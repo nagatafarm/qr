@@ -33,4 +33,7 @@ async function callApi(options) {
 
 function fetchState() { return callApi(); }
 
-function postRecord(rec) { return callApi({ method: 'POST', body: JSON.stringify(Object.assign({ action: 'record' }, rec)) }); }
+function postRecord(rec) { return postApi(Object.assign({ action: 'record' }, rec)); }
+
+// body.action：record（1件）／recordMany（まとめて）／delete（24時間以内の記録を消す）
+function postApi(body) { return callApi({ method: 'POST', body: JSON.stringify(body) }); }
