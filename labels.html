@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>ラベル印刷｜QR一元管理デモ</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script src="config.js"></script>
+<script src="common.js"></script>
+<style>
+  @page { size: A4 portrait; margin: 6mm; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #f6f7f5; font-family: "Yu Gothic", "Meiryo", "Hiragino Sans", sans-serif; color: #111; }
+  .bar { background: #2f6b3a; color: #fff; padding: 10px 16px; display: flex; gap: 12px; align-items: center; justify-content: space-between; }
+  .bar a, .bar button { color: #fff; font-size: 14px; }
+  .bar button { background: #fff; color: #2f6b3a; border: none; border-radius: 8px; padding: 6px 14px; font-weight: bold; cursor: pointer; font-family: inherit; }
+  .page { width: 198mm; margin: 12px auto; }
+  .plan { background: #fff; border: 1px dashed #bbb; padding: 2mm 3mm; margin-bottom: 2mm; break-inside: avoid; }
+  .plan h2 { font-size: 9pt; margin: 0 0 1mm; color: #2f6b3a; }
+  .row { display: flex; gap: 4mm; align-items: flex-start; }
+  .cap { font-size: 7pt; color: #666; margin-top: .5mm; text-align: center; }
+  .qr svg { display: block; width: 100%; height: 100%; }
+  .qrid { font-family: monospace; font-size: 6.5pt; text-align: center; }
+
+  /* 播種シール（細長いシール） */
+  .seed { width: 82mm; height: 19mm; border: .3mm solid #999; border-radius: 1.5mm; display: flex; align-items: center; padding: 1mm 1.5mm 1mm 3mm; gap: 2mm; }
+  .seed .date { font-size: 12pt; font-weight: bold; white-space: nowrap; letter-spacing: .02em; }
+  .seed .mid { flex: 1; min-width: 0; }
+  .seed .nm { font-size: 9.5pt; font-weight: bold; white-space: nowrap; overflow: hidden; }
+  .seed .to { font-size: 8.5pt; text-align: right; font-weight: bold; }
+  .seed .bt { display: flex; justify-content: space-between; align-items: center; font-size: 8pt; margin-top: .5mm; }
+  .seed .color { background: #ccc; padding: 0 3mm; min-width: 16mm; text-align: center; }
+  .seed .qr { width: 15mm; height: 15mm; flex: none; }
+
+  /* 土カード（土入りポット配置カード） */
+  .soil { width: 52mm; border: .3mm solid #999; padding: 2.5mm; background: #fff; }
+  .soil .hd { text-align: center; font-size: 7.5pt; line-height: 1.5; margin-bottom: 1.5mm; }
+  .soil table { width: 100%; border-collapse: collapse; }
+  .soil td { border: .3mm solid #333; text-align: center; font-size: 9pt; padding: 1.2mm .5mm; }
+  .soil td.big { font-size: 10pt; }
+  .soil .qr { width: 22mm; height: 22mm; margin: 2.5mm auto 0; }
+
+  /* 鉢上げラベル（ラベルに貼るシール） */
+  .pot { width: 40mm; border: .3mm solid #999; background: #fbf7f7; }
+  .pot table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  .pot td { border-bottom: .2mm dashed #888; font-size: 7pt; text-align: center; padding: .3mm .3mm; height: 3.9mm; }
+  .pot td + td { border-left: .2mm solid #888; }
+  .pot td.v { font-size: 9pt; }
+  .pot td.red { color: #c00; font-size: 9pt; }
+  .pot td.wide { font-size: 9pt; }
+  .pot .qrcell { padding: .6mm; }
+  .pot .qr { width: 14mm; height: 14mm; margin: 0 auto; }
+
+  /* 播種シールの下：この計画のスプレッドシートの行 */
+  .sheetlink { display: flex; gap: 2mm; align-items: center; margin-top: 4mm; padding: 2mm; border: .3mm dashed #aaa; border-radius: 1.5mm; width: 82mm; }
+  .sheetlink .qr { flex: none; width: 18mm; height: 18mm; }
+  .sheetlink .lt { font-size: 8pt; font-weight: bold; }
+  .sheetlink .ld { font-size: 6.5pt; color: #666; line-height: 1.4; margin-top: .5mm; }
+
+  /* 関連リンク */
+  .links { background: #fff; border: 1px dashed #bbb; padding: 2mm 3mm; break-inside: avoid; }
+  .links h2 { font-size: 9pt; margin: 0 0 1.5mm; color: #2f6b3a; }
+  .links .lrow { display: flex; gap: 3mm; }
+  .links .lk { flex: 1; min-width: 0; display: flex; gap: 1.5mm; align-items: center; }
+  .links .qr { flex: none; width: 16mm; height: 16mm; }
+  .links .lt { font-size: 7.5pt; font-weight: bold; line-height: 1.3; }
+  .links .ld { font-size: 6pt; color: #666; line-height: 1.3; margin-top: .5mm; }
+
+  @media print {
+    body { background: #fff; }
+    .bar, .noprint { display: none; }
+    .page { margin: 0; width: auto; }
+  }
+</style>
+</head>
+<body>
+<div class="bar noprint">
+  <div><b>ラベル印刷</b>　播種シール・土カード・鉢上げラベル（各計画に同じQR）</div>
+  <div><a id="back" href="#">一覧へ</a>　<button onclick="window.print()">印刷する</button></div>
+</div>
+<div class="page" id="page"></div>
+
+<script>
+function qrSvg(text) {
+  const qr = qrcode(0, 'M'); qr.addData(text); qr.make();
+  return qr.createSvgTag({ cellSize: 2, margin: 0, scalable: true });
+}
+document.getElementById('back').href = APP_URL;
+const pageEl = document.getElementById('page');
+pageEl.textContent = '読み込んでいます…';
+fetchState().then(state => { pageEl.innerHTML = labelsHtml(state); }).catch(e => { pageEl.textContent = e.message; });
+
+function labelsHtml(state) {
+  return state.plans.map(p => {
+  const v = p.v, w = p.w, qr = qrSvg(planUrl(p.id));
+  const name = esc(v['品番'] + ' ' + v['品目'] + ' ' + v['品種']);
+  return `<div class="plan">
+    <h2>${esc(p.id)}　${name}</h2>
+    <div class="row">
+      <div>
+        <div class="seed">
+          <div class="date">${esc(v['播種予定日'])}－ ${esc(v['鉢上予定日'])}</div>
+          <div class="mid">
+            <div class="nm">${name}</div>
+            <div class="to">${esc(v['出荷先'])}</div>
+            <div class="bt"><span>ﾌﾟﾗｸﾞ${esc(v['播種トレイ'])}</span><span class="color">${esc(v['P色'])}</span></div>
+          </div>
+          <div><div class="qr">${qr}</div></div>
+        </div>
+        <div class="cap">① 播種シール（プラグトレイに貼る）</div>
+        ${sheetRowHtml(state, p)}
+      </div>
+      <div>
+        <div class="soil">
+          <div class="hd">2026年 春野菜苗計画<br>土入りポット 配置カード</div>
+          <table>
+            <tr><td class="big">${esc(w['ポット使用日'] || v['ポット使用日'])}</td><td class="big">${esc(v['ポット使用TR数'])}</td></tr>
+            <tr><td colspan="2">${name}</td></tr>
+            <tr><td>${esc(v['Pサイズ'])}</td><td>${esc(v['P色'])}</td></tr>
+          </table>
+          <div class="qr">${qr}</div>
+          <div class="qrid">${esc(p.id)}</div>
+        </div>
+        <div class="cap">② 土カード</div>
+      </div>
+      <div>
+        <div class="pot">
+          <table>
+            <tr><td class="v">${esc(v['品目'])}</td><td class="v">${esc(v['品種'])}</td></tr>
+            <tr><td>${esc(v['Pサイズ'])}</td><td>${esc(v['P色'])}</td></tr>
+            <tr><td colspan="2" class="wide">${esc(v['播種予定日'])} － ${esc(v['鉢上予定日'])}</td></tr>
+            <tr><td></td><td>${esc(v['出荷先'])}</td></tr>
+            <tr><td>出荷予定日</td><td>出荷TR数</td></tr>
+            <tr><td class="red">${esc(v['出荷日'])}</td><td class="v">${esc(v['出荷TR数'])}</td></tr>
+            <tr><td>鉢上予定</td><td>TR数</td></tr>
+            <tr><td class="v">${esc(v['鉢上予定日'])}</td><td class="v">${esc(v['鉢上予定TR数'])}</td></tr>
+            <tr><td>鉢上日</td><td>TR数</td></tr>
+            <tr><td></td><td></td></tr>
+            <tr><td>過不足数</td><td class="qrcell"><div class="qr">${qr}</div></td></tr>
+          </table>
+        </div>
+        <div class="cap">③ 鉢上げラベル</div>
+      </div>
+    </div>
+  </div>`;
+  }).join('') + linksHtml(state);
+}
+
+// この計画のスプレッドシートの行を開くQR（計画シートの、その計画の行に飛ぶ）
+function sheetRowHtml(state, p) {
+  const links = state.links || {};
+  if (!links.sheet || !p.row) return '';
+  const url = links.sheet.replace(/#.*$/, '') + '#gid=' + links.planGid + '&range=A' + p.row;
+  return `<div class="sheetlink"><div class="qr">${qrSvg(url)}</div><div>
+    <div class="lt">計画スプレッドシート</div>
+    <div class="ld">この計画（${esc(p.id)}）の行が開きます。<br>工程の完了・次の作業も見られます（共有された人だけ）</div></div></div>`;
+}
+
+// 関連リンク：一覧・スプレッドシート・Apps Script・GitHub・このページ
+function linksHtml(state) {
+  const links = state.links || {};
+  const gh = location.hostname.match(/^([^.]+)\.github\.io$/);
+  const repo = location.pathname.split('/')[1];
+  const list = [
+    { t: '一覧（進み具合）', d: 'PC・スマホで3計画の状況を見る', u: APP_URL },
+    { t: '計画スプレッドシート', d: '計画・工程・実績のシート（共有された人だけ）', u: links.sheet },
+    { t: 'Apps Script', d: 'データの窓口のプログラム（作った人だけ）', u: links.script },
+    { t: 'GitHub', d: '画面のファイルの置き場所', u: gh && repo ? 'https://github.com/' + gh[1] + '/' + repo : '' },
+    { t: 'ラベル印刷', d: 'この紙を印刷し直す', u: APP_URL + 'labels.html' },
+  ].filter(l => l.u);
+  return `<div class="links"><h2>関連リンク</h2><div class="lrow">${list.map(l =>
+    `<div class="lk"><div class="qr">${qrSvg(l.u)}</div><div><div class="lt">${esc(l.t)}</div><div class="ld">${esc(l.d)}</div></div></div>`).join('')}</div></div>`;
+}
+</script>
+</body>
+</html>

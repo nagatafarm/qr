@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QR一元管理デモ</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script src="config.js"></script>
+<script src="common.js"></script>
+<style>
+  :root { --orange: #d4834a; --orange-d: #9a5320; --orange-l: #fdf5ee; --green: #4f9363; --green-d: #2f6b3a; --green-l: #f0f6f1; --line: #d6e2d8; --gray: #6b6b6b; --red: #c33; --bg: #f6f7f5; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: #222; font-family: "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif; font-size: 15px; line-height: 1.5; }
+  a { color: var(--green); }
+  header { background: var(--green); color: #fff; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  header h1 { font-size: 17px; margin: 0; }
+  header .sub { font-size: 12px; opacity: .85; }
+  header a { color: #fff; font-size: 13px; white-space: nowrap; }
+  main { max-width: 1100px; margin: 0 auto; padding: 14px 16px 40px; }
+  .muted { color: var(--gray); font-size: 12px; }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+
+  /* 一覧 */
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .btn-link { display: inline-block; background: #fff; border: 1px solid var(--green); color: var(--green); border-radius: 8px; padding: 6px 12px; text-decoration: none; font-size: 14px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+  .plan-head { display: flex; gap: 12px; align-items: flex-start; }
+  .qr { flex: none; text-align: center; }
+  .qr svg { display: block; width: 96px; height: 96px; }
+  .qr .id { font-size: 11px; color: var(--gray); font-family: monospace; }
+  .name { font-weight: bold; font-size: 16px; }
+  .meta { font-size: 13px; color: #444; }
+  .steps { list-style: none; margin: 10px 0 0; padding: 0; font-size: 13px; }
+  .steps li { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-top: 1px dashed #e5e5e5; }
+  .steps li .what { flex: 1; }
+  .steps li .when { color: var(--gray); font-size: 12px; text-align: right; }
+  .steps li.ng .what { color: #888; }
+  .tag { display: inline-block; flex: none; font-size: 11px; font-weight: bold; border-radius: 999px; padding: 1px 8px; white-space: nowrap; }
+  .tag.ok { background: #e1efe4; color: var(--green-d); }
+  .tag.now { background: #fbe4d2; color: var(--orange-d); }
+  .tag.ng { background: #eee; color: #888; }
+
+  /* 進み具合のステップ表示（大項目ごと） */
+  .stepper { display: flex; list-style: none; margin: 14px 0 4px; padding: 0; }
+  .stepper li { flex: 1; position: relative; text-align: center; color: #999; font-size: 13px; }
+  .stepper li::before { content: ""; position: absolute; z-index: 0; top: 16px; left: -50%; right: 50%; height: 4px; background: #ddd; }
+  .stepper li:first-child::before { display: none; }
+  .stepper li.done + li::before { background: var(--green); }
+  .stepper .dot { position: relative; z-index: 1; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 50%;
+    background: #fff; border: 3px solid #ccc; font-weight: bold; font-size: 15px; color: #999; }
+  .stepper .lb { display: block; margin-top: 4px; font-weight: bold; }
+  .stepper .ct { display: block; font-size: 11px; }
+  .stepper li.done { color: var(--green); }
+  .stepper li.done .dot { background: var(--green); border-color: var(--green); color: #fff; }
+  .stepper li.part { color: var(--green-d); }
+  .stepper li.part .dot { border-color: var(--green); color: var(--green); }
+  .stepper li.now { color: var(--orange); }
+  .stepper li.now .dot { border-color: var(--orange); color: var(--orange); box-shadow: 0 0 0 4px rgba(212, 131, 74, .15); }
+  .stepper.small { margin: 12px 0 2px; }
+  .stepper.small li { font-size: 12px; }
+  .stepper.small li::before { top: 12px; height: 3px; }
+  .stepper.small .dot { width: 28px; height: 28px; font-size: 13px; border-width: 2px; }
+  .open { display: block; text-align: center; margin-top: 10px; padding: 8px; border-radius: 8px; background: var(--green-l); text-decoration: none; font-weight: bold; }
+  .note { margin-top: 16px; font-size: 12px; color: var(--gray); }
+
+  /* 計画画面（スマホ） */
+  .plan-card .badge { display: inline-block; font-family: monospace; font-size: 12px; background: var(--green-l); color: var(--green-d); border-radius: 6px; padding: 1px 8px; }
+  .plan-card .name { font-size: 20px; margin: 6px 0 8px; }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: 14px; }
+  .kv dt { color: var(--gray); }
+  .kv dd { margin: 0; }
+  .next { margin: 12px 0; padding: 12px 14px; background: var(--orange-l); border: 1px solid #ecc3a3; border-radius: 12px; font-size: 15px; color: var(--orange-d); }
+  .next b { font-size: 17px; }
+  .next .fdone { color: var(--gray); opacity: .7; }
+  .next .flater { color: var(--orange-d); opacity: .75; }
+  .next .farrow { margin: 0 6px; color: var(--orange); }
+  .next.all { background: var(--green); border-color: var(--green); color: #fff; font-weight: bold; text-align: center; }
+  .major { margin-top: 18px; }
+  .major h2 { display: flex; justify-content: space-between; align-items: center; font-size: 16px; margin: 0 0 8px; }
+  .major h2 .tag { font-size: 12px; }
+  /* 小項目：左の丸と縦線でつなぐ */
+  .tl { list-style: none; margin: 0; padding: 0; }
+  .tl > li { position: relative; padding: 0 0 10px 40px; }
+  .tl > li::before { content: ""; position: absolute; left: 13px; top: 30px; bottom: 0; width: 3px; background: #ddd; }
+  .tl > li:last-child::before { display: none; }
+  .tl > li.done::before { background: var(--green); }
+  .tl .mark { position: absolute; left: 0; top: 12px; width: 29px; height: 29px; border-radius: 50%; border: 3px solid #ccc; background: #fff;
+    display: flex; align-items: center; justify-content: center; font-weight: bold; color: #fff; font-size: 15px; box-sizing: border-box; }
+  .tl li.done .mark { background: var(--green); border-color: var(--green); }
+  .tl li.cur .mark { border-color: var(--orange); box-shadow: 0 0 0 4px rgba(212, 131, 74, .15); }
+  .tl .box { border-radius: 12px; padding: 12px 14px; background: #fff; border: 1px solid var(--line); }
+  .tl li.done .box { background: var(--green-l); border-color: #cfe3d4; }
+  .tl li.cur .box { border: 2px solid #ecc3a3; box-shadow: 0 2px 8px rgba(212, 131, 74, .10); }
+  .tl li.todo .box { background: #fafafa; border-style: dashed; }
+  .tl .t { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 17px; font-weight: bold; }
+  .tl li.done .t { color: var(--green-d); }
+  .tl li.todo .t { color: #777; }
+  .tl .desc { font-size: 12px; color: var(--gray); margin-top: 2px; }
+  .tl .info { font-size: 13px; color: #333; margin-top: 4px; }
+  .tl .do { width: 100%; margin-top: 10px; padding: 12px; border-radius: 10px; font-size: 16px; font-weight: bold; font-family: inherit; cursor: pointer;
+    background: #fff; color: var(--green); border: 2px solid var(--green); }
+  .tl li.cur .do { background: var(--orange); border-color: var(--orange); color: #fff; padding: 14px; font-size: 17px; }
+  .tl .undo { margin-top: 6px; font-size: 12px; color: var(--gray); background: none; border: none; text-decoration: underline; cursor: pointer; padding: 0; font-family: inherit; }
+
+  /* 入力シート */
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: flex; align-items: flex-end; justify-content: center; z-index: 10; }
+  .modal[hidden] { display: none; }
+  .sheet { background: #fff; width: 100%; max-width: 520px; border-radius: 16px 16px 0 0; padding: 18px 16px 22px; }
+  .sheet h3 { margin: 0 0 4px; font-size: 18px; }
+  .sheet label { display: block; font-size: 13px; color: var(--gray); margin-top: 12px; }
+  .sheet input { width: 100%; font-size: 17px; padding: 10px; border: 1px solid #ccc; border-radius: 8px; margin-top: 4px; font-family: inherit; }
+  .sheet .diff { font-size: 13px; margin-top: 4px; }
+  .sheet .actions { display: flex; gap: 8px; margin-top: 16px; }
+  .sheet .actions button { flex: 1; font-size: 16px; padding: 12px; border-radius: 10px; border: 1px solid #ccc; background: #fff; font-family: inherit; }
+  .sheet .actions .primary { background: var(--green); color: #fff; border-color: var(--green); font-weight: bold; }
+  #toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: #222; color: #fff; padding: 10px 16px; border-radius: 10px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 20; max-width: 90%; }
+  #toast.show { opacity: 1; }
+  #toast.err { background: var(--red); }
+
+  /* 記録中のポップアップ（真ん中） */
+  #saving { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center; z-index: 30; }
+  #saving[hidden] { display: none; }
+  #saving .box { background: #fff; border-radius: 18px; padding: 26px 30px 22px; min-width: 230px; max-width: 86%; text-align: center; box-shadow: 0 8px 30px rgba(0,0,0,.25); }
+  #saving .spin { width: 46px; height: 46px; margin: 0 auto 14px; border: 5px solid var(--green-l); border-top-color: var(--green); border-radius: 50%; animation: spin .8s linear infinite; }
+  #saving .mark { width: 54px; height: 54px; margin: 0 auto 12px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 30px; font-weight: bold; color: #fff; background: var(--green); }
+  #saving.err .mark { background: var(--red); }
+  #saving .msg { font-size: 18px; font-weight: bold; }
+  #saving .sub { font-size: 13px; color: var(--gray); margin-top: 6px; }
+  #saving button { margin-top: 14px; font-size: 15px; padding: 8px 22px; border-radius: 10px; border: 1px solid #ccc; background: #fff; font-family: inherit; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<div class="modal" id="modal" hidden>
+  <div class="sheet">
+    <h3 id="m-title"></h3>
+    <div class="muted" id="m-plan"></div>
+    <div id="m-qty-wrap">
+      <label for="m-qty" id="m-qty-label"></label>
+      <input id="m-qty" type="number" inputmode="decimal" step="any">
+      <div class="diff" id="m-diff"></div>
+    </div>
+    <label for="m-person">担当者</label>
+    <input id="m-person" type="text" autocomplete="name" placeholder="名前">
+    <label for="m-memo">メモ（なくてもよい）</label>
+    <input id="m-memo" type="text">
+    <div class="actions">
+      <button type="button" id="m-cancel">やめる</button>
+      <button type="button" class="primary" id="m-ok">記録する</button>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+<div id="saving" hidden><div class="box" id="saving-box"></div></div>
+
+<script>
+// QR から開いたときは ?id=QRID が付いている
+const ID = new URLSearchParams(location.search).get('id') || '';
+let state = null;
+let busy = false;
+
+// ---------- 共通 ----------
+function qrSvg(text) {
+  try {
+    const qr = qrcode(0, 'M'); qr.addData(text); qr.make();
+    return qr.createSvgTag({ cellSize: 3, margin: 2, scalable: true });
+  } catch (e) { return '<div class="muted">QRを表示できません</div>'; }
+}
+function majors() {
+  const list = [];
+  state.steps.forEach(s => { if (list.indexOf(s.major) < 0) list.push(s.major); });
+  return list;
+}
+function majorProgress(plan, major) {
+  const ss = state.steps.filter(s => s.major === major);
+  const done = ss.filter(s => (plan.status[s.key] || {}).done).length;
+  return { done, total: ss.length };
+}
+// 大項目の状態：done（全部完了）／now（次の作業がある）／part（一部完了）／todo（未着手）
+function majorState(plan, m, nx) {
+  const pr = majorProgress(plan, m);
+  if (pr.done === pr.total) return 'done';
+  if (nx && nx.major === m) return 'now';
+  return pr.done > 0 ? 'part' : 'todo';
+}
+function stepperHtml(plan, small) {
+  const nx = nextStep(plan);
+  return `<ol class="stepper${small ? ' small' : ''}">` + majors().map((m, i) => {
+    const st = majorState(plan, m, nx), pr = majorProgress(plan, m);
+    return `<li class="${st}"><span class="dot">${st === 'done' ? '✓' : i + 1}</span><span class="lb">${esc(m)}</span>
+      <span class="ct">${st === 'done' ? '完了' : pr.done + ' / ' + pr.total}</span></li>`;
+  }).join('') + '</ol>';
+}
+function nextStep(plan) { return state.steps.find(s => !(plan.status[s.key] || {}).done); }
+function taskName(s) { return s.minor.replace(/\s*完了$/, '') || s.minor; }
+// 「大項目：作業名」。同じ名前なら1回だけ（例：土入れ：ポット入れ／播種）
+function fullTask(s, sep) { const t = taskName(s); return t === s.major ? t : s.major + sep + t; }
+// 次の作業の大項目の中の作業を、上流（左）→ 下流（右）の順に並べる。次の作業を太字、終わった作業は ✓ で薄く
+// 例：ポット入れ → 土入れ（ポット入れが次）／ ✓ポット入れ → 土入れ（土入れが次）
+function nextFlowHtml(plan, nx) {
+  return state.steps.filter(s => s.major === nx.major).map(s => {
+    if (s.key === nx.key) return '<b>' + esc(taskName(s)) + '</b>';
+    const done = (plan.status[s.key] || {}).done;
+    return '<span class="' + (done ? 'fdone' : 'flater') + '">' + (done ? '✓' : '') + esc(taskName(s)) + '</span>';
+  }).join('<span class="farrow">→</span>');
+}
+function planName(p) { return p.v['品番'] + ' ' + p.v['品目'] + ' ' + p.v['品種']; }
+function toast(msg, isErr) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'show' + (isErr ? ' err' : '');
+  clearTimeout(toast.timer); toast.timer = setTimeout(() => { t.className = ''; }, 2600);
+}
+function getName() { try { return localStorage.getItem('qrdemo.person') || ''; } catch (e) { return ''; } }
+function setName(v) { try { localStorage.setItem('qrdemo.person', v); } catch (e) {} }
+
+function refresh() {
+  if (busy || !document.getElementById('modal').hidden) return;
+  fetchState().then(s => { state = s; render(); }).catch(() => {});  // 自動更新の失敗は次の回に任せる
+}
+
+// ---------- 一覧（PC） ----------
+function renderList() {
+  const cards = state.plans.map(p => {
+    const nx = nextStep(p);
+    const steps = state.steps.map(s => {
+      const st = p.status[s.key] || {};
+      const tag = st.done ? '<span class="tag ok">完了</span>' : nx && nx.key === s.key ? '<span class="tag now">次の作業</span>' : '<span class="tag ng">未完了</span>';
+      return `<li class="${st.done ? 'ok' : 'ng'}">${tag}<span class="what">${esc(fullTask(s, '：'))}</span>
+        <span class="when">${st.done ? esc(st.time) + (st.person ? ' ' + esc(st.person) : '') + (st.qty !== '' && st.qty != null ? ' / ' + esc(st.qty) + esc(s.unit) : '') : ''}</span></li>`;
+    }).join('');
+    return `<div class="card">
+      <div class="plan-head">
+        <div class="qr">${qrSvg(planUrl(p.id))}<div class="id">${esc(p.id)}</div></div>
+        <div>
+          <div class="name">${esc(planName(p))}</div>
+          <div class="meta">${esc(p.v['Pサイズ'])} ${esc(p.v['P色'])}／${esc(p.v['出荷先'])} ${esc(p.v['出荷日'])}出荷 ${esc(p.v['出荷TR数'])}TR</div>
+          <div class="meta">播種 ${esc(p.v['播種予定日'])} → ポット ${esc(p.v['ポット使用日'])} → 鉢上げ ${esc(p.v['鉢上予定日'])}</div>
+        </div>
+      </div>
+      ${stepperHtml(p, true)}
+      <ul class="steps">${steps}</ul>
+      <a class="open" href="${esc(planUrl(p.id))}">この計画を開く</a>
+    </div>`;
+  }).join('');
+  document.getElementById('app').innerHTML = `
+    <header><div><h1>QR一元管理デモ</h1><div class="sub">播種 → 土入れ → 鉢上げ</div></div>
+      <a href="labels.html">ラベル印刷</a></header>
+    <main>
+      <div class="toolbar">
+        <div class="muted">スマホのカメラでQRを読むと、その計画の画面が開きます。この一覧は自動で更新されます（最終更新 ${esc(state.updated)}）</div>
+        <a class="btn-link" href="labels.html">ラベルを印刷する</a>
+      </div>
+      <div class="grid">${cards || '<div class="card">計画がありません。「計画」シートを確認してください。</div>'}</div>
+      <div class="note">工程（大項目・小項目）は、スプレッドシートの「工程」シートに行を足すと増やせます。記録は「実績」シートに残ります。</div>
+    </main>`;
+}
+
+// ---------- 計画画面（スマホ） ----------
+function renderPlan(plan) {
+  const nx = nextStep(plan);
+  const sections = majors().map(m => {
+    const st = majorState(plan, m, nx), pr = majorProgress(plan, m);
+    const head = st === 'done' ? '<span class="tag ok">完了</span>' : st === 'now' ? '<span class="tag now">作業中</span>'
+      : '<span class="tag ng">' + pr.done + ' / ' + pr.total + '</span>';
+    const items = state.steps.filter(s => s.major === m).map(s => {
+      const r = plan.status[s.key] || {};
+      if (r.done) {
+        let info = esc(r.time) + (r.person ? '　' + esc(r.person) : '');
+        if (r.qty !== '' && r.qty != null) info += '　' + esc(r.qty) + esc(s.unit) + diffText(plan, s, r.qty);
+        if (r.memo) info += '<br>' + esc(r.memo);
+        return `<li class="done"><span class="mark">✓</span><div class="box">
+          <div class="t">${esc(taskName(s))}<span class="tag ok">完了</span></div><div class="info">${info}</div>
+          <button class="undo" data-undo="${esc(s.key)}">取り消す</button></div></li>`;
+      }
+      const isNext = nx && nx.key === s.key;
+      return `<li class="${isNext ? 'cur' : 'todo'}"><span class="mark"></span><div class="box">
+        <div class="t">${esc(taskName(s))}${isNext ? '<span class="tag now">次の作業</span>' : '<span class="tag ng">未完了</span>'}</div>
+        <div class="desc">${esc(s.note)}</div>
+        <button class="do" data-do="${esc(s.key)}">${esc(taskName(s))}を完了にする</button></div></li>`;
+    }).join('');
+    return `<section class="major"><h2>${esc(m)}${head}</h2><ol class="tl">${items}</ol></section>`;
+  }).join('');
+
+  document.getElementById('app').innerHTML = `
+    <header><div><h1>QR一元管理デモ</h1><div class="sub">QRを読み込んだ計画</div></div>
+      <a href="${esc(APP_URL)}">一覧へ</a></header>
+    <main style="max-width:560px">
+      <div class="card plan-card">
+        <span class="badge">${esc(plan.id)}</span>
+        <div class="name">${esc(planName(plan))}</div>
+        <dl class="kv">
+          <dt>ポット</dt><dd>${esc(plan.v['Pサイズ'])}　${esc(plan.v['P色'])}</dd>
+          <dt>出荷</dt><dd>${esc(plan.v['出荷先'])}　${esc(plan.v['出荷日'])}　${esc(plan.v['出荷TR数'])}TR</dd>
+          <dt>播種</dt><dd>${esc(plan.v['播種予定日'])}　${esc(plan.v['播種トレイ'])} × ${esc(plan.v['播種TR数'])}</dd>
+          <dt>土入れ</dt><dd>${esc(plan.v['ポット使用日'])}　${esc(plan.v['ポット使用TR数'])}TR</dd>
+          <dt>鉢上げ</dt><dd>${esc(plan.v['鉢上予定日'])}　${esc(plan.v['鉢上予定TR数'])}TR</dd>
+        </dl>
+      </div>
+      ${stepperHtml(plan, false)}
+      <div class="next ${nx ? '' : 'all'}">${nx ? '次の作業：' + nextFlowHtml(plan, nx) : '✓ すべての工程が完了しました'}</div>
+      ${sections}
+    </main>`;
+
+  document.querySelectorAll('[data-do]').forEach(b => b.onclick = () => openSheet(plan, state.steps.find(s => s.key === b.dataset.do)));
+  document.querySelectorAll('[data-undo]').forEach(b => b.onclick = () => {
+    const s = state.steps.find(x => x.key === b.dataset.undo);
+    if (confirm('「' + taskName(s) + '」の完了を取り消しますか？')) send(plan, s, '取消', '', getName(), '');
+  });
+}
+
+function diffText(plan, step, qty) {
+  if (!step.compare || plan.v[step.compare] === undefined || qty === '' || qty == null) return '';
+  const d = Math.round((Number(qty) - Number(plan.v[step.compare])) * 10) / 10;
+  return '（予定' + plan.v[step.compare] + '、過不足 ' + (d > 0 ? '+' : '') + d + '）';
+}
+
+function openSheet(plan, step) {
+  const m = document.getElementById('modal');
+  document.getElementById('m-title').textContent = taskName(step) + 'を完了にする';
+  document.getElementById('m-plan').textContent = plan.id + '　' + planName(plan);
+  const qw = document.getElementById('m-qty-wrap');
+  const qi = document.getElementById('m-qty');
+  const diff = document.getElementById('m-diff');
+  qw.hidden = !step.needQty;
+  qi.value = step.compare && plan.v[step.compare] !== undefined ? plan.v[step.compare] : '';
+  document.getElementById('m-qty-label').textContent = '数量（' + (step.unit || '') + '）' + (step.compare ? '　予定：' + plan.v[step.compare] + (step.unit || '') : '');
+  const showDiff = () => { diff.textContent = diffText(plan, step, qi.value); };
+  qi.oninput = showDiff; showDiff();
+  document.getElementById('m-person').value = getName();
+  document.getElementById('m-memo').value = '';
+  m.hidden = false;
+  document.getElementById('m-cancel').onclick = () => { m.hidden = true; };
+  document.getElementById('m-ok').onclick = () => {
+    if (step.needQty && qi.value === '') { toast('数量を入れてください', true); return; }
+    const person = document.getElementById('m-person').value.trim();
+    if (!person) { toast('担当者の名前を入れてください', true); return; }
+    setName(person);
+    m.hidden = true;
+    send(plan, step, '完了', step.needQty ? qi.value : '', person, document.getElementById('m-memo').value);
+  };
+}
+
+function send(plan, step, action, qty, person, memo) {
+  busy = true;
+  popup('wait', '記録しています…', '「' + taskName(step) + '」' + (action === '完了' ? 'の完了' : 'の取り消し') + '\n画面を閉じずにお待ちください');
+  postRecord({ id: plan.id, major: step.major, minor: step.minor, op: action, qty: qty, person: person, memo: memo })
+    .then(s => {
+      busy = false; state = s; render();
+      popup('ok', action === '完了' ? '「' + taskName(step) + '」を完了にしました' : '取り消しました', '');
+      setTimeout(() => popup(), 1500);
+    })
+    .catch(e => { busy = false; popup('err', '記録できませんでした', e.message); });
+}
+
+// 真ん中のポップアップ。kind：wait（くるくる）／ok（✓、少しして消える）／err（✕、閉じるボタン）。引数なしで閉じる
+function popup(kind, msg, sub) {
+  const el = document.getElementById('saving');
+  clearTimeout(popup.timer);
+  if (!kind) { el.hidden = true; return; }
+  el.className = kind;
+  document.getElementById('saving-box').innerHTML =
+    (kind === 'wait' ? '<div class="spin"></div>' : '<div class="mark">' + (kind === 'ok' ? '✓' : '✕') + '</div>') +
+    '<div class="msg">' + esc(msg) + '</div>' + (sub ? '<div class="sub">' + esc(sub).replace(/\n/g, '<br>') + '</div>' : '') +
+    (kind === 'err' ? '<button type="button" onclick="popup()">閉じる</button>' : '');
+  el.hidden = false;
+}
+
+// ---------- 画面の切り替え ----------
+function render() {
+  if (ID) {
+    const plan = state.plans.find(p => p.id === ID);
+    if (plan) return renderPlan(plan);
+    document.getElementById('app').innerHTML = `<header><h1>QR一元管理デモ</h1><a href="${esc(APP_URL)}">一覧へ</a></header>
+      <main><div class="card">この QR（${esc(ID)}）の計画が見つかりません。</div></main>`;
+    return;
+  }
+  renderList();
+}
+function showMessage(msg) {
+  document.getElementById('app').innerHTML = `<header><h1>QR一元管理デモ</h1></header><main><div class="card">${esc(msg)}</div></main>`;
+}
+showMessage('読み込んでいます…');
+fetchState()
+  .then(s => { state = s; render(); setInterval(refresh, 10000); })
+  .catch(e => showMessage(e.message));
+</script>
+</body>
+</html>
