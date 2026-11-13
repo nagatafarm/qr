@@ -157,6 +157,7 @@
   .tl li.cur .do { background: var(--orange); border-color: var(--orange); color: #fff; padding: 14px; font-size: 17px; }
   .tl .qty { width: 80px; padding: 12px 8px; }
   .tl .del { margin-top: 8px; }
+  .short { color: #c62828; font-weight: bold; }
   .others { display: block; width: 100%; margin-top: 16px; padding: 10px; background: #fff; border: 1px dashed #bbb; border-radius: 10px; color: var(--gray); cursor: pointer; font-size: 14px; }
 
   #toast { position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%); background: #222; color: #fff; padding: 10px 16px; border-radius: 10px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 20; max-width: 90%; }
@@ -176,6 +177,40 @@
   #saving button { margin-top: 14px; font-size: 15px; padding: 8px 22px; border-radius: 10px; border: 1px solid #ccc; background: #fff; cursor: pointer; }
   #saving button.undo { border-color: var(--red); color: var(--red); }
   @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* 農薬散布（spray.js） */
+  .sp { margin-bottom: 12px; }
+  .sp h3 { margin: 0 0 8px; font-size: 16px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  .chip { display: inline-flex; align-items: center; gap: 4px; background: var(--green-l); border: 1px solid #cfe3d4; border-radius: 999px; padding: 3px 4px 3px 10px; font-size: 13px; }
+  .chip small { color: var(--gray); }
+  .chip button { border: none; background: none; font-size: 16px; color: var(--gray); cursor: pointer; padding: 0 4px; }
+  .sub-btn { background: #fff; border: 1px solid var(--green); color: var(--green); border-radius: 8px; padding: 6px 12px; font-size: 14px; cursor: pointer; margin-top: 4px; }
+  .picker { margin-top: 8px; border-top: 1px dashed #ddd; padding-top: 8px; max-height: 360px; overflow-y: auto; }
+  .picker input[type=search] { width: 100%; font-size: 16px; padding: 8px; border: 1px solid #ccc; border-radius: 8px; font-family: inherit; }
+  .prow2 { display: flex; gap: 8px; align-items: center; padding: 6px 2px; border-bottom: 1px solid #f0f0f0; font-size: 14px; }
+  .prow2 input { width: 22px; height: 22px; flex: none; accent-color: var(--green); }
+  .prow { border-top: 1px dashed #e5e5e5; padding: 8px 0; }
+  .prow:first-of-type { border-top: none; }
+  .pline { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+  .pline select, .pline input { flex: 1; min-width: 0; font-size: 16px; padding: 8px; border: 1px solid #ccc; border-radius: 8px; font-family: inherit; background: #fff; }
+  .pline .muted { flex: none; max-width: 45%; }
+  .x { flex: none; border: 1px solid #ccc; background: #fff; border-radius: 8px; width: 36px; height: 36px; font-size: 18px; cursor: pointer; }
+  .ck-line { font-size: 13px; padding: 2px 0; }
+  .ck-line.ok { color: var(--green-d); }
+  .ck-line.bad { color: var(--red); font-weight: bold; }
+  .ck-line.warn, b.warn { color: var(--orange-d); }
+  .fl { display: block; margin-top: 10px; font-size: 13px; color: var(--gray); }
+  .fl input { display: block; width: 100%; font-size: 16px; padding: 8px; border: 1px solid #ccc; border-radius: 8px; margin-top: 4px; font-family: inherit; color: #222; }
+  .eq { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+  .eq button { flex: 1; min-width: 70px; padding: 10px 6px; border: 1px solid #ccc; border-radius: 8px; background: #fff; font-size: 15px; cursor: pointer; font-family: inherit; }
+  .eq button.on { background: var(--green); border-color: var(--green); color: #fff; font-weight: bold; }
+  label.ck { display: block; margin-top: 10px; font-size: 14px; line-height: 1.5; }
+  label.ck input { width: 20px; height: 20px; vertical-align: -4px; accent-color: var(--green); }
+  .overbox { background: #fbe9e9; border: 1px solid #e3b4b4; color: var(--red); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; font-size: 14px; }
+  table.ut { border-collapse: collapse; width: 100%; font-size: 13px; }
+  table.ut th, table.ut td { border: 1px solid var(--line); padding: 4px 6px; text-align: left; }
+  table.ut th { background: var(--green-l); }
 </style>
 </head>
 <body>
@@ -220,10 +255,11 @@ function roles() {
       const names = state.steps.filter(s => s.major === m).map(taskName);
       const label = (names.length === 1 && names[0] === m ? m : names.join('・')) + '担当';
       return { key: m, label: label, desc: 'やること：' + names.join(' → ') };
-    }));
+    }))
+    .concat(state.pest ? [sprayRole()] : []);   // 農薬のシートがあれば「農薬散布担当」も（spray.js）
 }
 function roleLabel() { const r = roles().find(x => x.key === getRole()); return r ? r.label : ''; }
-function myMajors() { return isPlanner() ? majors() : [getRole()]; }
+function myMajors() { return isPlanner() ? majors() : isSpray() ? [] : [getRole()]; }
 
 // ---------- 共通 ----------
 function qrSvg(text) {
@@ -271,7 +307,7 @@ function majorFields(m) {
   const sample = state.plans[0] ? Object.keys(state.plans[0].v) : [];
   // 自動で書く工程の列（小項目の名前・「完了」を取った名前）と「次の作業」の列は、計画の情報ではないので出さない
   const auto = ['次の作業'];
-  state.steps.forEach(s => auto.push(s.minor, taskName(s)));
+  state.steps.forEach(s => { auto.push(s.minor, taskName(s)); if (s.qtyCol) auto.push(s.qtyCol); });
   sample.forEach(c => { if (c.indexOf(m) === 0 && !cols.includes(c) && !auto.includes(c)) cols.push(c); });
   if (majors().indexOf(m) > 0) ['Pサイズ', 'P色'].forEach(c => { if (sample.includes(c) && !cols.includes(c)) cols.push(c); });
   return cols;
@@ -293,10 +329,17 @@ function bindQty(list) {
     if (x) qtyEdit[x.p.id + '|' + x.s.key] = el.value;
   });
 }
+// 予定との過不足（HTML）。予定を下回っていたら赤
 function diffText(plan, step, qty) {
   if (!step.compare || plan.v[step.compare] === undefined || qty === '' || qty == null) return '';
   const d = Math.round((Number(qty) - Number(plan.v[step.compare])) * 10) / 10;
-  return '（予定' + plan.v[step.compare] + '、過不足 ' + (d > 0 ? '+' : '') + d + '）';
+  const t = '（予定' + plan.v[step.compare] + '、過不足 ' + (d > 0 ? '+' : '') + d + '）';
+  return d < 0 ? '<span class="short">' + esc(t) + '</span>' : esc(t);
+}
+function isShortQty(plan, step, qty) {
+  if (!step.compare || qty === '' || qty == null) return false;
+  const want = Number(plan.v[step.compare]);
+  return !isNaN(want) && want > 0 && Number(qty) < want;
 }
 function toast(msg, isErr) {
   const t = document.getElementById('toast');
@@ -539,7 +582,7 @@ function renderPlanner() {
         const st = p.status[s.key] || {};
         const tag = st.done ? '<span class="tag ok">完了</span>' : nx && nx.key === s.key ? '<span class="tag now">次の作業</span>' : '<span class="tag ng">未完了</span>';
         return `<li class="${st.done ? 'ok' : 'ng'}">${tag}<span class="what">${esc(fullTask(s, '：'))}</span>
-          <span class="when">${st.done ? esc(st.time) + (st.person ? ' ' + esc(st.person) : '') + (st.qty !== '' && st.qty != null ? ' / ' + esc(st.qty) + esc(s.unit) : '') : ''}</span></li>`;
+          <span class="when">${st.done ? esc(st.time) + (st.person ? ' ' + esc(st.person) : '') + (st.qty !== '' && st.qty != null ? ' / <span class="' + (isShortQty(p, s, st.qty) ? 'short' : '') + '">' + esc(st.qty) + esc(s.unit) + '</span>' : '') : ''}</span></li>`;
       }).join('');
       return `<div class="card"><div class="plan-head">
           <div class="qr">${qrSvg(planUrl(p.id))}<div class="id">${esc(p.id)}</div></div>
@@ -549,6 +592,8 @@ function renderPlanner() {
         ${stepperHtml(p, true)}<ul class="steps">${steps}</ul>
         <a class="open" href="${esc(planUrl(p.id))}">この計画を開く</a></div>`;
     }).join('') || '<div class="card">計画がありません。「計画」シートを確認してください。</div>'}</div>`;
+  } else if (tab === 'pest' && state.pest) {
+    body = plannerPestHtml();
   } else {
     const logs = state.logs.filter(l => !logFilter || l.major === logFilter);
     body = `<div class="filter"><button type="button" data-f="" class="${!logFilter ? 'on' : ''}">すべて</button>${majors().map(m =>
@@ -560,7 +605,8 @@ function renderPlanner() {
     <main>
       <div class="toolbar"><div class="tabs" style="margin:0;border:none">
           <button type="button" data-tab="list" class="${tab === 'list' ? 'on' : ''}">一覧</button>
-          <button type="button" data-tab="log" class="${tab === 'log' ? 'on' : ''}">履歴<span class="n">${state.logs.length}</span></button></div>
+          <button type="button" data-tab="log" class="${tab === 'log' ? 'on' : ''}">履歴<span class="n">${state.logs.length}</span></button>
+          ${state.pest ? `<button type="button" data-tab="pest" class="${tab === 'pest' ? 'on' : ''}">農薬</button>` : ''}</div>
         <a class="btn-link" href="labels.html">ラベルを印刷する</a></div>
       ${body}
       <p class="muted">最終更新 ${esc(state.updated)}（自動で更新）。工程は「工程」シートに行を足すと増やせます。</p>
@@ -570,6 +616,7 @@ function renderPlanner() {
   document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { tab = b.dataset.tab; render(); });
   document.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { logFilter = b.dataset.f; render(); });
   bindDelete();
+  if (tab === 'pest' && state.pest) bindPlannerPest();
 }
 
 // ---------- 画面：計画画面（QRを読んだとき） ----------
@@ -617,8 +664,10 @@ function renderPlan(plan) {
       </div>
       ${stepperHtml(plan, false)}
       ${isPlanner() ? `<div class="next ${nx ? '' : 'all'}">${nx ? '次の作業：' + nextFlowHtml(plan, nx) : '✓ すべての工程が完了しました'}</div>` : ''}
+      ${isSpray() ? pestHistoryHtml(plan) : ''}
       ${sections}
       ${isPlanner() ? '' : `<button type="button" class="others" id="others">${showAll ? '自分の担当だけにする' : 'ほかの工程も見る'}</button>`}
+      ${isSpray() ? '' : pestHistoryHtml(plan)}
     </main>`;
   bindHeader();
   document.getElementById('bulkbar').hidden = true;
@@ -629,6 +678,7 @@ function renderPlan(plan) {
   });
   const o = document.getElementById('others'); if (o) o.onclick = () => { showAll = !showAll; render(); };
   bindDelete();
+  bindPest(plan);
   bindQty(id => { const s = state.steps.find(x => x.needQty && nextIn(plan, x.major) === x); return s ? { p: plan, s } : null; });
 }
 
@@ -641,7 +691,7 @@ function render() {
     document.getElementById('app').innerHTML = headerHtml('', true) + `<main><div class="card">この QR（${esc(ID)}）の計画が見つかりません。</div></main>`;
     return bindHeader();
   }
-  isPlanner() ? renderPlanner() : renderWorker();
+  isPlanner() ? renderPlanner() : isSpray() ? renderSpray() : renderWorker();
 }
 function showMessage(msg) {
   document.getElementById('app').innerHTML = `<header><h1>QR一元管理</h1></header><main><div class="card">${esc(msg)}</div></main>`;
@@ -651,5 +701,6 @@ fetchState()
   .then(s => { server = s; if (!server.logs) server.logs = []; rebuild(); render(); setInterval(refresh, 15000); })
   .catch(e => showMessage(e.message));
 </script>
+<script src="spray.js"></script>
 </body>
 </html>
