@@ -256,10 +256,14 @@ function roles() {
       const label = (names.length === 1 && names[0] === m ? m : names.join('・')) + '担当';
       return { key: m, label: label, desc: 'やること：' + names.join(' → ') };
     }))
-    .concat(state.pest ? [sprayRole()] : []);   // 農薬のシートがあれば「農薬散布担当」も（spray.js）
+    .concat(pestOn() ? [sprayRole()] : []);   // 農薬のシートがあれば「農薬散布担当」も（spray.js）
 }
 function roleLabel() { const r = roles().find(x => x.key === getRole()); return r ? r.label : ''; }
-function myMajors() { return isPlanner() ? majors() : isSpray() ? [] : [getRole()]; }
+function myMajors() { return isPlanner() ? majors() : sprayMode() ? [] : [getRole()]; }
+// 農薬散布（spray.js）を読めたか。読めなかったとき（置き忘れなど）は農薬の部分だけ出さず、ほかの画面は動かす
+function hasSpray() { return typeof window.renderSpray === 'function'; }
+function pestOn() { return !!(state && state.pest && hasSpray()); }
+function sprayMode() { return hasSpray() && isSpray(); }
 
 // ---------- 共通 ----------
 function qrSvg(text) {
@@ -592,7 +596,7 @@ function renderPlanner() {
         ${stepperHtml(p, true)}<ul class="steps">${steps}</ul>
         <a class="open" href="${esc(planUrl(p.id))}">この計画を開く</a></div>`;
     }).join('') || '<div class="card">計画がありません。「計画」シートを確認してください。</div>'}</div>`;
-  } else if (tab === 'pest' && state.pest) {
+  } else if (tab === 'pest' && pestOn()) {
     body = plannerPestHtml();
   } else {
     const logs = state.logs.filter(l => !logFilter || l.major === logFilter);
@@ -606,7 +610,7 @@ function renderPlanner() {
       <div class="toolbar"><div class="tabs" style="margin:0;border:none">
           <button type="button" data-tab="list" class="${tab === 'list' ? 'on' : ''}">一覧</button>
           <button type="button" data-tab="log" class="${tab === 'log' ? 'on' : ''}">履歴<span class="n">${state.logs.length}</span></button>
-          ${state.pest ? `<button type="button" data-tab="pest" class="${tab === 'pest' ? 'on' : ''}">農薬</button>` : ''}</div>
+          ${pestOn() ? `<button type="button" data-tab="pest" class="${tab === 'pest' ? 'on' : ''}">農薬</button>` : ''}</div>
         <a class="btn-link" href="labels.html">ラベルを印刷する</a></div>
       ${body}
       <p class="muted">最終更新 ${esc(state.updated)}（自動で更新）。工程は「工程」シートに行を足すと増やせます。</p>
@@ -616,7 +620,7 @@ function renderPlanner() {
   document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { tab = b.dataset.tab; render(); });
   document.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { logFilter = b.dataset.f; render(); });
   bindDelete();
-  if (tab === 'pest' && state.pest) bindPlannerPest();
+  if (tab === 'pest' && pestOn()) bindPlannerPest();
 }
 
 // ---------- 画面：計画画面（QRを読んだとき） ----------
@@ -664,10 +668,10 @@ function renderPlan(plan) {
       </div>
       ${stepperHtml(plan, false)}
       ${isPlanner() ? `<div class="next ${nx ? '' : 'all'}">${nx ? '次の作業：' + nextFlowHtml(plan, nx) : '✓ すべての工程が完了しました'}</div>` : ''}
-      ${isSpray() ? pestHistoryHtml(plan) : ''}
+      ${sprayMode() ? pestHistoryHtml(plan) : ''}
       ${sections}
       ${isPlanner() ? '' : `<button type="button" class="others" id="others">${showAll ? '自分の担当だけにする' : 'ほかの工程も見る'}</button>`}
-      ${isSpray() ? '' : pestHistoryHtml(plan)}
+      ${sprayMode() || !hasSpray() ? '' : pestHistoryHtml(plan)}
     </main>`;
   bindHeader();
   document.getElementById('bulkbar').hidden = true;
@@ -678,7 +682,7 @@ function renderPlan(plan) {
   });
   const o = document.getElementById('others'); if (o) o.onclick = () => { showAll = !showAll; render(); };
   bindDelete();
-  bindPest(plan);
+  if (hasSpray()) bindPest(plan);
   bindQty(id => { const s = state.steps.find(x => x.needQty && nextIn(plan, x.major) === x); return s ? { p: plan, s } : null; });
 }
 
@@ -691,7 +695,7 @@ function render() {
     document.getElementById('app').innerHTML = headerHtml('', true) + `<main><div class="card">この QR（${esc(ID)}）の計画が見つかりません。</div></main>`;
     return bindHeader();
   }
-  isPlanner() ? renderPlanner() : isSpray() ? renderSpray() : renderWorker();
+  isPlanner() ? renderPlanner() : sprayMode() ? renderSpray() : renderWorker();
 }
 function showMessage(msg) {
   document.getElementById('app').innerHTML = `<header><h1>QR一元管理</h1></header><main><div class="card">${esc(msg)}</div></main>`;
