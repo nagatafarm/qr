@@ -34,6 +34,9 @@
   table.sched th.who small { display: block; font-weight: normal; color: var(--gray); font-size: 11px; }
   .rank { display: inline-block; font-size: 11px; border-radius: 999px; padding: 0 6px; margin-left: 4px; background: #e1efe4; color: var(--green-d); }
   .rank.b { background: #eee; color: #666; }
+  .sumline.std { color: #8a8a8a; font-size: 11px; }
+  .job .fx { color: var(--orange-d); font-size: 10px; }
+  .lack small { font-weight: normal; }
   .sumline { font-weight: normal; font-size: 11px; color: var(--gray); }
   .sumline.over, .cap.over { color: var(--red); font-weight: bold; }
   .lack { display: inline-block; margin-top: 2px; font-size: 11px; font-weight: bold; color: #fff; background: var(--red); border-radius: 999px; padding: 0 7px; }
@@ -122,9 +125,9 @@ function taskOf(a) { return sch.tasks.find(t => t.id === a.id && t.key === a.key
 function jobHtml(a) {
   const isSel = sel && sel.aid === a.aid;
   return `<div class="job${a.fixed ? ' fixed' : ''}${a.done ? ' done' : ''}${isSel ? ' sel' : ''}" data-aid="${esc(a.aid)}"${canEdit() ? ' draggable="true"' : ''}
-    title="${esc(a.plan)}（${esc(a.id)}）${a.fixed ? '／固定（自動の組み直しで動かない）' : ''}">
+    title="${esc(a.plan)}（${esc(a.id)}）／実際に入る ${esc(num(a.hours))} 時間${a.f && a.f !== 1 ? '・1人前に直すと ' + esc(num(a.std)) + ' 時間（掛ける数 ' + esc(num(a.f)) + '）' : ''}${a.fixed ? '／固定（自動の組み直しで動かない）' : ''}">
     <div class="nm">${esc(a.plan)}</div>
-    <div class="tk"><span>${esc(a.task)}${a.done ? '（済）' : ''}${a.fixed ? ' 📌' : ''}</span><b>${esc(num(a.hours))}h</b></div></div>`;
+    <div class="tk"><span>${esc(a.task)}${a.done ? '（済）' : ''}${a.fixed ? ' 📌' : ''}${a.f && a.f !== 1 ? ` <small class="fx">×${esc(num(a.f))}</small>` : ''}</span><b>${esc(num(a.hours))}h</b></div></div>`;
 }
 
 function render() {
@@ -132,14 +135,17 @@ function render() {
   const areas = [...new Set(sch.people.map(p => p.area).filter(String))], kubuns = [...new Set(sch.people.map(p => p.kubun).filter(String))];
   const head = sch.days.map(d => {
     const capSum = people.reduce((n, p) => n + (sch.cap[p.name][d.key] || 0), 0);
-    const used = sch.assigns.filter(a => a.date === d.key && names.includes(a.name) && !a.done).reduce((n, a) => n + a.hours, 0);
+    const capStd = people.reduce((n, p) => n + (sch.cap[p.name][d.key] || 0) * (p.eff || 1), 0);   // 1人前に直した出勤の時間（その人の掛ける数のならしで）
+    const mine = sch.assigns.filter(a => a.date === d.key && names.includes(a.name) && !a.done);
+    const used = mine.reduce((n, a) => n + a.hours, 0), usedStd = mine.reduce((n, a) => n + (a.std === undefined ? a.hours : a.std), 0);
     const lack = sch.tasks.filter(t => t.short > 0 && (t.due === d.key || (d.today && t.late))).reduce((n, t) => n + t.short, 0);
     return `<th class="${d.today ? 'today' : d.past ? 'past' : ''}">${esc(d.label)}${d.today ? '　今日' : ''}
       <div class="sumline${used > capSum + 1e-9 ? ' over' : ''}">割り振り ${esc(num(used))} ／ 出勤 ${esc(num(capSum))} 時間</div>
-      ${lack > 0 ? `<span class="lack">人手不足 ${esc(num(lack))} 時間</span>` : ''}</th>`;
+      <div class="sumline std">1人前に直すと ${esc(num(usedStd))} ／ ${esc(num(capStd))}</div>
+      ${lack > 0 ? `<span class="lack">人手不足 ${esc(num(lack))} 時間<small>（1人前で）</small></span>` : ''}</th>`;
   }).join('');
-  const rows = people.map(p => `<tr><th class="who">${esc(p.name)}${p.rank ? `<span class="rank${p.rank === 'A' ? '' : ' b'}">${esc(p.rank)}</span>` : ''}
-      <small>${esc([p.kubun, p.area].filter(String).join('・'))}${p.can.length ? '<br>' + esc(p.can.join('・')) + 'だけ' : ''}</small></th>` +
+  const rows = people.map(p => `<tr><th class="who">${esc(p.name)}${p.top ? `<span class="rank${p.top === 'A' ? '' : ' b'}">${esc(p.top)}</span>` : ''}
+      <small>${esc([p.kubun, p.area].filter(String).join('・'))}${(p.jobs || []).length ? '<br>' + esc(p.jobs.slice(0, 6).join(' ')) + (p.jobs.length > 6 ? ' …' : '') : ''}</small></th>` +
     sch.days.map(d => {
       const cap = sch.cap[p.name][d.key] || 0, jobs = jobsOf(p.name, d.key);
       const used = jobs.filter(a => !a.done).reduce((n, a) => n + a.hours, 0);
@@ -164,17 +170,19 @@ function render() {
         <button type="button" class="auto" id="auto"${canEdit() ? '' : ' disabled'}>自動で組み直す</button>
       </div>
       ${canEdit() ? '' : '<div class="note">見るだけの画面です。手直しと組み直しは、一覧の画面で担当を「計画担当」にすると使えます。</div>'}
-      ${!sch.hasPace ? '<div class="note">「作業ペース」のシートがありません。スプレッドシートのメニュー「QRデモ → スケジュールのシートを作る」を実行してください。</div>' : ''}
-      ${!sch.people.length ? '<div class="note">「担当者」シートに人がいません。名前を書くと、ここに行が出ます。</div>' : ''}
+      ${sch.noBook ? '<div class="note">スケジュール用のスプレッドシートが、まだありません。QR一元管理デモのスプレッドシートのメニュー「QRデモ → スケジュール用のスプレッドシートを作る」を実行してください。</div>' : ''}
+      ${!sch.noBook && !sch.hasPace ? '<div class="note">スケジュール用のスプレッドシートに「作業ペース」のシートがありません。メニュー「QRデモ → スケジュール用のスプレッドシートを付け替える」で同じスプレッドシートを選び直すと、足りないシートができます。</div>' : ''}
+      ${!sch.noBook && !sch.people.length ? '<div class="note">「人と仕事」シートに人がいません。名前を書くと、ここに行が出ます。</div>' : ''}
       ${sel && canEdit() ? `<div class="note">「${esc(selText)}」を選んでいます。動かす先のマス（人 × 日）を押してください。</div>` : ''}
       <div class="wrap"><table class="sched"><thead><tr><th class="who">人</th>${head}</tr></thead><tbody>${rows}</tbody></table></div>
+      <p class="muted">カードの時間は、その人が実際に入る時間。「×0.8」は掛ける数で、その人の1時間が1人前の 0.8 時間ぶんに当たるという意味（「人と仕事」シートの A・B・C と「設定」シートで決まる）。必要な時間・人手不足は、1人前の時間で出しています。${canEdit() && sch.bookUrl ? ` <a href="${esc(sch.bookUrl)}" target="_blank" rel="noopener">スケジュール用のスプレッドシートを開く</a>` : ''}</p>
       <p class="muted">カードは、つかんで別のマスへ動かせます（押して選んでから、動かす先のマスを押してもよい）。動かしたカードは 📌（固定）になり、「自動で組み直す」で動きません。
         自動で組むのは ${esc(sch.today.slice(5).replace('-', '/'))} から ${esc(sch.horizonEnd.slice(5).replace('-', '/'))} まで。</p>
       <h2>人手が足りない作業${lackTasks.length ? `<span class="muted">　${lackTasks.length}件</span>` : ''}</h2>
       ${lackTasks.length ? `<div class="tasks">${lackTasks.map(t => `<div class="task${sel && sel.id === t.id && sel.key === t.key ? ' sel' : ''}" data-tid="${esc(t.id)}" data-tkey="${esc(t.key)}">
           <div class="nm">${esc(t.name)} <span class="muted">${esc(t.id)}</span></div>
           <div>${esc(t.task)}　予定日 ${esc(t.dueLabel)}${t.late ? '（過ぎています）' : ''}</div>
-          <div>${esc(t.qty)}${esc(t.unit)}　必要 ${esc(num(t.hours))} 時間　<span class="lk">あと ${esc(num(t.short))} 時間</span></div></div>`).join('')}</div>
+          <div>${esc(t.qty)}${esc(t.unit)}　必要 ${esc(num(t.hours))} 時間　<span class="lk">あと ${esc(num(t.short))} 時間</span><span class="muted">（1人前で）</span></div></div>`).join('')}</div>
         ${canEdit() ? '<p class="muted">押して選んでから、入れる先のマスを押すと、その人のその日に足せます（固定になる）。</p>' : ''}`
         : '<div class="muted">ありません。予定日までの作業は、全部だれかに入っています。</div>'}
       <details><summary>時間を出せない作業・予定日がない作業（${sch.unknown.length}件）</summary>
@@ -223,7 +231,7 @@ function bind() {
       if (!t) return;
       const cap = sch.cap[td.dataset.name][td.dataset.date] || 0;
       const free = cap - jobsOf(td.dataset.name, td.dataset.date).filter(a => !a.done).reduce((n, a) => n + a.hours, 0);
-      edit({ op: 'add', date: td.dataset.date, name: td.dataset.name, id: t.id, key: t.key, hours: free >= 0.25 ? Math.min(t.short, free) : t.short });
+      edit({ op: 'add', date: td.dataset.date, name: td.dataset.name, id: t.id, key: t.key, hours: free >= 0.25 ? Math.min(t.short, free) : t.short });   // 足したあと、掛ける数で足りなければ「あと ◯ 時間」が残る
     };
   });
 }
@@ -240,7 +248,7 @@ function renderPanel() {
   const a = sel && sel.aid ? sch.assigns.find(x => x.aid === sel.aid) : null;
   if (!a) { el.hidden = true; return; }
   const t = taskOf(a);
-  el.innerHTML = `<span class="ttl">${esc(a.plan)}：${esc(a.task)}</span><span class="muted">${esc(a.name)}　${esc(a.date.slice(5).replace('-', '/'))}${t ? '　必要 ' + esc(num(t.hours)) + ' 時間（予定日 ' + esc(t.dueLabel) + '）' : ''}</span>
+  el.innerHTML = `<span class="ttl">${esc(a.plan)}：${esc(a.task)}</span><span class="muted">${esc(a.name)}　${esc(a.date.slice(5).replace('-', '/'))}${t ? '　必要 ' + esc(num(t.hours)) + ' 時間（1人前で。予定日 ' + esc(t.dueLabel) + '）' : ''}${a.f && a.f !== 1 ? '　この人は ×' + esc(num(a.f)) + '（1人前に直すと ' + esc(num(a.std)) + ' 時間）' : ''}</span>
     ${canEdit() ? `<input id="p-h" type="number" inputmode="decimal" step="0.25" min="0.25" value="${esc(num(a.hours))}" aria-label="時間">時間
       <button type="button" id="p-set">時間を変える</button>
       <button type="button" id="p-fix">${a.fixed ? '固定を外す' : '固定する 📌'}</button>

@@ -42,6 +42,29 @@
   .myassign .ma .what { flex: 1; min-width: 90px; color: #444; }
   .backbtn { width: 100%; margin-top: 10px; padding: 12px; font-size: 15px; border-radius: 12px; border: 1px solid #ccc; background: #fff; color: #444; cursor: pointer; }
 
+  /* 最初の画面（作業を登録する／作業を調べる） */
+  .big { display: block; width: 100%; text-align: left; border: none; border-radius: 16px; padding: 28px 22px; margin-top: 16px; font-size: 26px; font-weight: bold; color: #fff; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+  .big small { display: block; font-size: 13px; font-weight: normal; opacity: .95; margin-top: 6px; }
+  .big.reg { background: var(--orange); }
+  .big.find { background: var(--green); }
+  .role.part { border-style: dashed; }
+  /* パートさん用：だれとして記録するかの確認 */
+  #ask { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; z-index: 50; }
+  #ask[hidden] { display: none; }
+  #ask .box { background: #fff; border-radius: 18px; padding: 24px 22px 20px; width: 88%; max-width: 380px; text-align: center; box-shadow: 0 8px 30px rgba(0,0,0,.3); }
+  #ask .msg { font-size: 23px; font-weight: bold; line-height: 1.4; }
+  #ask button { display: block; width: 100%; margin-top: 12px; padding: 16px; font-size: 19px; font-weight: bold; border-radius: 12px; cursor: pointer; }
+  #ask .yes { background: var(--green); color: #fff; border: none; }
+  #ask .no { background: #fff; border: 2px solid #bbb; color: #444; }
+  .whobar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; font-size: 16px; }
+  .whobar b { font-size: 20px; }
+  .whobar button { flex: none; background: #fff; border: 2px solid var(--orange); color: var(--orange-d); border-radius: 10px; padding: 8px 12px; font-size: 14px; font-weight: bold; cursor: pointer; }
+  /* 調べる */
+  .findrow { width: 100%; text-align: left; font-family: inherit; font-size: 15px; cursor: pointer; color: #222; }
+  .findrow .fs span { margin-right: 10px; white-space: nowrap; }
+  .findrow .fs .ok { color: var(--green-d); }
+  button.btn-link { cursor: pointer; font-family: inherit; }
+
   /* タブ */
   .tabs { display: flex; gap: 6px; margin-bottom: 12px; border-bottom: 2px solid var(--line); }
   .tabs button { background: none; border: none; padding: 8px 12px; font-size: 15px; font-weight: bold; color: var(--gray); cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; }
@@ -264,6 +287,8 @@
 </div>
 <div id="toast"></div>
 <div id="saving" hidden><div class="box" id="saving-box"></div></div>
+<div id="ask" hidden><div class="box"><div class="msg" id="ask-msg"></div>
+  <button type="button" class="yes" id="ask-yes">はい</button><button type="button" class="no" id="ask-no">やり直す</button></div></div>
 <div id="scan" hidden>
   <video id="scan-video" playsinline muted></video>
   <div class="bar">
@@ -276,10 +301,22 @@
 
 <script>
 // QR から開いたときは ?id=QRID が付いている
-const ID = new URLSearchParams(location.search).get('id') || '';
-// 名札の QR から開いたときは ?who=名前 が付いている（共有のスマホで、入力する人を切り替える）
+let ID = new URLSearchParams(location.search).get('id') || '';
+// 調べるだけのときは &view=1 が付く（記録のボタンを出さない）
+let VIEW = new URLSearchParams(location.search).get('view') === '1';
+// 名札の QR から開いたときは ?who=名前 が付いている
 const WHO = (new URLSearchParams(location.search).get('who') || '').trim();
+const GO = new URLSearchParams(location.search).get('go') || '';
+// 今の画面：front（最初の画面）／reg（作業を登録する）／find（作業を調べる）。QR から開いたときは最初の画面を飛ばす
+let page = ID ? (VIEW ? 'find' : 'reg') : WHO ? 'reg' : GO === 'find' ? 'find' : GO === 'reg' ? 'reg' : 'front';
 const PLANNER = '__all__';         // 計画担当（すべてを見る）
+const PART = '__part__';           // パートさん用（共有のスマホ）。名札の QR を読んで、その人として記録する
+const PART_IDLE_MIN = 10;          // パートさん用：この分数さわらなければ、名札の読み取りへ戻す
+let partAt = 0;                    // パートさん用：最後にさわった時刻
+let gateManual = false;            // 名札の読み取りを手で閉じた（カメラを自動で開き直さない）
+let asking = null;                 // 「〇〇 さんとして記録します」を出している間の名前
+let findText = '';                 // 調べる画面：探す文字
+let findShort = false;             // 調べる画面：不足の一覧を出すか
 let server = null;                 // 窓口から受け取った最新の状態
 let state = null;                  // 画面に出す状態（server に、まだ送り終わっていない記録を重ねたもの）
 const queue = [];                  // 送る順番待ち（送信中のものも含む）
@@ -303,6 +340,7 @@ function save(k, v) { try { localStorage.setItem('qrdemo.' + k, v); } catch (e) 
 function getName() { return load('person'); }
 function getRole() { return load('role'); }
 function isPlanner() { return getRole() === PLANNER; }
+function isPart() { return load('mode') === 'part'; }   // このスマホは「パートさん用」か
 function majors() {
   const list = [];
   state.steps.forEach(s => { if (list.indexOf(s.major) < 0) list.push(s.major); });
@@ -318,8 +356,8 @@ function roles() {
     }))
     .concat(pestOn() ? [sprayRole()] : []);   // 農薬のシートがあれば「農薬散布担当」も（spray.js）
 }
-function roleLabel() { const r = roles().find(x => x.key === getRole()); return r ? r.label : ''; }
-function myMajors() { return isPlanner() ? majors() : sprayMode() ? [] : [getRole()]; }
+function roleLabel() { if (isPart()) return 'パートさん'; const r = roles().find(x => x.key === getRole()); return r ? r.label : ''; }
+function myMajors() { return isPlanner() || isPart() ? majors() : sprayMode() ? [] : [getRole()]; }
 // 農薬散布（spray.js）を読めたか。読めなかったとき（置き忘れなど）は農薬の部分だけ出さず、ほかの画面は動かす
 function hasSpray() { return typeof window.renderSpray === 'function'; }
 function pestOn() { return !!(state && state.pest && hasSpray()); }
@@ -348,7 +386,7 @@ function stepperHtml(plan, small) {
   const nx = nextStep(plan), mine = myMajors();
   return `<ol class="stepper${small ? ' small' : ''}">` + majors().map((m, i) => {
     const st = majorState(plan, m, nx), pr = majorProgress(plan, m);
-    return `<li class="${st}${!isPlanner() && mine.includes(m) ? ' mine' : ''}"><span class="dot">${st === 'done' ? '✓' : i + 1}</span><span class="lb">${esc(m)}</span>
+    return `<li class="${st}${!isPlanner() && !isPart() && mine.includes(m) ? ' mine' : ''}"><span class="dot">${st === 'done' ? '✓' : i + 1}</span><span class="lb">${esc(m)}</span>
       <span class="ct">${st === 'done' ? '完了' : pr.done + ' / ' + pr.total}</span></li>`;
   }).join('') + '</ol>';
 }
@@ -546,7 +584,7 @@ function removeLogs(ids, what) {
 }
 function refresh() {
   if (queue.length || !document.getElementById('saving').hidden) return;
-  if (inSetup || scan) return;       // 担当・名前を選んでいる間、QR を読んでいる間は描き直さない
+  if (inSetup || scan || asking) return;       // 担当・名前を選んでいる間、QR を読んでいる間は描き直さない
   if (document.activeElement && /^(INPUT|SELECT)$/.test(document.activeElement.tagName)) return;  // 入力中は描き直さない
   fetchState().then(s => { server = s; rebuild(); render(); }).catch(() => {});
 }
@@ -576,9 +614,11 @@ function renderSetup() {
   if (!roles().some(r => r.key === role)) role = '';
   const canBack = !!getName() && !!role;     // 「担当・名前」から来たときは、変えずにもどれる
   document.getElementById('app').innerHTML = `
-    <header><div><h1>QR一元管理</h1><div class="sub">あなたの担当と名前を選んでください</div></div></header>
+    <header><div><h1>QR一元管理</h1><div class="sub">あなたの担当と名前を選んでください</div></div>
+      <div style="display:flex;gap:6px;flex:none"><button type="button" class="hbtn" id="home">最初へ</button></div></header>
     <main style="max-width:520px">
-      <div class="roles">${roles().map(r => `<button type="button" class="role${r.key === role ? ' sel' : ''}" data-role="${esc(r.key)}">${esc(r.label)}<small>${esc(r.desc)}</small></button>`).join('')}</div>
+      <div class="roles">${roles().map(r => `<button type="button" class="role${r.key === role ? ' sel' : ''}" data-role="${esc(r.key)}">${esc(r.label)}<small>${esc(r.desc)}</small></button>`).join('')}
+        <button type="button" class="role part" id="partbtn">パートさん用<small>共有のスマホ用。名札の QR を読んで、その人として記録する</small></button></div>
       <button type="button" class="scanbtn" id="badgebtn" style="margin-top:14px">名札の QR を読む</button>
       <label class="field" for="nm" style="margin-top:8px">名前（記録に残ります）</label>
       <div class="names" id="names"></div>
@@ -603,19 +643,26 @@ function renderSetup() {
   });
   nm.oninput = () => { document.querySelectorAll('[data-name]').forEach(b => b.classList.toggle('sel', b.dataset.name === nm.value.trim())); check(); };
   drawNames(); check();
-  go.onclick = () => { save('role', role); save('person', nm.value.trim()); inSetup = false; tab = ''; picked.clear(); render(); };
+  go.onclick = () => { save('mode', ''); save('role', role); save('person', nm.value.trim()); inSetup = false; tab = ''; picked.clear(); render(); };
+  // パートさん用：このスマホに覚えて、名札の読み取りへ
+  document.getElementById('partbtn').onclick = () => { save('mode', 'part'); save('role', PART); save('person', ''); inSetup = false; gateManual = false; tab = ''; picked.clear(); render(); };
+  document.getElementById('home').onclick = () => goPage('front');
   const back = document.getElementById('back'); if (back) back.onclick = () => { inSetup = false; render(); };
   document.getElementById('badgebtn').onclick = () => startScan('badge');
 }
-// 上の帯：題名の下に今の担当と名前。右に「一覧へ」「担当・名前」（担当と名前を選び直す）
+// 上の帯：題名の下に今の担当と名前。右に「最初へ」「一覧へ」と、「担当・名前」（パートさん用のスマホでは「次の人」）
 function headerHtml(sub, back) {
   return `<header><div style="min-width:0"><h1>QR一元管理${sub ? '<span style="font-size:12px;font-weight:normal">　' + esc(sub) + '</span>' : ''}</h1>
       <div class="sub">${esc(roleLabel())}・${esc(getName())}</div></div>
     <span id="sync" hidden></span>
-    <div style="display:flex;gap:6px;flex:none">${back ? `<a href="${esc(APP_URL)}">一覧へ</a>` : ''}<button type="button" class="hbtn" id="chg">担当・名前</button></div></header>`;
+    <div style="display:flex;gap:6px;flex:none"><button type="button" class="hbtn" id="home">最初へ</button>${back ? '<button type="button" class="hbtn" id="tolist">一覧へ</button>' : ''}${
+      isPart() ? '<button type="button" class="hbtn" id="nextp">次の人</button>' : '<button type="button" class="hbtn" id="chg">担当・名前</button>'}</div></header>`;
 }
 function bindHeader() {
-  document.getElementById('chg').onclick = () => renderSetup();   // 今の担当・名前を選んだまま開く（名前だけ変えるのも2回押すだけ）
+  const c = document.getElementById('chg'); if (c) c.onclick = () => renderSetup();   // 今の担当・名前を選んだまま開く（名前だけ変えるのも2回押すだけ）
+  const h = document.getElementById('home'); if (h) h.onclick = () => goPage('front');
+  const l = document.getElementById('tolist'); if (l) l.onclick = () => goPage('reg');
+  const n = document.getElementById('nextp'); if (n) n.onclick = nextPerson;
   syncBadge();
 }
 
@@ -714,7 +761,7 @@ function renderWorker() {
 function itemFor(p, s) {
   let qty = '';
   if (s.needQty) {
-    const el = document.querySelector('[data-qty="' + CSS.escape(p.id) + '"]');
+    const el = document.querySelector('[data-qty="' + CSS.escape(p.id + '|' + s.key) + '"]') || document.querySelector('[data-qty="' + CSS.escape(p.id) + '"]');
     qty = el ? el.value : defaultQty(p, s);
     if (qty === '' || isNaN(Number(qty))) { toast(planName(p) + '：数量を入れてください', true); return null; }
   }
@@ -836,6 +883,7 @@ function bindShortTab() {
 function renderPlan(plan) {
   const nx = nextStep(plan), mine = myMajors();
   const shown = isPlanner() || showAll ? majors() : mine;
+  const allow = isPart() ? partAllowed(plan) : null;   // パートさん：完了にできる工程
   const sections = shown.map(m => {
     const st = majorState(plan, m, nx), pr = majorProgress(plan, m);
     const head = st === 'done' ? '<span class="tag ok">完了</span>' : st === 'now' ? '<span class="tag now">作業中</span>' : '<span class="tag ng">' + pr.done + ' / ' + pr.total + '</span>';
@@ -853,12 +901,14 @@ function renderPlan(plan) {
         return `<li class="done"><span class="mark">✓</span><div class="box">
           <div class="t">${esc(taskName(s))}<span class="tag ok">完了</span></div><div class="info">${info}</div>${del}</div></li>`;
       }
-      const isCur = firstOpen && firstOpen.key === s.key;
+      const isCur = allow ? allow.includes(s.key) : firstOpen && firstOpen.key === s.key;
+      if (allow && !isCur) return `<li class="todo"><span class="mark"></span><div class="box">
+        <div class="t">${esc(taskName(s))}<span class="tag ng">未完了</span></div><div class="desc">${esc(s.note)}</div></div></li>`;
       return `<li class="${isCur ? 'cur' : 'todo'}"><span class="mark"></span><div class="box">
         <div class="t">${esc(taskName(s))}${isCur ? '<span class="tag now">次の作業</span>' : '<span class="tag ng">未完了</span>'}</div>
         <div class="desc">${esc(s.note)}</div>
         ${placeHtml(plan, s)}${shortHtml(plan, s)}
-        <div class="row">${s.needQty ? `<input class="qty" type="number" inputmode="decimal" step="any" data-qty="${esc(plan.id)}" value="${esc(defaultQty(plan, s))}" aria-label="数量（${esc(s.unit)}）">` : ''}
+        <div class="row">${s.needQty ? `<input class="qty" type="number" inputmode="decimal" step="any" data-qty="${esc(plan.id + '|' + s.key)}" value="${esc(defaultQty(plan, s))}" aria-label="数量（${esc(s.unit)}）">` : ''}
           <button type="button" class="do" data-step="${esc(s.key)}">${esc(taskName(s))}を完了にする</button></div></div></li>`;
     }).join('');
     return `<section class="major"><h2>${esc(m)}${head}</h2>
@@ -884,7 +934,8 @@ function renderPlan(plan) {
       ${isPlanner() ? `<div class="next ${nx ? '' : 'all'}">${nx ? '次の作業：' + nextFlowHtml(plan, nx) : '✓ すべての工程が完了しました'}</div>` : ''}
       ${sprayMode() ? pestHistoryHtml(plan) : ''}
       ${sections}
-      ${isPlanner() ? '' : `<button type="button" class="others" id="others">${showAll ? '自分の担当だけにする' : 'ほかの工程も見る'}</button>`}
+      ${isPlanner() || isPart() ? '' : `<button type="button" class="others" id="others">${showAll ? '自分の担当だけにする' : 'ほかの工程も見る'}</button>`}
+      ${isPart() ? '<button type="button" class="primary" id="p-more">ほかの作業を登録する</button><button type="button" class="backbtn" id="p-next">次の人に替わる</button>' : ''}
       ${sprayMode() || !hasSpray() ? '' : pestHistoryHtml(plan)}
     </main>`;
   bindHeader();
@@ -896,9 +947,11 @@ function renderPlan(plan) {
   });
   document.getElementById('seeplan').onclick = () => { showPlan = !showPlan; render(); };
   const o = document.getElementById('others'); if (o) o.onclick = () => { showAll = !showAll; render(); };
+  const pm = document.getElementById('p-more'); if (pm) pm.onclick = () => goPage('reg');
+  const pn = document.getElementById('p-next'); if (pn) pn.onclick = nextPerson;
   bindDelete();
   if (hasSpray()) bindPest(plan);
-  bindQty(id => { const s = state.steps.find(x => x.needQty && nextIn(plan, x.major) === x); return s ? { p: plan, s } : null; });
+  bindQty(k => { const s = state.steps.find(x => x.key === k.slice(plan.id.length + 1)); return s ? { p: plan, s } : null; });
   bindPlace();
 }
 
@@ -907,10 +960,12 @@ function scanDraw(msg, isErr) {
   const m = document.getElementById('scan-msg');
   if (msg !== undefined) { m.textContent = msg; m.className = 'msg' + (isErr ? ' err' : ''); }
   const n = scan ? scan.items.filter(x => x.ok).length : 0;
-  document.getElementById('scan-cnt').textContent = n ? n + '件を選びました' : '';
+  const multi = !scan || !scan.mode;   // 計画の QR をまとめて読んでいる
+  document.getElementById('scan-cnt').textContent = multi && n ? n + '件を選びました' : '';
   document.getElementById('scan-list').innerHTML = (scan ? scan.items : []).map(x =>
     `<div class="${x.ok ? '' : 'ng'}">${x.ok ? '✓ ' : '✕ '}${esc(x.text)} <small>${esc(x.id)}</small></div>`).join('');
-  document.getElementById('scan-end').textContent = n ? '読み終わる（' + n + '件を選んだ）' : '読み終わる';
+  document.getElementById('scan-end').textContent = scan && scan.mode === 'gate' ? '名前の一覧から選ぶ'
+    : !multi ? 'やめる' : n ? '読み終わる（' + n + '件を選んだ）' : '読み終わる';
 }
 // QR の中身（画面のURL?id=QRID）から QRID を取り出す。QRID だけの QR も読める
 function qrId(text) {
@@ -927,10 +982,24 @@ function onScan(text) {
     if (!scan.seen['?' + text]) { scan.seen['?' + text] = true; scan.items.unshift({ ok: false, id: String(text).slice(0, 30), text: '名札の QR ではありません' }); scanDraw(); }
     return;
   }
+  if (scan.mode === 'gate') {         // パートさん用：名札を読んだら「〇〇 さんとして記録します」と確かめる
+    if (scan.hold) return;
+    let who = '';
+    try { who = (new URL(String(text).trim()).searchParams.get('who') || '').trim(); } catch (e) {}
+    if (who) return askWho(who);
+    if (!scan.seen['?' + text]) { scan.seen['?' + text] = true; scan.items.unshift({ ok: false, id: String(text).slice(0, 30), text: '名札の QR ではありません' }); scanDraw(); }
+    return;
+  }
+  if (scan.mode === 'one' || scan.mode === 'find') {   // 1つ読んだら、その計画の画面を開く（find は見るだけ）
+    const id1 = qrId(text), k1 = id1 || '?' + text;
+    if (id1 && state.plans.some(p => p.id === id1)) { const v = scan.mode === 'find'; stopScan(true); openPlan(id1, v); return; }
+    if (!scan.seen[k1]) { scan.seen[k1] = true; scan.items.unshift({ ok: false, id: id1 || String(text).slice(0, 30), text: id1 ? 'この QR の計画が見つかりません' : '計画の QR ではありません' }); scanDraw(); }
+    return;
+  }
   const id = qrId(text), key = id || '?' + text;
   if (scan.seen[key]) return;          // 同じ QR は1回だけ
   scan.seen[key] = true;
-  const x = id && todoList(getRole()).find(y => y.p.id === id);
+  const x = id && myTodo().find(y => y.p.id === id);
   if (x) {
     picked.add(id);
     scan.items.unshift({ ok: true, id: id, text: planName(x.p) + '（' + taskName(x.s) + '）' });
@@ -949,11 +1018,12 @@ function loadScript(src) {
     document.head.appendChild(s);
   });
 }
-// mode が 'badge' なら名札を読む（担当・名前の画面から）。それ以外は計画の QR をまとめて読む
+// mode：'badge' ＝ 名札を読む（担当・名前の画面から）、'gate' ＝ 名札を読んで確かめる（パートさん用）、
+//       'one' ＝ 計画の QR を1つ読んで開く、'find' ＝ 1つ読んで調べる。それ以外は計画の QR をまとめて読む
 async function startScan(mode) {
   if (scan) return;
   const el = document.getElementById('scan'), video = document.getElementById('scan-video');
-  const me = scan = { seen: {}, items: [], stream: null, timer: 0, busy: false, mode: mode === 'badge' ? 'badge' : '' };
+  const me = scan = { seen: {}, items: [], stream: null, timer: 0, busy: false, mode: ['badge', 'gate', 'one', 'find'].indexOf(mode) >= 0 ? mode : '', hold: false };
   el.hidden = false;
   document.getElementById('scan-end').onclick = stopScan;
   scanDraw('カメラを開いています…');
@@ -965,7 +1035,7 @@ async function startScan(mode) {
     stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
   } catch (e) {
     if (scan !== me) return;
-    return scanDraw(e.name === 'NotAllowedError' || e.name === 'SecurityError' ? 'カメラが許可されていません。ブラウザの設定でこのページのカメラを許可してから、もう一度「QR をまとめて読む」を押してください。'
+    return scanDraw(e.name === 'NotAllowedError' || e.name === 'SecurityError' ? 'カメラが許可されていません。ブラウザの設定でこのページのカメラを許可してから、もう一度、読み取りのボタンを押してください。'
       : e.name === 'NotFoundError' || e.name === 'OverconstrainedError' ? 'カメラが見つかりません。'
       : e.name === 'NotReadableError' ? 'カメラをほかのアプリが使っています。そのアプリを閉じてから、もう一度押してください。'
       : 'カメラを開けませんでした（' + e.name + '）。', true);
@@ -986,7 +1056,7 @@ async function startScan(mode) {
     }
   }
   if (scan !== me) return;
-  scanDraw(me.mode === 'badge' ? '自分の名札の QR にカメラを向けてください。' : 'QR にカメラを向けてください。続けて何枚でも読めます。');
+  scanDraw(me.mode === 'badge' || me.mode === 'gate' ? '自分の名札の QR にカメラを向けてください。' : me.mode ? '計画の QR にカメラを向けてください。' : 'QR にカメラを向けてください。続けて何枚でも読めます。');
   const canvas = document.createElement('canvas');
   me.timer = setInterval(async () => {
     if (scan !== me || me.busy || video.readyState < 2 || !video.videoWidth) return;
@@ -1018,19 +1088,327 @@ function stopScan(keep) {
   const video = document.getElementById('scan-video');
   try { video.pause(); video.srcObject = null; } catch (e) {}
   document.getElementById('scan').hidden = true;
+  if (!asking) document.getElementById('ask').hidden = true;
   if (keep === true || (me && me.mode === 'badge')) return;   // 名札を読んでいたときは、担当・名前の画面のまま
+  if (me && me.mode === 'gate') gateManual = true;            // パートさん用：カメラを閉じた。名前の一覧から選べる
+  if (me && me.mode) { if (state) render(); return; }
   if (state) { tab = 'todo'; render(); }
 }
 
+// ---------- 画面：最初の画面（作業を登録する／作業を調べる） ----------
+function renderFront() {
+  const who = isPart() ? 'このスマホは「パートさん用」です' : getName() && roleLabel() ? 'このスマホ：' + roleLabel() + '・' + getName() : '';
+  document.getElementById('app').innerHTML = `
+    <header><div><h1>QR一元管理</h1><div class="sub">作業の記録と、進み具合の確認</div></div></header>
+    <main style="max-width:520px">
+      <button type="button" class="big reg" id="f-reg">作業を登録する<small>終わった作業を記録する（QR を読む・やることの一覧）</small></button>
+      <button type="button" class="big find" id="f-find">作業を調べる<small>計画の中身と進み具合を見る（QR を読む・名前で探す）</small></button>
+      ${who ? `<p class="muted" style="text-align:center;margin-top:16px">${esc(who)}</p>` : ''}
+    </main>`;
+  document.getElementById('bulkbar').hidden = true;
+  document.getElementById('f-reg').onclick = () => goPage('reg');
+  document.getElementById('f-find').onclick = () => goPage('find');
+}
+// 画面を替える（読み込み直さない）。URL も合わせる（もどるボタン・読み込み直しで同じ画面になる）
+function setUrl(q) { try { history.pushState(null, '', location.pathname + q); } catch (e) {} }
+function goPage(name) {
+  if (scan) stopScan(true);
+  asking = null; document.getElementById('ask').hidden = true;
+  ID = ''; VIEW = false; page = name; inSetup = false; tab = ''; showAll = false;
+  setUrl(name === 'front' ? '' : '?go=' + name);
+  window.scrollTo(0, 0);
+  render();
+}
+function openPlan(id, view) {
+  ID = id; VIEW = !!view; page = view ? 'find' : 'reg'; showAll = false;
+  if (view) showPlan = true;   // 調べるときは、計画の中身を開いて出す
+  setUrl('?id=' + encodeURIComponent(id) + (view ? '&view=1' : ''));
+  window.scrollTo(0, 0);
+  render();
+}
+window.addEventListener('popstate', () => {
+  const q = new URLSearchParams(location.search);
+  ID = q.get('id') || ''; VIEW = q.get('view') === '1';
+  page = ID ? (VIEW ? 'find' : 'reg') : q.get('go') === 'find' ? 'find' : q.get('go') === 'reg' ? 'reg' : 'front';
+  if (state) render();
+});
+
+// ---------- パートさん用（共有のスマホ）：名札の QR を読んで、その人として記録する ----------
+function touchPart() { partAt = Date.now(); save('partAt', String(partAt)); }
+function partExpired() { return Date.now() - (partAt || Number(load('partAt')) || 0) > PART_IDLE_MIN * 60000; }
+function knownPerson(name) { const l = state.people || []; return !l.length || l.some(p => p.name === name); }
+// 名札を読んだ・名前を選んだ：「〇〇 さんとして記録します」「はい」「やり直す」
+function askWho(name) {
+  name = String(name || '').trim().slice(0, 40);
+  if (!name) return;
+  if (!knownPerson(name)) {
+    const msg = '「' + name + '」さんは、人の一覧にありません。名札を確かめて、もう一度読んでください。';
+    asking = null;
+    if (scan) {
+      if (!scan.seen['x' + name]) { scan.seen['x' + name] = true; setTimeout(() => { if (scan) delete scan.seen['x' + name]; }, 4000); scanDraw(msg, true); }
+    } else { toast(msg, true); if (state) render(); }
+    return;
+  }
+  if (scan) scan.hold = true;
+  asking = name;
+  const el = document.getElementById('ask');
+  document.getElementById('ask-msg').textContent = name + ' さんとして記録します';
+  el.hidden = false;
+  document.getElementById('ask-yes').onclick = () => {
+    el.hidden = true; asking = null;
+    stopScan(true);
+    save('person', name); touchPart(); tab = ''; picked.clear();
+    render();
+  };
+  document.getElementById('ask-no').onclick = () => {
+    el.hidden = true; asking = null;
+    if (scan) { scan.hold = false; scanDraw('自分の名札の QR にカメラを向けてください。'); }
+    else { gateManual = false; render(); }
+  };
+}
+// 次の人に替わる：名札の読み取りへ戻る
+function nextPerson() {
+  save('person', ''); gateManual = false; picked.clear(); tab = '';
+  if (ID) return goPage('reg');
+  render();
+}
+// 一定の時間さわらなければ、名札の読み取りへ戻す（前の人のまま記録しないように）
+function partIdleCheck() {
+  if (!isPart() || !getName() || queue.length || scan || asking || !partExpired()) return;
+  save('person', ''); gateManual = false; picked.clear();
+  if (state && page === 'reg') render();
+}
+['pointerdown', 'keydown', 'input'].forEach(ev => document.addEventListener(ev, () => { if (isPart() && getName() && Date.now() - partAt > 5000) touchPart(); }, true));
+setInterval(partIdleCheck, 15000);
+
+// 名札を読む画面。開くと、カメラの読み取りが自動で始まる
+function renderGate() {
+  const all = state.people || [];
+  const parts = all.filter(p => p.kubun && p.kubun.indexOf('社員') < 0);
+  const names = parts.length ? parts : all;
+  document.getElementById('app').innerHTML = `
+    <header><div><h1>QR一元管理</h1><div class="sub">パートさん用</div></div>
+      <div style="display:flex;gap:6px;flex:none"><button type="button" class="hbtn" id="home">最初へ</button></div></header>
+    <main style="max-width:520px">
+      <div class="card" style="text-align:center">
+        <div class="name" style="font-size:20px">自分の名札の QR を読んでください</div>
+        <p class="muted">読むと「〇〇 さんとして記録します」と出ます。「はい」を押すと、作業を登録できます。</p>
+        <button type="button" class="primary" id="g-scan" style="margin-top:8px">名札の QR を読む</button>
+      </div>
+      <details class="card" style="margin-top:12px"${gateManual ? ' open' : ''}><summary>カメラが使えないとき：名前の一覧から選ぶ</summary>
+        <div class="names" style="margin-top:10px">${names.map(p => `<button type="button" class="nmbtn" data-gname="${esc(p.name)}">${esc(p.name)}</button>`).join('')}</div>
+        ${names.length ? '' : `<label class="field">名前を入れる<input id="g-name" type="text" placeholder="例：いいだ"></label>
+          <button type="button" class="sub-btn" id="g-ok" style="margin-top:8px">この名前で記録する</button>`}
+      </details>
+      <button type="button" class="others" id="g-staff">社員の画面にする（担当を選び直す）</button>
+    </main>`;
+  document.getElementById('bulkbar').hidden = true;
+  document.getElementById('home').onclick = () => goPage('front');
+  document.getElementById('g-scan').onclick = () => { gateManual = false; startScan('gate'); };
+  document.querySelectorAll('[data-gname]').forEach(b => b.onclick = () => askWho(b.dataset.gname));
+  const ok = document.getElementById('g-ok'); if (ok) ok.onclick = () => askWho(document.getElementById('g-name').value);
+  document.getElementById('g-staff').onclick = () => { save('mode', ''); save('role', ''); save('person', ''); renderSetup(); };
+  if (!gateManual && !scan && !asking) startScan('gate');
+}
+// パートさんが、その計画で完了にできる工程：今日の自分の割り振りにある工程。なければ、その計画の次の作業
+function partAllowed(p) {
+  const mine = (state.assign || []).filter(a => a.name === getName() && a.id === p.id)
+    .map(a => state.steps.find(s => s.key === a.key)).filter(s => s && !isDone(p, s));
+  if (mine.length) return mine.map(s => s.key);
+  const nx = nextStep(p);
+  return nx ? [nx.key] : [];
+}
+function partList() {
+  return state.plans.map(p => ({ p, s: state.steps.find(s => s.key === partAllowed(p)[0]), key: '' })).filter(x => x.s);
+}
+// まとめ読みで選べる計画：社員は担当のやること、パートさんは終わっていない計画（割り振りの工程か、次の作業）
+function myTodo() { return isPart() ? partList() : todoList(getRole()); }
+// パートさんの登録の画面：今日の割り振り、QR を読む、読んだ計画の一覧
+function renderPart() {
+  const all = partList();
+  const mineIds = (state.assign || []).filter(a => a.name === getName()).map(a => a.id);
+  const list = all.filter(x => picked.has(x.p.id) || mineIds.includes(x.p.id));
+  const mineLogs = state.logs.filter(l => l.person === getName() && l.canDelete);
+  const rows = list.map(({ p, s }) => `<div class="task${picked.has(p.id) ? ' picked' : ''}" data-row="${esc(p.id)}">
+      <input type="checkbox" data-pick="${esc(p.id)}"${picked.has(p.id) ? ' checked' : ''} aria-label="選ぶ">
+      <div class="body"><div class="nm"><a href="#" data-open="${esc(p.id)}">${esc(planName(p))}</a> <span class="muted">${esc(p.id)}</span></div>
+        <div class="fs"><b>${esc(fullTask(s, '：'))}</b>　${fieldsHtml(p, s.major)}</div>
+        ${placeHtml(p, s)}${shortHtml(p, s)}</div>
+      <div class="act">${s.needQty ? `<input class="qty" type="number" inputmode="decimal" step="any" data-qty="${esc(p.id)}" value="${esc(defaultQty(p, s))}" aria-label="数量">` : ''}
+        <button type="button" class="done-btn" data-do="${esc(p.id)}">${esc(taskName(s))}<br>完了</button></div>
+    </div>`).join('');
+  document.getElementById('app').innerHTML = headerHtml('', false) + `
+    <main style="max-width:720px">
+      <div class="card whobar"><span><b>${esc(getName())}</b> さんとして記録します</span><button type="button" id="w-next">次の人に替わる</button></div>
+      ${myAssignHtml()}
+      <button type="button" class="scanbtn" id="onebtn">作業の QR を読む</button>
+      <button type="button" class="scanbtn" id="scanbtn" style="margin-top:8px">QR をまとめて読む</button>
+      <p class="muted" style="margin:6px 0 0">「作業の QR を読む」は、読んだ計画の画面が開きます。「まとめて読む」は、読んだ計画が下に並び、一度に完了にできます。</p>
+      ${list.length ? '<div class="day"><h3>今日の割り振りと、読んだ計画</h3></div>' + rows : ''}
+      ${mineLogs.length ? '<div class="day"><h3>自分の記録（24時間）</h3></div>' + mineLogs.map(logHtml).join('') + '<p class="muted">押しまちがえた記録は、24時間以内なら「消す」で消せます。</p>' : ''}
+      <p class="muted">最終更新 ${esc(state.updated)}。記録が終わったら「次の人に替わる」を押してください（${PART_IDLE_MIN}分さわらないと、自動で名札の読み取りへ戻ります）。</p>
+    </main>`;
+  bindHeader();
+  document.getElementById('w-next').onclick = nextPerson;
+  document.getElementById('onebtn').onclick = () => startScan('one');
+  document.getElementById('scanbtn').onclick = () => startScan();
+  document.querySelectorAll('[data-open]').forEach(a => a.onclick = ev => { ev.preventDefault(); openPlan(a.dataset.open, false); });
+  document.querySelectorAll('.myassign a').forEach(a => a.onclick = ev => { const id = new URL(a.href).searchParams.get('id'); if (id) { ev.preventDefault(); openPlan(id, false); } });
+  document.querySelectorAll('[data-pick]').forEach(c => c.onchange = () => { c.checked ? picked.add(c.dataset.pick) : picked.delete(c.dataset.pick); render(); });
+  document.querySelectorAll('[data-do]').forEach(b => b.onclick = () => {
+    const x = list.find(y => y.p.id === b.dataset.do);
+    const item = itemFor(x.p, x.s);
+    if (item) { picked.delete(x.p.id); complete([item], '「' + taskName(x.s) + '」完了'); }
+  });
+  bindDelete();
+  bindQty(id => list.find(y => y.p.id === id));
+  bindPlace();
+  // 一括登録のバー
+  const ids = [...picked].filter(id => list.some(x => x.p.id === id));
+  picked.forEach(id => { if (!ids.includes(id)) picked.delete(id); });
+  document.getElementById('bulkbar').hidden = !ids.length;
+  document.getElementById('bulk-cnt').textContent = ids.length + '件を選択中';
+  document.getElementById('bulk-clear').onclick = () => { picked.clear(); render(); };
+  document.getElementById('bulk-go').onclick = () => {
+    const items = [];
+    for (const id of ids) { const x = list.find(y => y.p.id === id); const it = itemFor(x.p, x.s); if (!it) return; items.push(it); }
+    picked.clear();
+    complete(items, items.length + '件を完了にしました');
+  };
+}
+
+// ---------- 作業を調べる（見るだけ。担当や名前を決めていなくても見られる） ----------
+const nk = s => String(s == null ? '' : s).normalize('NFKC').toLowerCase().replace(/\s+/g, '');
+function findList() {
+  const q = nk(findText);
+  return state.plans.filter(p => !q || nk([planName(p), p.id, p.v['注文NO'], p.v['品番'], p.v['商品名'], p.v['出荷先']].join(' ')).includes(q));
+}
+function findRowsHtml() {
+  const list = findList(), max = 60;
+  return (list.slice(0, max).map(p => {
+    const nx = nextStep(p);
+    const prog = majors().map(m => { const pr = majorProgress(p, m); return `<span class="${pr.done === pr.total ? 'ok' : ''}">${esc(m)} ${pr.done === pr.total ? '✓' : pr.done + '/' + pr.total}</span>`; }).join('');
+    return `<button type="button" class="task findrow" data-open="${esc(p.id)}"><div class="body">
+      <div class="nm">${esc(planName(p))} <span class="muted">${esc(p.id)}</span></div>
+      <div class="fs">${prog}${nx ? '次の作業：' + esc(fullTask(nx, '：')) : '<span class="ok">すべて完了</span>'}</div></div></button>`;
+  }).join('') || '<div class="empty">当てはまる計画がありません</div>') +
+    (list.length > max ? `<p class="muted">${list.length}件のうち、はじめの${max}件を出しています。文字を足してしぼってください。</p>` : '');
+}
+function shortListHtml() {
+  const list = state.shorts || [];
+  if (!list.length) return '<div class="empty">不足の記録はありません</div>';
+  return list.map(x => {
+    const s = state.steps.find(y => y.major === x.major && y.minor === x.minor);
+    return `<div class="sh${x.fix ? ' ok' : ''}">
+      <div class="top"><b class="short">不足 ${esc(x.short)}本</b><a href="#" data-open="${esc(x.id)}">${esc(x.name)}</a><span class="muted">${esc(x.id)}</span>
+        <span class="tag ${x.fix ? 'ok' : 'now'}">${x.fix ? '対処済み' : '対処まだ'}</span></div>
+      <div class="t">${esc(x.time)}　${esc(s ? fullTask(s, '：') : x.major + '：' + x.minor)}${placeText(x) ? '　' + esc(placeText(x)) : ''}　${esc(x.person)}${x.memo ? '　メモ：' + esc(x.memo) : ''}</div>
+      ${x.fix ? `<div style="margin-top:6px"><span class="fixed">対処：${esc(x.fix)}</span><span class="muted">　${esc(x.fixBy)} ${esc(x.fixAt)}</span></div>` : ''}</div>`;
+  }).join('');
+}
+function bindOpen() {
+  document.querySelectorAll('[data-open]').forEach(b => b.onclick = ev => { ev.preventDefault(); openPlan(b.dataset.open, true); });
+}
+function renderFind() {
+  const nShort = (state.shorts || []).filter(x => !x.fix).length;
+  document.getElementById('app').innerHTML = `
+    <header><div><h1>作業を調べる</h1><div class="sub">計画の中身と進み具合を見る（ここからは記録しません）</div></div>
+      <div style="display:flex;gap:6px;flex:none"><button type="button" class="hbtn" id="home">最初へ</button></div></header>
+    <main style="max-width:720px">
+      <button type="button" class="scanbtn" id="findscan">QR を読む</button>
+      <label class="field" style="margin-top:10px">名前・QRID・注文NO で探す<input id="findq" type="search" value="${esc(findText)}" placeholder="例：ミニトマト、26-00012"></label>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin:12px 0">
+        <a class="btn-link" href="schedule.html">スケジュール</a>
+        <button type="button" class="btn-link" id="findshort">${findShort ? '不足の一覧を閉じる' : '不足の一覧'}${nShort ? '（対処まだ ' + nShort + '件）' : ''}</button></div>
+      ${findShort ? shortListHtml() : ''}
+      <div class="day"><h3>計画の一覧<span class="muted" id="findcnt">　${findList().length}件</span></h3></div>
+      <div id="findlist">${findRowsHtml()}</div>
+      <p class="muted">最終更新 ${esc(state.updated)}（自動で更新）。</p>
+    </main>`;
+  document.getElementById('bulkbar').hidden = true;
+  document.getElementById('home').onclick = () => goPage('front');
+  document.getElementById('findscan').onclick = () => startScan('find');
+  document.getElementById('findshort').onclick = () => { findShort = !findShort; render(); };
+  // 探す文字を打っている間は、一覧の所だけ描き直す（入力欄を作り直さない）
+  document.getElementById('findq').oninput = e => {
+    findText = e.target.value;
+    document.getElementById('findlist').innerHTML = findRowsHtml();
+    document.getElementById('findcnt').textContent = '　' + findList().length + '件';
+    bindOpen();
+  };
+  bindOpen();
+}
+// 調べる：計画の中身と進み具合（記録のボタンは出さない）
+function renderPlanView(plan) {
+  const nx = nextStep(plan);
+  const sections = majors().map(m => {
+    const st = majorState(plan, m, nx), pr = majorProgress(plan, m);
+    const head = st === 'done' ? '<span class="tag ok">完了</span>' : st === 'now' ? '<span class="tag now">作業中</span>' : '<span class="tag ng">' + pr.done + ' / ' + pr.total + '</span>';
+    const items = majorSteps(m).map(s => {
+      const r = plan.status[s.key] || {};
+      if (r.done) {
+        let info = esc(r.time) + (r.person ? '　' + esc(r.person) : '');
+        if (r.qty !== '' && r.qty != null) info += '　' + esc(r.qty) + esc(s.unit) + diffText(plan, s, r.qty);
+        if (placeText(r)) info += '　' + esc(placeText(r));
+        if (shortInfo(r)) info += '<br>' + shortInfo(r, true);
+        return `<li class="done"><span class="mark">✓</span><div class="box"><div class="t">${esc(taskName(s))}<span class="tag ok">完了</span></div><div class="info">${info}</div></div></li>`;
+      }
+      const isCur = nx && nx.key === s.key;
+      return `<li class="${isCur ? 'cur' : 'todo'}"><span class="mark"></span><div class="box">
+        <div class="t">${esc(taskName(s))}${isCur ? '<span class="tag now">次の作業</span>' : '<span class="tag ng">未完了</span>'}</div><div class="desc">${esc(s.note)}</div></div></li>`;
+    }).join('');
+    return `<section class="major"><h2>${esc(m)}${head}</h2>
+      <div class="fs muted" style="margin:-4px 0 8px">${fieldsHtml(plan, m)}${dateCol(m) ? '　<b>予定日</b> ' + esc(plan.w[dateCol(m)] || plan.v[dateCol(m)]) : ''}</div>
+      <ol class="tl">${items}</ol></section>`;
+  }).join('');
+  document.getElementById('app').innerHTML = `
+    <header><div style="min-width:0"><h1>作業を調べる</h1><div class="sub">見るだけの画面です</div></div>
+      <div style="display:flex;gap:6px;flex:none"><button type="button" class="hbtn" id="home">最初へ</button><button type="button" class="hbtn" id="tofind">一覧へ</button></div></header>
+    <main style="max-width:560px">
+      <div class="card plan-card">
+        <span class="badge">${esc(plan.id)}</span>
+        <div class="name">${esc(planName(plan))}</div>
+        <button type="button" class="seeplan" id="seeplan" aria-expanded="${showPlan}">${showPlan ? '計画を閉じる' : 'この計画を見る'}</button>
+        ${showPlan ? planAllHtml(plan) : ''}
+      </div>
+      ${stepperHtml(plan, false)}
+      <div class="next ${nx ? '' : 'all'}">${nx ? '次の作業：' + nextFlowHtml(plan, nx) : '✓ すべての工程が完了しました'}</div>
+      ${sections}
+      <button type="button" class="primary" id="v-reg">この作業を登録する</button>
+      <button type="button" class="backbtn" id="v-back">ほかの計画を調べる</button>
+    </main>`;
+  document.getElementById('bulkbar').hidden = true;
+  document.getElementById('home').onclick = () => goPage('front');
+  document.getElementById('tofind').onclick = () => goPage('find');
+  document.getElementById('v-back').onclick = () => goPage('find');
+  document.getElementById('v-reg').onclick = () => openPlan(plan.id, false);
+  document.getElementById('seeplan').onclick = () => { showPlan = !showPlan; render(); };
+}
+
 // ---------- 画面の切り替え ----------
+function planMissing() {
+  document.getElementById('app').innerHTML = headerHtml('', true) + `<main><div class="card">この QR（${esc(ID)}）の計画が見つかりません。</div></main>`;
+  document.getElementById('bulkbar').hidden = true;
+  bindHeader();
+}
 function render() {
+  if (!state) return;
+  if (page === 'front' && !inSetup) return renderFront();
+  if (page === 'find') {
+    const p = ID && state.plans.find(x => x.id === ID);
+    return p ? renderPlanView(p) : renderFind();
+  }
+  // ここから「作業を登録する」
+  if (isPart() && !inSetup) {   // パートさん用のスマホ：だれかが決まっていなければ、先に名札を読む
+    if (!getName()) return renderGate();
+    if (ID) { const plan = state.plans.find(p => p.id === ID); return plan ? renderPlan(plan) : planMissing(); }
+    return renderPart();
+  }
   if (inSetup || !getName() || !roles().some(r => r.key === getRole())) return renderSetup();
   inSetup = false;
   if (ID) {
     const plan = state.plans.find(p => p.id === ID);
-    if (plan) return renderPlan(plan);
-    document.getElementById('app').innerHTML = headerHtml('', true) + `<main><div class="card">この QR（${esc(ID)}）の計画が見つかりません。</div></main>`;
-    return bindHeader();
+    return plan ? renderPlan(plan) : planMissing();
   }
   isPlanner() ? renderPlanner() : sprayMode() ? renderSpray() : renderWorker();
 }
@@ -1041,11 +1419,18 @@ showMessage('読み込んでいます…');
 fetchState()
   .then(s => {
     server = s; if (!server.logs) server.logs = []; rebuild();
+    partAt = Number(load('partAt')) || 0;
+    if (isPart() && getName() && partExpired()) save('person', '');   // 前の人のまま時間がたっていたら、名札の読み取りから
+    let askName = '';
     if (WHO) {   // 名札の QR から開いた：その人に切り替え、URL から who を外す（読み込み直しても切り替え直さない）
-      applyWho(WHO);
+      if (isPart()) { askName = WHO; asking = WHO; save('person', ''); }   // パートさん用のスマホでは、確かめてから
+      else applyWho(WHO);
       try { history.replaceState(null, '', location.pathname + (ID ? '?id=' + encodeURIComponent(ID) : '')); } catch (e) {}
     }
-    render(); setInterval(refresh, 15000);
+    if (showPlan === false && VIEW) showPlan = true;   // 調べるときは、計画の中身を開いて出す
+    render();
+    if (askName) askWho(askName);
+    setInterval(refresh, 15000);
   })
   .catch(e => showMessage(e.message));
 </script>
