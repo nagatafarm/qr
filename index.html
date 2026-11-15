@@ -125,6 +125,9 @@
   .kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: 14px; }
   .kv dt { color: var(--gray); }
   .kv dd { margin: 0; }
+  .kv.all { margin-top: 10px; padding-top: 10px; border-top: 1px solid #e3e3e3; gap: 4px 12px; }
+  .kv.all dd { overflow-wrap: anywhere; }
+  .seeplan { display: block; width: 100%; margin-top: 10px; padding: 10px; background: var(--green-l); color: var(--green-d); border: 0; border-radius: 10px; font-size: 15px; font-weight: bold; cursor: pointer; }
   .next { margin: 12px 0; padding: 12px 14px; background: var(--orange-l); border: 1px solid #ecc3a3; border-radius: 12px; font-size: 15px; color: var(--orange-d); }
   .next b { font-size: 17px; }
   .next .fdone { color: var(--gray); opacity: .7; }
@@ -232,6 +235,7 @@ let state = null;                  // 画面に出す状態（server に、ま�
 const queue = [];                  // 送る順番待ち（送信中のものも含む）
 let sending = false;
 let tab = '';                      // 今のタブ
+let showPlan = false;              // 計画画面で、計画の全部の列（Excel から送った中身）を出すか
 let showAll = false;               // 計画画面で、自分の担当以外の工程も出すか
 let logFilter = '';                // 履歴の絞り込み（大項目）
 const picked = new Set();          // 一括登録で選んだ計画（QRID）
@@ -303,7 +307,15 @@ function nextFlowHtml(plan, nx) {
     return '<span class="' + (done ? 'fdone' : 'flater') + '">' + (done ? '✓' : '') + esc(taskName(s)) + '</span>';
   }).join('<span class="farrow">→</span>');
 }
-function planName(p) { return p.v['品番'] + ' ' + p.v['品目'] + ' ' + p.v['品種']; }
+// 計画の名前：「品番 品目 品種」。営利の表（品番などがない）は「注文NO 穂木×台木」、それもなければ商品名
+function planName(p) {
+  const has = c => p.v[c] !== undefined && String(p.v[c]).trim() !== '';
+  const a = ['品番', '品目', '品種'].filter(has).map(c => p.v[c]);
+  if (a.length) return a.join(' ');
+  const g = ['穂木', '台木'].filter(has).map(c => p.v[c]).join('×');
+  const b = [has('注文NO') ? p.v['注文NO'] : '', g || (has('商品名') ? p.v['商品名'] : '')].filter(x => String(x) !== '');
+  return b.length ? b.join(' ') : p.id;
+}
 // 担当の大項目で見る計画の列：工程シートの「色を付ける列」＋ 大項目の名前で始まる列。2つ目以降の大項目はポットの大きさ・色も
 function majorFields(m) {
   const cols = [];
@@ -322,6 +334,14 @@ function dateCol(m) {
 }
 function fieldsHtml(plan, m) {
   return majorFields(m).filter(c => c !== dateCol(m)).map(c => `<b>${esc(c)}</b> ${esc(plan.v[c])}`).join('　');
+}
+// 「この計画を見る」で出す列：計画の表の全部の列（表の並びのまま）。自動で書く工程の列・QRID・空の列は出さない
+function planAllHtml(plan) {
+  const auto = ['次の作業', 'QRID'];
+  state.steps.forEach(s => { auto.push(s.minor, taskName(s)); if (s.qtyCol) auto.push(s.qtyCol); });
+  const rows = Object.keys(plan.v).filter(c => !auto.includes(c) && String(plan.v[c]).trim() !== '')
+    .map(c => `<dt>${esc(c)}</dt><dd>${esc(plan.w[c] || plan.v[c])}</dd>`).join('');
+  return rows ? `<dl class="kv all">${rows}</dl>` : '<div class="fs muted">計画の列がありません。</div>';
 }
 function defaultQty(plan, s) {
   if (qtyEdit[plan.id + '|' + s.key] !== undefined) return qtyEdit[plan.id + '|' + s.key];
@@ -665,6 +685,8 @@ function renderPlan(plan) {
         <span class="badge">${esc(plan.id)}</span>
         <div class="name">${esc(planName(plan))}</div>
         ${kv ? `<dl class="kv">${kv}</dl>` : ''}
+        <button type="button" class="seeplan" id="seeplan" aria-expanded="${showPlan}">${showPlan ? '計画を閉じる' : 'この計画を見る'}</button>
+        ${showPlan ? planAllHtml(plan) : ''}
       </div>
       ${stepperHtml(plan, false)}
       ${isPlanner() ? `<div class="next ${nx ? '' : 'all'}">${nx ? '次の作業：' + nextFlowHtml(plan, nx) : '✓ すべての工程が完了しました'}</div>` : ''}
@@ -680,6 +702,7 @@ function renderPlan(plan) {
     const item = itemFor(plan, s);
     if (item) complete([item], '「' + taskName(s) + '」完了');
   });
+  document.getElementById('seeplan').onclick = () => { showPlan = !showPlan; render(); };
   const o = document.getElementById('others'); if (o) o.onclick = () => { showAll = !showAll; render(); };
   bindDelete();
   if (hasSpray()) bindPest(plan);
