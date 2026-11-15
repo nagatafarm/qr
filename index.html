@@ -35,6 +35,11 @@
   .names { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
   .nmbtn { background: #fff; border: 2px solid var(--line); border-radius: 999px; padding: 8px 16px; font-size: 16px; cursor: pointer; color: #222; }
   .nmbtn.sel { border-color: var(--green); background: var(--green-l); font-weight: bold; }
+  .myassign { margin-bottom: 12px; border-color: var(--green); }
+  .myassign h3 { margin: 0 0 6px; font-size: 15px; color: var(--green-d); }
+  .myassign .ma { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; padding: 6px 0; border-top: 1px dashed #e5e5e5; font-size: 14px; }
+  .myassign .ma a { font-weight: bold; color: inherit; }
+  .myassign .ma .what { flex: 1; min-width: 90px; color: #444; }
   .backbtn { width: 100%; margin-top: 10px; padding: 12px; font-size: 15px; border-radius: 12px; border: 1px solid #ccc; background: #fff; color: #444; cursor: pointer; }
 
   /* タブ */
@@ -67,6 +72,18 @@
   .place { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; font-size: 13px; color: var(--gray); }
   .place input, .place select { font-size: 16px; padding: 7px 6px; border: 1px solid #ccc; border-radius: 8px; font-family: inherit; background: #fff; color: #222; }
   .place input { width: 62px; text-align: right; }
+  .place input.memo { flex: 1; min-width: 120px; width: auto; text-align: left; }
+  /* 不足（足りなかった本数）と、その対処 */
+  .fixed { color: var(--green-d); }
+  .sh { background: #fff; border: 1px solid #e3b4b4; border-left: 5px solid var(--red); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; font-size: 14px; }
+  .sh.ok { border-color: #cfe3d4; border-left-color: var(--green); background: var(--green-l); }
+  .sh .top { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+  .sh .top b { font-size: 16px; }
+  .sh .t { font-size: 12px; color: var(--gray); margin-top: 2px; }
+  .sh .fx { display: flex; gap: 6px; margin-top: 8px; }
+  .sh .fx input { flex: 1; min-width: 0; font-size: 16px; padding: 8px; border: 1px solid #ccc; border-radius: 8px; font-family: inherit; }
+  .sh .fx button { flex: none; padding: 8px 12px; font-size: 14px; font-weight: bold; border-radius: 8px; border: none; background: var(--green); color: #fff; cursor: pointer; }
+  .sh .fx button.sub { background: #fff; color: var(--gray); border: 1px solid #ccc; font-weight: normal; }
   /* QR をまとめて読む */
   .scanbtn { display: block; width: 100%; margin: 0 0 4px; padding: 12px; background: #fff; border: 2px solid var(--green); color: var(--green-d); border-radius: 12px; font-size: 16px; font-weight: bold; cursor: pointer; }
   #scan { position: fixed; inset: 0; background: #111; color: #fff; z-index: 40; display: flex; flex-direction: column; }
@@ -260,6 +277,8 @@
 <script>
 // QR から開いたときは ?id=QRID が付いている
 const ID = new URLSearchParams(location.search).get('id') || '';
+// 名札の QR から開いたときは ?who=名前 が付いている（共有のスマホで、入力する人を切り替える）
+const WHO = (new URLSearchParams(location.search).get('who') || '').trim();
 const PLANNER = '__all__';         // 計画担当（すべてを見る）
 let server = null;                 // 窓口から受け取った最新の状態
 let state = null;                  // 画面に出す状態（server に、まだ送り終わっていない記録を重ねたもの）
@@ -271,7 +290,9 @@ let showAll = false;               // 計画画面で、自分の担当以外の
 let logFilter = '';                // 履歴の絞り込み（大項目）
 const picked = new Set();          // 一括登録で選んだ計画（QRID）
 const qtyEdit = {};                // 手で直した数量（画面を描き直しても消えないように）
-const placeEdit = {};              // 入れた場所（計画|工程 → {house, col, num}）。画面を描き直しても消えないように
+const placeEdit = {};              // 入れた場所と不足（計画|工程 → {house, col, num, short, memo}）。画面を描き直しても消えないように
+const fixEdit = {};                // 「不足」タブで書きかけの対処（記録ID → 文）。fixOpen は、対処済みの行を直すために開いているもの
+const fixOpen = {};
 let inSetup = false;               // 担当・名前を選ぶ画面を出しているか（「担当・名前」を押したときも）
 let scan = null;                   // QR をまとめて読んでいる間の状態
 const JSQR_URL = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';   // BarcodeDetector がないブラウザ（iPhone など）で使う
@@ -363,6 +384,20 @@ function placeHtml(plan, s) {
   return `<div class="place">ハウス<input type="number" inputmode="numeric" min="1" step="1" data-pk="${k}" data-pl="house" value="${esc(e.house || '')}" aria-label="ハウス番号">
     ベンチ<select data-pk="${k}" data-pl="col" aria-label="ベンチの列">${opt(['A', 'B', 'C'], e.col)}</select><select data-pk="${k}" data-pl="num" aria-label="ベンチの番号">${opt(Array.from({ length: 25 }, (_, i) => i + 1), e.num)}</select></div>`;
 }
+// 不足の入力欄（「不足の入力」が「あり」の工程だけ）。足りなかった本数と、理由などのメモ。入れなくても記録できる
+function shortHtml(plan, s) {
+  if (!s.needShort) return '';
+  const k = esc(plan.id + '|' + s.key), e = placeEdit[plan.id + '|' + s.key] || {};
+  return `<div class="place">不足<input type="number" inputmode="numeric" min="0" step="1" data-pk="${k}" data-pl="short" value="${esc(e.short || '')}" aria-label="不足の本数">本
+    <input class="memo" type="text" maxlength="100" data-pk="${k}" data-pl="memo" value="${esc(e.memo || '')}" placeholder="理由など（なくてもよい）" aria-label="不足のメモ"></div>`;
+}
+// 記録に出す不足：「不足 12本」（赤）。メモと、計画担当が書いた対処も続けて出す
+function shortInfo(r, withFix) {
+  if (!r || !(Number(r.short) > 0)) return '';
+  let h = '<span class="short">不足 ' + esc(r.short) + '本</span>' + (r.memo ? '（' + esc(r.memo) + '）' : '');
+  if (withFix) h += r.fix ? '<br><span class="fixed">対処：' + esc(r.fix) + '</span><span class="muted">　' + esc(r.fixBy || '') + ' ' + esc(r.fixAt || '') + '</span>' : '<br><span class="muted">対処はまだ書かれていません</span>';
+  return h;
+}
 function bindPlace() {
   document.querySelectorAll('[data-pk]').forEach(el => el.oninput = el.onchange = () => {
     (placeEdit[el.dataset.pk] = placeEdit[el.dataset.pk] || {})[el.dataset.pl] = el.value;
@@ -452,7 +487,7 @@ function rebuild() {
     if (job.type !== 'record' || job.cancel) return;
     job.items.forEach(it => {
       const plan = state.plans.find(p => p.id === it.id);
-      if (plan) plan.status[it.major + '／' + it.minor] = { done: true, time: '送信中…', person: name, qty: it.qty, house: it.house, bench: it.bench, pending: true };
+      if (plan) plan.status[it.major + '／' + it.minor] = { done: true, time: '送信中…', person: name, qty: it.qty, house: it.house, bench: it.bench, short: Number(it.short) > 0 ? Number(it.short) : 0, memo: it.memo || '', pending: true };
     });
   });
 }
@@ -523,6 +558,18 @@ function peopleFor(role) {
   const hit = x => !r || x === r.key || r.label.indexOf(x) >= 0 || (r.key === PLANNER && x.indexOf('計画') === 0);
   return (state.people || []).filter(p => !p.roles || !p.roles.length || p.roles.some(hit));
 }
+// 名札の QR を読んだとき：その名前に切り替える。「担当者」シートでその人の担当が1つならその担当に。なければ（複数でも）担当を選ぶ画面へ
+function applyWho(name) {
+  name = String(name || '').trim().slice(0, 40);
+  if (!name) return;
+  save('person', name);
+  const p = (state.people || []).find(x => x.name === name);
+  const hit = (r, x) => x === r.key || r.label.indexOf(x) >= 0 || (r.key === PLANNER && x.indexOf('計画') === 0);
+  const rs = p ? roles().filter(r => (p.roles || []).some(x => hit(r, x))) : [];
+  if (rs.length === 1) { save('role', rs[0].key); inSetup = false; } else inSetup = true;
+  tab = ''; picked.clear();
+  toast(name + ' さんに切り替えました' + (rs.length === 1 ? '' : '。担当を選んでください'));
+}
 function renderSetup() {
   inSetup = true;
   let role = getRole();
@@ -532,7 +579,8 @@ function renderSetup() {
     <header><div><h1>QR一元管理</h1><div class="sub">あなたの担当と名前を選んでください</div></div></header>
     <main style="max-width:520px">
       <div class="roles">${roles().map(r => `<button type="button" class="role${r.key === role ? ' sel' : ''}" data-role="${esc(r.key)}">${esc(r.label)}<small>${esc(r.desc)}</small></button>`).join('')}</div>
-      <label class="field" for="nm">名前（記録に残ります）</label>
+      <button type="button" class="scanbtn" id="badgebtn" style="margin-top:14px">名札の QR を読む</button>
+      <label class="field" for="nm" style="margin-top:8px">名前（記録に残ります）</label>
       <div class="names" id="names"></div>
       <label class="field" style="margin-top:8px"><span id="nm-lb"></span><input id="nm" type="text" autocomplete="name" value="${esc(getName())}" placeholder="例：たかべ"></label>
       <button type="button" class="primary" id="go" disabled>はじめる</button>
@@ -557,6 +605,7 @@ function renderSetup() {
   drawNames(); check();
   go.onclick = () => { save('role', role); save('person', nm.value.trim()); inSetup = false; tab = ''; picked.clear(); render(); };
   const back = document.getElementById('back'); if (back) back.onclick = () => { inSetup = false; render(); };
+  document.getElementById('badgebtn').onclick = () => startScan('badge');
 }
 // 上の帯：題名の下に今の担当と名前。右に「一覧へ」「担当・名前」（担当と名前を選び直す）
 function headerHtml(sub, back) {
@@ -571,6 +620,17 @@ function bindHeader() {
 }
 
 // ---------- 画面：担当者のホーム（やること・終わった） ----------
+// 今日のあなたの割り振り（スケジュールの画面で組んだもの）。なければ何も出さない
+function myAssignHtml() {
+  const mine = (state.assign || []).filter(a => a.name === getName());
+  if (!mine.length) return '';
+  const total = Math.round(mine.reduce((n, a) => n + Number(a.hours || 0), 0) * 100) / 100;
+  return `<div class="card myassign"><h3>今日のあなたの割り振り<span class="muted">　合わせて ${esc(total)} 時間</span></h3>` + mine.map(a => {
+    const p = state.plans.find(x => x.id === a.id), s = state.steps.find(x => x.key === a.key);
+    return `<div class="ma"><a href="${esc(planUrl(a.id))}">${esc(p ? planName(p) : a.id)}</a> <span class="muted">${esc(a.id)}</span>
+      <span class="what">${esc(s ? fullTask(s, '：') : a.key)}</span><b>${esc(a.hours)} 時間</b></div>`;
+  }).join('') + '</div>';
+}
 function todoList(m) {
   const col = dateCol(m);
   return state.plans.map(p => ({ p, s: nextIn(p, m) })).filter(x => x.s)
@@ -599,7 +659,7 @@ function renderWorker() {
             <input type="checkbox" data-pick="${esc(p.id)}"${picked.has(p.id) ? ' checked' : ''} aria-label="選ぶ">
             <div class="body"><div class="nm"><a href="${esc(planUrl(p.id))}">${esc(planName(p))}</a> <span class="muted">${esc(p.id)}</span></div>
               <div class="fs">${fieldsHtml(p, m)}</div>
-              ${placeHtml(p, s)}
+              ${placeHtml(p, s)}${shortHtml(p, s)}
               ${prev ? `<div class="warn">※ 前の工程（${esc(prev)}）が未記録</div>` : ''}</div>
             <div class="act">${s.needQty ? `<input class="qty" type="number" inputmode="decimal" step="any" data-qty="${esc(p.id)}" value="${esc(defaultQty(p, s))}" aria-label="数量">` : ''}
               <button type="button" class="done-btn" data-do="${esc(p.id)}">${majorSteps(m).length > 1 ? esc(taskName(s)) + '<br>' : ''}完了</button></div>
@@ -612,6 +672,7 @@ function renderWorker() {
   }
   document.getElementById('app').innerHTML = headerHtml('', false) + `
     <main style="max-width:720px">
+      ${tab === 'todo' ? myAssignHtml() : ''}
       <div class="tabs"><button type="button" data-tab="todo" class="${tab === 'todo' ? 'on' : ''}">やること<span class="n">${list.length}</span></button>
         <button type="button" data-tab="mine" class="${tab === 'mine' ? 'on' : ''}">自分の記録（24時間）</button></div>
       ${body}
@@ -659,7 +720,12 @@ function itemFor(p, s) {
   }
   const e = s.needPlace ? (placeEdit[p.id + '|' + s.key] || {}) : {};
   if (!e.col !== !e.num) { toast(planName(p) + '：ベンチは列（A・B・C）と番号の両方を選んでください', true); return null; }
-  return { id: p.id, major: s.major, minor: s.minor, qty: qty, house: String(e.house || '').trim(), bench: e.col ? e.col + e.num : '' };
+  // 不足が要る工程は、入れてあれば不足の本数とメモも付ける（空 ＝ 不足なし）
+  const x = s.needShort ? (placeEdit[p.id + '|' + s.key] || {}) : {};
+  const short = String(x.short === undefined ? '' : x.short).trim();
+  if (short !== '' && (isNaN(Number(short)) || Number(short) < 0)) { toast(planName(p) + '：不足は 0 以上の数字で入れてください', true); return null; }
+  return { id: p.id, major: s.major, minor: s.minor, qty: qty, house: String(e.house || '').trim(), bench: e.col ? e.col + e.num : '',
+    short: short === '' ? '' : Number(short), memo: String(x.memo || '').trim() };
 }
 function logHtml(l) {
   const s = state.steps.find(x => x.major === l.major && x.minor === l.minor);
@@ -667,7 +733,7 @@ function logHtml(l) {
   const unit = s ? s.unit : '';
   return `<div class="log${l.op === '取消' ? ' cancel' : ''}"><div class="body">
     <div>${esc(l.name)} <span class="muted">${esc(l.id)}</span></div>
-    <div class="t">${esc(l.time)}　${esc(task)}${l.op === '取消' ? '（取り消し）' : ''}${l.qty !== '' && l.qty != null ? '　' + esc(l.qty) + esc(unit) : ''}${placeText(l) ? '　' + esc(placeText(l)) : ''}　${esc(l.person)}</div></div>
+    <div class="t">${esc(l.time)}　${esc(task)}${l.op === '取消' ? '（取り消し）' : ''}${l.qty !== '' && l.qty != null ? '　' + esc(l.qty) + esc(unit) : ''}${placeText(l) ? '　' + esc(placeText(l)) : ''}${shortInfo(l) ? '　' + shortInfo(l) : ''}　${esc(l.person)}</div></div>
     ${l.canDelete && (isPlanner() || l.person === getName()) ? `<button type="button" class="del" data-del="${esc(l.logId)}">消す</button>` : ''}</div>`;
 }
 function bindDelete() {
@@ -688,7 +754,7 @@ function renderPlanner() {
         const st = p.status[s.key] || {};
         const tag = st.done ? '<span class="tag ok">完了</span>' : nx && nx.key === s.key ? '<span class="tag now">次の作業</span>' : '<span class="tag ng">未完了</span>';
         return `<li class="${st.done ? 'ok' : 'ng'}">${tag}<span class="what">${esc(fullTask(s, '：'))}</span>
-          <span class="when">${st.done ? esc(st.time) + (st.person ? ' ' + esc(st.person) : '') + (st.qty !== '' && st.qty != null ? ' / <span class="' + (isShortQty(p, s, st.qty) ? 'short' : '') + '">' + esc(st.qty) + esc(s.unit) + '</span>' : '') + (placeText(st) ? ' / ' + esc(placeText(st)) : '') : ''}</span></li>`;
+          <span class="when">${st.done ? esc(st.time) + (st.person ? ' ' + esc(st.person) : '') + (st.qty !== '' && st.qty != null ? ' / <span class="' + (isShortQty(p, s, st.qty) ? 'short' : '') + '">' + esc(st.qty) + esc(s.unit) + '</span>' : '') + (placeText(st) ? ' / ' + esc(placeText(st)) : '') + (Number(st.short) > 0 ? ' / <span class="short">不足 ' + esc(st.short) + '本</span>' : '') : ''}</span></li>`;
       }).join('');
       return `<div class="card"><div class="plan-head">
           <div class="qr">${qrSvg(planUrl(p.id))}<div class="id">${esc(p.id)}</div></div>
@@ -698,6 +764,8 @@ function renderPlanner() {
         ${stepperHtml(p, true)}<ul class="steps">${steps}</ul>
         <a class="open" href="${esc(planUrl(p.id))}">この計画を開く</a></div>`;
     }).join('') || '<div class="card">計画がありません。「計画」シートを確認してください。</div>'}</div>`;
+  } else if (tab === 'short') {
+    body = shortTabHtml();
   } else if (tab === 'pest' && pestOn()) {
     body = plannerPestHtml();
   } else {
@@ -712,8 +780,9 @@ function renderPlanner() {
       <div class="toolbar"><div class="tabs" style="margin:0;border:none">
           <button type="button" data-tab="list" class="${tab === 'list' ? 'on' : ''}">一覧</button>
           <button type="button" data-tab="log" class="${tab === 'log' ? 'on' : ''}">履歴<span class="n">${state.logs.length}</span></button>
+          <button type="button" data-tab="short" class="${tab === 'short' ? 'on' : ''}">不足${shortOpen() ? '<span class="n">' + shortOpen() + '</span>' : ''}</button>
           ${pestOn() ? `<button type="button" data-tab="pest" class="${tab === 'pest' ? 'on' : ''}">農薬</button>` : ''}</div>
-        <a class="btn-link" href="labels.html">ラベルを印刷する</a></div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px"><a class="btn-link" href="schedule.html">スケジュール</a><a class="btn-link" href="badges.html">名札を印刷する</a><a class="btn-link" href="labels.html">ラベルを印刷する</a></div></div>
       ${body}
       <p class="muted">最終更新 ${esc(state.updated)}（自動で更新）。工程は「工程」シートに行を足すと増やせます。</p>
     </main>`;
@@ -723,6 +792,44 @@ function renderPlanner() {
   document.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { logFilter = b.dataset.f; render(); });
   bindDelete();
   if (tab === 'pest' && pestOn()) bindPlannerPest();
+  if (tab === 'short') bindShortTab();
+}
+
+// ---------- 計画担当の「不足」タブ：不足のある記録の一覧と、その対処（マイナス報告用紙の代わり） ----------
+function shortOpen() { return (state.shorts || []).filter(x => !x.fix).length; }   // まだ対処を書いていない件数
+function shortTabHtml() {
+  const list = state.shorts || [];
+  if (!list.length) return '<div class="empty">不足の記録はありません</div><p class="muted">工程シートの「不足の入力」を「あり」にした工程で、完了のときに不足の本数を入れると、ここに並びます。</p>';
+  return list.map(x => {
+    const s = state.steps.find(y => y.major === x.major && y.minor === x.minor);
+    const edit = !x.fix || fixOpen[x.logId];
+    const val = fixEdit[x.logId] !== undefined ? fixEdit[x.logId] : x.fix;
+    return `<div class="sh${x.fix ? ' ok' : ''}">
+      <div class="top"><b class="short">不足 ${esc(x.short)}本</b><a href="${esc(planUrl(x.id))}">${esc(x.name)}</a><span class="muted">${esc(x.id)}</span>
+        <span class="tag ${x.fix ? 'ok' : 'now'}">${x.fix ? '対処済み' : '対処まだ'}</span></div>
+      <div class="t">${esc(x.time)}　${esc(s ? fullTask(s, '：') : x.major + '：' + x.minor)}${placeText(x) ? '　' + esc(placeText(x)) : ''}　${esc(x.person)}${x.memo ? '　メモ：' + esc(x.memo) : ''}</div>
+      ${x.fix && !edit ? `<div style="margin-top:6px"><span class="fixed">対処：${esc(x.fix)}</span><span class="muted">　${esc(x.fixBy)} ${esc(x.fixAt)}</span></div>
+        <div class="fx"><button type="button" class="sub" data-fixopen="${esc(x.logId)}">対処を直す</button></div>` : `
+      <div class="fx"><input type="text" maxlength="200" data-fix="${esc(x.logId)}" value="${esc(val)}" placeholder="対処を書く（例：予備苗から補充、追加播種）" aria-label="対処">
+        <button type="button" data-fixsave="${esc(x.logId)}">${x.fix ? '直す' : '対処を書く'}</button></div>`}
+    </div>`;
+  }).join('') + '<p class="muted">新しい順。対処を書くと、その計画の画面（担当者のスマホ）にも出ます。対処を消すときは、空にして「直す」を押します。</p>';
+}
+function bindShortTab() {
+  document.querySelectorAll('[data-fix]').forEach(el => el.oninput = () => { fixEdit[el.dataset.fix] = el.value; });
+  document.querySelectorAll('[data-fixopen]').forEach(b => b.onclick = () => { fixOpen[b.dataset.fixopen] = true; render(); });
+  document.querySelectorAll('[data-fixsave]').forEach(b => b.onclick = async () => {
+    const id = b.dataset.fixsave, el = document.querySelector('[data-fix="' + CSS.escape(id) + '"]');
+    const text = el ? el.value.trim() : '', cur = (state.shorts || []).find(x => x.logId === id);
+    if (!text && !(cur && cur.fix)) { toast('対処を書いてください', true); return; }
+    popup('wait', '書いています…');
+    try {
+      server = await postApi({ action: 'fixShort', logId: id, fix: text, person: getName(), planner: isPlanner() });
+      delete fixEdit[id]; delete fixOpen[id];
+      rebuild(); render();
+      popup('ok', text ? '対処を書きました' : '対処を消しました');
+    } catch (e) { popup('err', '書けませんでした', e.message); }
+  });
 }
 
 // ---------- 画面：計画画面（QRを読んだとき） ----------
@@ -739,6 +846,7 @@ function renderPlan(plan) {
         let info = esc(r.time) + (r.person ? '　' + esc(r.person) : '');
         if (r.qty !== '' && r.qty != null) info += '　' + esc(r.qty) + esc(s.unit) + diffText(plan, s, r.qty);
         if (placeText(r)) info += '　' + esc(placeText(r));
+        if (shortInfo(r)) info += '<br>' + shortInfo(r, !r.pending);
         const log = state.logs.find(l => l.id === plan.id && l.major === s.major && l.minor === s.minor && l.op === '完了');
         const del = log && log.canDelete && (isPlanner() || log.person === getName())
           ? `<button type="button" class="del" data-del="${esc(log.logId)}">まちがえた（消す）</button>` : '';
@@ -749,7 +857,7 @@ function renderPlan(plan) {
       return `<li class="${isCur ? 'cur' : 'todo'}"><span class="mark"></span><div class="box">
         <div class="t">${esc(taskName(s))}${isCur ? '<span class="tag now">次の作業</span>' : '<span class="tag ng">未完了</span>'}</div>
         <div class="desc">${esc(s.note)}</div>
-        ${placeHtml(plan, s)}
+        ${placeHtml(plan, s)}${shortHtml(plan, s)}
         <div class="row">${s.needQty ? `<input class="qty" type="number" inputmode="decimal" step="any" data-qty="${esc(plan.id)}" value="${esc(defaultQty(plan, s))}" aria-label="数量（${esc(s.unit)}）">` : ''}
           <button type="button" class="do" data-step="${esc(s.key)}">${esc(taskName(s))}を完了にする</button></div></div></li>`;
     }).join('');
@@ -812,6 +920,13 @@ function qrId(text) {
 }
 function onScan(text) {
   if (!scan) return;
+  if (scan.mode === 'badge') {        // 名札を読む：1枚読んだら、その人に切り替えて終わる
+    let who = '';
+    try { who = (new URL(String(text).trim()).searchParams.get('who') || '').trim(); } catch (e) {}
+    if (who) { stopScan(true); applyWho(who); render(); return; }
+    if (!scan.seen['?' + text]) { scan.seen['?' + text] = true; scan.items.unshift({ ok: false, id: String(text).slice(0, 30), text: '名札の QR ではありません' }); scanDraw(); }
+    return;
+  }
   const id = qrId(text), key = id || '?' + text;
   if (scan.seen[key]) return;          // 同じ QR は1回だけ
   scan.seen[key] = true;
@@ -834,10 +949,11 @@ function loadScript(src) {
     document.head.appendChild(s);
   });
 }
-async function startScan() {
+// mode が 'badge' なら名札を読む（担当・名前の画面から）。それ以外は計画の QR をまとめて読む
+async function startScan(mode) {
   if (scan) return;
   const el = document.getElementById('scan'), video = document.getElementById('scan-video');
-  const me = scan = { seen: {}, items: [], stream: null, timer: 0, busy: false };
+  const me = scan = { seen: {}, items: [], stream: null, timer: 0, busy: false, mode: mode === 'badge' ? 'badge' : '' };
   el.hidden = false;
   document.getElementById('scan-end').onclick = stopScan;
   scanDraw('カメラを開いています…');
@@ -870,7 +986,7 @@ async function startScan() {
     }
   }
   if (scan !== me) return;
-  scanDraw('QR にカメラを向けてください。続けて何枚でも読めます。');
+  scanDraw(me.mode === 'badge' ? '自分の名札の QR にカメラを向けてください。' : 'QR にカメラを向けてください。続けて何枚でも読めます。');
   const canvas = document.createElement('canvas');
   me.timer = setInterval(async () => {
     if (scan !== me || me.busy || video.readyState < 2 || !video.videoWidth) return;
@@ -892,7 +1008,7 @@ async function startScan() {
     me.busy = false;
   }, 250);
 }
-function stopScan() {
+function stopScan(keep) {
   const me = scan;
   scan = null;
   if (me) {
@@ -902,6 +1018,7 @@ function stopScan() {
   const video = document.getElementById('scan-video');
   try { video.pause(); video.srcObject = null; } catch (e) {}
   document.getElementById('scan').hidden = true;
+  if (keep === true || (me && me.mode === 'badge')) return;   // 名札を読んでいたときは、担当・名前の画面のまま
   if (state) { tab = 'todo'; render(); }
 }
 
@@ -922,7 +1039,14 @@ function showMessage(msg) {
 }
 showMessage('読み込んでいます…');
 fetchState()
-  .then(s => { server = s; if (!server.logs) server.logs = []; rebuild(); render(); setInterval(refresh, 15000); })
+  .then(s => {
+    server = s; if (!server.logs) server.logs = []; rebuild();
+    if (WHO) {   // 名札の QR から開いた：その人に切り替え、URL から who を外す（読み込み直しても切り替え直さない）
+      applyWho(WHO);
+      try { history.replaceState(null, '', location.pathname + (ID ? '?id=' + encodeURIComponent(ID) : '')); } catch (e) {}
+    }
+    render(); setInterval(refresh, 15000);
+  })
   .catch(e => showMessage(e.message));
 </script>
 <script src="spray.js"></script>

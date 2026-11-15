@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>スケジュール｜QR一元管理</title>
+<script src="config.js"></script>
+<script src="common.js"></script>
+<style>
+  :root { --orange: #d4834a; --orange-d: #9a5320; --orange-l: #fdf5ee; --green: #4f9363; --green-d: #2f6b3a; --green-l: #f0f6f1; --line: #d6e2d8; --gray: #6b6b6b; --red: #c33; --bg: #f6f7f5; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: #222; font-family: "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif; font-size: 14px; line-height: 1.45; }
+  button, select, input { font-family: inherit; }
+  header { background: var(--green); color: #fff; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; gap: 8px; position: sticky; top: 0; z-index: 5; }
+  header h1 { font-size: 17px; margin: 0; }
+  header .sub { font-size: 12px; opacity: .9; }
+  header a { color: #fff; font-size: 13px; white-space: nowrap; border: 1px solid rgba(255,255,255,.6); border-radius: 8px; padding: 4px 10px; text-decoration: none; }
+  main { padding: 12px 16px 110px; }
+  .muted { color: var(--gray); font-size: 12px; }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+  .bar .week { font-weight: bold; font-size: 16px; min-width: 190px; text-align: center; }
+  .bar button, .bar select { background: #fff; border: 1px solid #bbb; border-radius: 8px; padding: 6px 12px; font-size: 14px; cursor: pointer; color: #222; }
+  .bar .auto { background: var(--orange); border-color: var(--orange); color: #fff; font-weight: bold; margin-left: auto; }
+  .bar button:disabled { opacity: .5; cursor: default; }
+  .note { background: var(--orange-l); border: 1px solid #ecc3a3; color: var(--orange-d); border-radius: 10px; padding: 8px 12px; margin-bottom: 10px; }
+  .wrap { overflow-x: auto; background: #fff; border: 1px solid var(--line); border-radius: 12px; }
+  table.sched { border-collapse: collapse; width: 100%; min-width: 980px; table-layout: fixed; }
+  table.sched th, table.sched td { border: 1px solid var(--line); vertical-align: top; padding: 4px; }
+  table.sched thead th { background: var(--green-l); position: sticky; top: 0; font-size: 13px; text-align: center; }
+  table.sched thead th.today { background: #fbe4d2; }
+  table.sched thead th.past { color: #999; }
+  table.sched th.who { width: 118px; text-align: left; background: #fafafa; font-size: 14px; }
+  table.sched th.who small { display: block; font-weight: normal; color: var(--gray); font-size: 11px; }
+  .rank { display: inline-block; font-size: 11px; border-radius: 999px; padding: 0 6px; margin-left: 4px; background: #e1efe4; color: var(--green-d); }
+  .rank.b { background: #eee; color: #666; }
+  .sumline { font-weight: normal; font-size: 11px; color: var(--gray); }
+  .sumline.over, .cap.over { color: var(--red); font-weight: bold; }
+  .lack { display: inline-block; margin-top: 2px; font-size: 11px; font-weight: bold; color: #fff; background: var(--red); border-radius: 999px; padding: 0 7px; }
+  td.cell { min-height: 54px; height: 54px; }
+  td.cell.off { background: repeating-linear-gradient(45deg, #f3f3f3, #f3f3f3 6px, #fafafa 6px, #fafafa 12px); }
+  td.cell.past { background: #fafafa; }
+  td.cell.target { outline: 2px dashed var(--orange); outline-offset: -3px; cursor: pointer; }
+  td.cell.dragover { background: var(--orange-l); }
+  .cap { font-size: 10px; color: #999; text-align: right; }
+  .job { background: var(--green-l); border: 1px solid #cfe3d4; border-left: 4px solid var(--green); border-radius: 8px; padding: 3px 6px; margin-bottom: 3px; font-size: 12px; cursor: pointer; }
+  .job[draggable=true] { cursor: grab; }
+  .job .nm { font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .job .tk { display: flex; justify-content: space-between; gap: 4px; color: #444; }
+  .job.fixed { border-left-color: var(--orange); background: var(--orange-l); border-color: #ecc3a3; }
+  .job.done { opacity: .55; border-left-color: #999; background: #f1f1f1; border-color: #ddd; }
+  .job.sel { outline: 3px solid var(--orange); }
+  h2 { font-size: 15px; margin: 18px 0 6px; }
+  .tasks { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 6px; }
+  .task { background: #fff; border: 1px solid #e3b4b4; border-left: 4px solid var(--red); border-radius: 8px; padding: 6px 8px; font-size: 13px; cursor: pointer; }
+  .task.sel { outline: 3px solid var(--orange); }
+  .task .nm { font-weight: bold; }
+  .task .lk { color: var(--red); font-weight: bold; }
+  details { margin-top: 14px; }
+  details summary { cursor: pointer; font-weight: bold; }
+  table.ut { border-collapse: collapse; width: 100%; font-size: 12px; margin-top: 6px; background: #fff; }
+  table.ut th, table.ut td { border: 1px solid var(--line); padding: 3px 6px; text-align: left; }
+  table.ut th { background: var(--green-l); }
+  #panel { position: fixed; left: 0; right: 0; bottom: 0; background: #fff; border-top: 2px solid var(--orange); padding: 10px 16px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; z-index: 6; box-shadow: 0 -4px 14px rgba(0,0,0,.08); }
+  #panel[hidden] { display: none; }
+  #panel .ttl { font-weight: bold; margin-right: 6px; }
+  #panel input { width: 70px; font-size: 16px; padding: 6px; border: 1px solid #ccc; border-radius: 8px; text-align: right; }
+  #panel button, #panel a { background: #fff; border: 1px solid #bbb; border-radius: 8px; padding: 7px 12px; font-size: 14px; cursor: pointer; color: #222; text-decoration: none; }
+  #panel .danger { border-color: var(--red); color: var(--red); }
+  #busy { position: fixed; inset: 0; background: rgba(255,255,255,.55); display: flex; align-items: center; justify-content: center; z-index: 30; font-weight: bold; color: var(--green-d); }
+  #busy[hidden] { display: none; }
+  #toast { position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%); background: #222; color: #fff; padding: 10px 16px; border-radius: 10px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 40; max-width: 90%; }
+  #toast.show { opacity: 1; }
+  #toast.err { background: var(--red); }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="panel" hidden></div>
+<div id="busy" hidden>書き込んでいます…</div>
+<div id="toast"></div>
+
+<script>
+// スケジュールの画面：週（金〜木）× 人の表に、作業のカードを並べる。計画担当は、カードを動かして手直しできる
+let sch = null;                    // 窓口から受け取った状態（スケジュール.gs の getSchedule）
+let from = '';                     // 見ている週（空なら今週）
+let fArea = '', fKubun = '';       // しぼりこみ（エリア・区分）
+let sel = null;                    // 選んでいるもの：{ aid }（割り振りのカード）か { id, key }（足りない作業）
+let dragAid = '';
+function load(k) { try { return localStorage.getItem('qrdemo.' + k) || ''; } catch (e) { return ''; } }
+const canEdit = () => load('role') === '__all__';     // 手直しできるのは計画担当だけ（index.html の PLANNER と同じ）
+const num = h => String(Math.round(Number(h) * 100) / 100);
+
+function toast(msg, isErr) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'show' + (isErr ? ' err' : '');
+  clearTimeout(toast.timer); toast.timer = setTimeout(() => { t.className = ''; }, 3000);
+}
+function busy(on) { document.getElementById('busy').hidden = !on; }
+
+async function reload() {
+  try { sch = await fetchSchedule(from); render(); }
+  catch (e) { if (!sch) showMessage(e.message); else toast(e.message, true); }
+}
+// 手直しを窓口へ送り、返ってきた状態で描き直す
+async function edit(body) {
+  busy(true);
+  try {
+    sch = await postApi(Object.assign({ action: 'schedule', planner: canEdit(), from: sch.start }, body));
+    sel = null;
+  } catch (e) { toast(e.message, true); }
+  busy(false);
+  render();
+}
+
+function visiblePeople() {
+  return sch.people.filter(p => (!fArea || p.area === fArea) && (!fKubun || p.kubun === fKubun));
+}
+function jobsOf(name, date) { return sch.assigns.filter(a => a.name === name && a.date === date); }
+function taskOf(a) { return sch.tasks.find(t => t.id === a.id && t.key === a.key); }
+
+function jobHtml(a) {
+  const isSel = sel && sel.aid === a.aid;
+  return `<div class="job${a.fixed ? ' fixed' : ''}${a.done ? ' done' : ''}${isSel ? ' sel' : ''}" data-aid="${esc(a.aid)}"${canEdit() ? ' draggable="true"' : ''}
+    title="${esc(a.plan)}（${esc(a.id)}）${a.fixed ? '／固定（自動の組み直しで動かない）' : ''}">
+    <div class="nm">${esc(a.plan)}</div>
+    <div class="tk"><span>${esc(a.task)}${a.done ? '（済）' : ''}${a.fixed ? ' 📌' : ''}</span><b>${esc(num(a.hours))}h</b></div></div>`;
+}
+
+function render() {
+  const people = visiblePeople(), names = people.map(p => p.name);
+  const areas = [...new Set(sch.people.map(p => p.area).filter(String))], kubuns = [...new Set(sch.people.map(p => p.kubun).filter(String))];
+  const head = sch.days.map(d => {
+    const capSum = people.reduce((n, p) => n + (sch.cap[p.name][d.key] || 0), 0);
+    const used = sch.assigns.filter(a => a.date === d.key && names.includes(a.name) && !a.done).reduce((n, a) => n + a.hours, 0);
+    const lack = sch.tasks.filter(t => t.short > 0 && (t.due === d.key || (d.today && t.late))).reduce((n, t) => n + t.short, 0);
+    return `<th class="${d.today ? 'today' : d.past ? 'past' : ''}">${esc(d.label)}${d.today ? '　今日' : ''}
+      <div class="sumline${used > capSum + 1e-9 ? ' over' : ''}">割り振り ${esc(num(used))} ／ 出勤 ${esc(num(capSum))} 時間</div>
+      ${lack > 0 ? `<span class="lack">人手不足 ${esc(num(lack))} 時間</span>` : ''}</th>`;
+  }).join('');
+  const rows = people.map(p => `<tr><th class="who">${esc(p.name)}${p.rank ? `<span class="rank${p.rank === 'A' ? '' : ' b'}">${esc(p.rank)}</span>` : ''}
+      <small>${esc([p.kubun, p.area].filter(String).join('・'))}${p.can.length ? '<br>' + esc(p.can.join('・')) + 'だけ' : ''}</small></th>` +
+    sch.days.map(d => {
+      const cap = sch.cap[p.name][d.key] || 0, jobs = jobsOf(p.name, d.key);
+      const used = jobs.filter(a => !a.done).reduce((n, a) => n + a.hours, 0);
+      return `<td class="cell${cap ? '' : ' off'}${d.past ? ' past' : ''}${sel && canEdit() ? ' target' : ''}" data-name="${esc(p.name)}" data-date="${esc(d.key)}">
+        ${jobs.map(jobHtml).join('')}
+        <div class="cap${used > cap + 1e-9 ? ' over' : ''}">${cap ? esc(num(used)) + ' / ' + esc(num(cap)) + 'h' : used ? esc(num(used)) + 'h（休み）' : '休み'}</div></td>`;
+    }).join('') + '</tr>').join('');
+  const lackTasks = sch.tasks.filter(t => t.short > 0);
+  const selText = !sel ? '' : sel.aid ? (() => { const a = sch.assigns.find(x => x.aid === sel.aid); return a ? a.plan + '：' + a.task : ''; })()
+    : (() => { const t = sch.tasks.find(x => x.id === sel.id && x.key === sel.key); return t ? t.name + '：' + t.task : ''; })();
+  document.getElementById('app').innerHTML = `
+    <header><div><h1>スケジュール</h1><div class="sub">いつまでに・どの作業を・だれが　／　最終更新 ${esc(sch.updated)}</div></div>
+      <div style="display:flex;gap:6px"><a href="index.html">一覧・進み具合へ</a></div></header>
+    <main>
+      <div class="bar">
+        <button type="button" id="prev">◀ 前の週</button>
+        <span class="week">${esc(sch.days[0].label)} 〜 ${esc(sch.days[6].label)}</span>
+        <button type="button" id="next">次の週 ▶</button>
+        <button type="button" id="now">今週</button>
+        <select id="f-area" aria-label="エリア"><option value="">エリア：すべて</option>${areas.map(a => `<option${a === fArea ? ' selected' : ''}>${esc(a)}</option>`).join('')}</select>
+        <select id="f-kubun" aria-label="区分"><option value="">区分：すべて</option>${kubuns.map(a => `<option${a === fKubun ? ' selected' : ''}>${esc(a)}</option>`).join('')}</select>
+        <button type="button" class="auto" id="auto"${canEdit() ? '' : ' disabled'}>自動で組み直す</button>
+      </div>
+      ${canEdit() ? '' : '<div class="note">見るだけの画面です。手直しと組み直しは、一覧の画面で担当を「計画担当」にすると使えます。</div>'}
+      ${!sch.hasPace ? '<div class="note">「作業ペース」のシートがありません。スプレッドシートのメニュー「QRデモ → スケジュールのシートを作る」を実行してください。</div>' : ''}
+      ${!sch.people.length ? '<div class="note">「担当者」シートに人がいません。名前を書くと、ここに行が出ます。</div>' : ''}
+      ${sel && canEdit() ? `<div class="note">「${esc(selText)}」を選んでいます。動かす先のマス（人 × 日）を押してください。</div>` : ''}
+      <div class="wrap"><table class="sched"><thead><tr><th class="who">人</th>${head}</tr></thead><tbody>${rows}</tbody></table></div>
+      <p class="muted">カードは、つかんで別のマスへ動かせます（押して選んでから、動かす先のマスを押してもよい）。動かしたカードは 📌（固定）になり、「自動で組み直す」で動きません。
+        自動で組むのは ${esc(sch.today.slice(5).replace('-', '/'))} から ${esc(sch.horizonEnd.slice(5).replace('-', '/'))} まで。</p>
+      <h2>人手が足りない作業${lackTasks.length ? `<span class="muted">　${lackTasks.length}件</span>` : ''}</h2>
+      ${lackTasks.length ? `<div class="tasks">${lackTasks.map(t => `<div class="task${sel && sel.id === t.id && sel.key === t.key ? ' sel' : ''}" data-tid="${esc(t.id)}" data-tkey="${esc(t.key)}">
+          <div class="nm">${esc(t.name)} <span class="muted">${esc(t.id)}</span></div>
+          <div>${esc(t.task)}　予定日 ${esc(t.dueLabel)}${t.late ? '（過ぎています）' : ''}</div>
+          <div>${esc(t.qty)}${esc(t.unit)}　必要 ${esc(num(t.hours))} 時間　<span class="lk">あと ${esc(num(t.short))} 時間</span></div></div>`).join('')}</div>
+        ${canEdit() ? '<p class="muted">押して選んでから、入れる先のマスを押すと、その人のその日に足せます（固定になる）。</p>' : ''}`
+        : '<div class="muted">ありません。予定日までの作業は、全部だれかに入っています。</div>'}
+      <details><summary>時間を出せない作業・予定日がない作業（${sch.unknown.length}件）</summary>
+        ${sch.unknown.length ? `<table class="ut"><thead><tr><th>計画</th><th>工程</th><th>予定日</th><th>わけ</th></tr></thead><tbody>${sch.unknown.map(u =>
+          `<tr><td><a href="${esc(planUrl(u.id))}">${esc(u.name)}</a> <span class="muted">${esc(u.id)}</span></td><td>${esc(u.task)}</td><td>${esc(u.due)}</td><td>${esc(u.why)}</td></tr>`).join('')}</tbody></table>`
+          : '<div class="muted">ありません。</div>'}
+        <p class="muted">「作業ペース」のシートに行を足すか、計画の数量・予定日を入れると、自動の割り振りに入ります。</p></details>
+    </main>`;
+  bind();
+  renderPanel();
+}
+
+function bind() {
+  const move = d => { from = d; sel = null; reload(); };
+  const shift = n => new Date(Date.parse(sch.start + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10);
+  document.getElementById('prev').onclick = () => move(shift(-7));
+  document.getElementById('next').onclick = () => move(shift(7));
+  document.getElementById('now').onclick = () => move('');
+  document.getElementById('f-area').onchange = e => { fArea = e.target.value; render(); };
+  document.getElementById('f-kubun').onchange = e => { fKubun = e.target.value; render(); };
+  document.getElementById('auto').onclick = () => {
+    if (confirm('今日から ' + sch.horizonEnd.slice(5).replace('-', '/') + ' までの割り振りを、自動で組み直しますか？\n📌（固定）のカードは動かしません。')) edit({ op: 'auto' });
+  };
+  // カード：押して選ぶ／つかんで動かす
+  document.querySelectorAll('.job').forEach(el => {
+    el.onclick = ev => { ev.stopPropagation(); sel = sel && sel.aid === el.dataset.aid ? null : { aid: el.dataset.aid }; render(); };
+    if (!canEdit()) return;
+    el.ondragstart = ev => { dragAid = el.dataset.aid; try { ev.dataTransfer.setData('text/plain', dragAid); ev.dataTransfer.effectAllowed = 'move'; } catch (e) {} };
+    el.ondragend = () => { dragAid = ''; document.querySelectorAll('.dragover').forEach(x => x.classList.remove('dragover')); };
+  });
+  document.querySelectorAll('.task').forEach(el => el.onclick = () => {
+    if (!canEdit()) return;
+    sel = sel && sel.id === el.dataset.tid && sel.key === el.dataset.tkey ? null : { id: el.dataset.tid, key: el.dataset.tkey };
+    render();
+  });
+  if (!canEdit()) return;
+  document.querySelectorAll('td.cell').forEach(td => {
+    td.ondragover = ev => { if (dragAid) { ev.preventDefault(); td.classList.add('dragover'); } };
+    td.ondragleave = () => td.classList.remove('dragover');
+    td.ondrop = ev => { ev.preventDefault(); const aid = dragAid || ev.dataTransfer.getData('text/plain'); dragAid = ''; if (aid) moveTo(aid, td); };
+    td.onclick = () => {
+      if (!sel) return;
+      if (sel.aid) return moveTo(sel.aid, td);
+      // 足りない作業を、この人のこの日に足す。時間は、足りない分（その日の空きがあれば、空きまで）
+      const t = sch.tasks.find(x => x.id === sel.id && x.key === sel.key);
+      if (!t) return;
+      const cap = sch.cap[td.dataset.name][td.dataset.date] || 0;
+      const free = cap - jobsOf(td.dataset.name, td.dataset.date).filter(a => !a.done).reduce((n, a) => n + a.hours, 0);
+      edit({ op: 'add', date: td.dataset.date, name: td.dataset.name, id: t.id, key: t.key, hours: free >= 0.25 ? Math.min(t.short, free) : t.short });
+    };
+  });
+}
+function moveTo(aid, td) {
+  const a = sch.assigns.find(x => x.aid === aid);
+  if (!a) return;
+  if (a.name === td.dataset.name && a.date === td.dataset.date) { sel = null; return render(); }
+  edit({ op: 'move', aid: aid, date: td.dataset.date, name: td.dataset.name });
+}
+
+// 下の帯：選んだカードの手直し（時間・固定・消す）と、計画の画面へのリンク
+function renderPanel() {
+  const el = document.getElementById('panel');
+  const a = sel && sel.aid ? sch.assigns.find(x => x.aid === sel.aid) : null;
+  if (!a) { el.hidden = true; return; }
+  const t = taskOf(a);
+  el.innerHTML = `<span class="ttl">${esc(a.plan)}：${esc(a.task)}</span><span class="muted">${esc(a.name)}　${esc(a.date.slice(5).replace('-', '/'))}${t ? '　必要 ' + esc(num(t.hours)) + ' 時間（予定日 ' + esc(t.dueLabel) + '）' : ''}</span>
+    ${canEdit() ? `<input id="p-h" type="number" inputmode="decimal" step="0.25" min="0.25" value="${esc(num(a.hours))}" aria-label="時間">時間
+      <button type="button" id="p-set">時間を変える</button>
+      <button type="button" id="p-fix">${a.fixed ? '固定を外す' : '固定する 📌'}</button>
+      <button type="button" class="danger" id="p-del">消す</button>` : ''}
+    <a href="${esc(planUrl(a.id))}">この計画の進み具合</a>
+    <button type="button" id="p-x">やめる</button>`;
+  el.hidden = false;
+  document.getElementById('p-x').onclick = () => { sel = null; render(); };
+  if (!canEdit()) return;
+  document.getElementById('p-set').onclick = () => edit({ op: 'set', aid: a.aid, hours: document.getElementById('p-h').value });
+  document.getElementById('p-fix').onclick = () => edit({ op: 'fix', aid: a.aid, fixed: !a.fixed });
+  document.getElementById('p-del').onclick = () => { if (confirm('この割り振りを消しますか？')) edit({ op: 'del', aid: a.aid }); };
+}
+
+function showMessage(msg) {
+  document.getElementById('app').innerHTML = `<header><h1>スケジュール</h1><a href="index.html">一覧へ</a></header><main><div class="card">${esc(msg)}</div></main>`;
+}
+showMessage('読み込んでいます…');
+reload();
+setInterval(() => { if (!sel && document.getElementById('busy').hidden) reload(); }, 60000);
+</script>
+</body>
+</html>

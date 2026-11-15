@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>名札を印刷する｜QR一元管理</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script src="config.js"></script>
+<script src="common.js"></script>
+<style>
+  :root { --green: #4f9363; --green-d: #2f6b3a; --green-l: #f0f6f1; --line: #d6e2d8; --gray: #6b6b6b; --bg: #f6f7f5; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: #222; font-family: "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif; font-size: 15px; line-height: 1.5; }
+  header { background: var(--green); color: #fff; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  header h1 { font-size: 17px; margin: 0; }
+  header a, header button { color: #fff; font-size: 13px; background: none; border: 1px solid rgba(255,255,255,.6); border-radius: 8px; padding: 4px 10px; text-decoration: none; cursor: pointer; font-family: inherit; }
+  main { max-width: 210mm; margin: 0 auto; padding: 14px 16px 40px; }
+  .muted { color: var(--gray); font-size: 12px; }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+  /* A4 に 2列 × 4段（1枚 8人）。名札ケース（名刺の大きさより少し大きい）に入る */
+  .sheet { display: grid; grid-template-columns: repeat(2, 90mm); gap: 6mm; justify-content: center; margin-top: 12px; }
+  .badge { width: 90mm; height: 58mm; background: #fff; border: 1px dashed #999; border-radius: 3mm; padding: 5mm; display: flex; align-items: center; gap: 5mm; break-inside: avoid; }
+  .badge svg { width: 42mm; height: 42mm; flex: none; display: block; }
+  .badge .nm { font-size: 26px; font-weight: bold; line-height: 1.2; overflow-wrap: anywhere; }
+  .badge .sub { font-size: 11px; color: var(--gray); margin-top: 4px; }
+  @media print {
+    header, .noprint { display: none; }
+    body { background: #fff; }
+    main { padding: 0; max-width: none; }
+    .sheet { margin-top: 0; }
+    @page { size: A4 portrait; margin: 12mm 9mm; }
+  }
+</style>
+</head>
+<body>
+<header><h1>名札を印刷する</h1><div style="display:flex;gap:6px"><a href="index.html">一覧へ</a><button type="button" onclick="window.print()">印刷する</button></div></header>
+<main>
+  <div class="card noprint">「担当者」シートの人の名札です。共有のスマホで、画面の上の「担当・名前」→「名札の QR を読む」で読むと、入力する人がその人に切り替わります。
+    スマホのカメラでこの QR を読んで開いても、同じように切り替わります。<span class="muted">A4 縦・1枚に8人。点線で切って名札ケースに入れてください。</span></div>
+  <div class="sheet" id="sheet"></div>
+</main>
+<script>
+function qrSvg(text) {
+  try {
+    const qr = qrcode(0, 'M'); qr.addData(text); qr.make();
+    return qr.createSvgTag({ cellSize: 3, margin: 2, scalable: true });
+  } catch (e) { return '<div class="muted">QRを表示できません</div>'; }
+}
+// 名札の QR の中身：画面のURL?who=名前
+function badgeUrl(name) { return APP_URL + '?who=' + encodeURIComponent(name); }
+fetchState().then(s => {
+  const people = s.people || [];
+  document.getElementById('sheet').innerHTML = people.length ? people.map(p =>
+    `<div class="badge">${qrSvg(badgeUrl(p.name))}<div><div class="nm">${esc(p.name)}</div><div class="sub">${esc((p.roles || []).join('・'))}</div><div class="sub">QR一元管理 名札</div></div></div>`).join('')
+    : '<div class="card">「担当者」シートに名前がありません。スプレッドシートの「担当者」シートに名前を書いてください。</div>';
+}).catch(e => { document.getElementById('sheet').innerHTML = '<div class="card">' + esc(e.message) + '</div>'; });
+</script>
+</body>
+</html>

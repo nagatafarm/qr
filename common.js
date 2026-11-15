@@ -12,10 +12,13 @@ function esc(s) {
 // Apps Script（データの窓口）を呼ぶ。
 // credentials: 'omit' で Google のログイン情報を送らないので、スマホが Google にどうログインしていても結果は同じ。
 // POST の本文は文字列のまま送る（Content-Type が text/plain になり、事前確認の通信が要らない）。
+// options が文字なら GET の問い合わせ（例：'api=schedule&from=2026-11-13'）、なければ ?api=state、それ以外は POST
 async function callApi(options) {
   let res;
+  const query = typeof options === 'string' ? options : '';
+  if (query) options = null;
   try {
-    res = await fetch(options ? API_URL : API_URL + '?api=state',
+    res = await fetch(options ? API_URL : API_URL + '?' + (query || 'api=state'),
       Object.assign({ credentials: 'omit', cache: 'no-store', redirect: 'follow' }, options || {}));
   } catch (e) {
     throw new Error('通信できませんでした。電波の状態を確認してください');
@@ -32,6 +35,9 @@ async function callApi(options) {
 }
 
 function fetchState() { return callApi(); }
+
+// スケジュールの状態（from をふくむ週。空なら今週）
+function fetchSchedule(from) { return callApi('api=schedule' + (from ? '&from=' + encodeURIComponent(from) : '')); }
 
 function postRecord(rec) { return postApi(Object.assign({ action: 'record' }, rec)); }
 
