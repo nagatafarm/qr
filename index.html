@@ -229,6 +229,10 @@
   .tl .do { flex: 1; padding: 12px; border-radius: 10px; font-size: 16px; font-weight: bold; cursor: pointer; background: #fff; color: var(--green); border: 2px solid var(--green); }
   .tl li.cur .do { background: var(--orange); border-color: var(--orange); color: #fff; padding: 14px; font-size: 17px; }
   .tl .qty { width: 80px; padding: 12px 8px; }
+  /* 数量を「〇トレイ〇列」で入れる欄 */
+  .trayin { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 13px; color: var(--gray); white-space: nowrap; }
+  .trayin .qty { width: 52px; }
+  .tl .trayin .qty { width: 62px; }
   .tl .del { margin-top: 8px; }
   .short { color: #c62828; font-weight: bold; }
   .others { display: block; width: 100%; margin-top: 16px; padding: 10px; background: #fff; border: 1px dashed #bbb; border-radius: 10px; color: var(--gray); cursor: pointer; font-size: 14px; }
@@ -337,6 +341,7 @@ let showAll = false;               // 計画画面で、自分の担当以外の
 let logFilter = '';                // 履歴の絞り込み（大項目）
 const picked = new Set();          // 一括登録で選んだ計画（QRID）
 const qtyEdit = {};                // 手で直した数量（画面を描き直しても消えないように）
+const trayEdit = {};               // 手で直した「〇トレイ〇列」（計画|工程 → {tray, line}）
 const placeEdit = {};              // 入れた場所と不足（計画|工程 → {house, col, num, short, memo}）。画面を描き直しても消えないように
 const fixEdit = {};                // 「不足」タブで書きかけの対処（記録ID → 文）。fixOpen は、対処済みの行を直すために開いているもの
 const fixOpen = {};
@@ -442,7 +447,7 @@ function shortHtml(plan, s) {
 // 記録に出す不足：「不足 12本」（赤）。メモと、計画担当が書いた対処も続けて出す
 function shortInfo(r, withFix) {
   if (!r || !(Number(r.short) > 0)) return '';
-  let h = '<span class="short">不足 ' + esc(r.short) + '本</span>' + (r.memo ? '（' + esc(r.memo) + '）' : '');
+  let h = '<span class="short">不足 ' + esc(r.short) + '本</span>' + (memoRest(r.memo) ? '（' + esc(memoRest(r.memo)) + '）' : '');
   if (withFix) h += r.fix ? '<br><span class="fixed">対処：' + esc(r.fix) + '</span><span class="muted">　' + esc(r.fixBy || '') + ' ' + esc(r.fixAt || '') + '</span>' : '<br><span class="muted">対処はまだ書かれていません</span>';
   return h;
 }
@@ -485,6 +490,58 @@ function planAllHtml(plan) {
 function defaultQty(plan, s) {
   if (qtyEdit[plan.id + '|' + s.key] !== undefined) return qtyEdit[plan.id + '|' + s.key];
   return s.compare && plan.v[s.compare] !== undefined ? plan.v[s.compare] : '';
+}
+// ---------- 数量を「〇トレイ〇列」で入れる（工程シートの「数量の入力」が「トレイと列」の工程） ----------
+// トレイの穴数：計画の「播種トレイ」の数字（TR288 → 288、128 → 128）。分からなければ 0
+function trayHoles(plan) {
+  const m = String(plan.v['播種トレイ'] == null ? '' : plan.v['播種トレイ']).normalize('NFKC').match(/\d+/);
+  return m ? Number(m[0]) : 0;
+}
+// 1列の穴数：穴数 ÷ 2 の平方根を丸める（72→6、128→8、200→10、288→12、406→14。Excel のアドインと同じ決め方）
+function trayPerLine(holes) { return holes > 0 ? Math.max(1, Math.round(Math.sqrt(holes / 2))) : 0; }
+// 計画から出す初めの値。「播種の枚数列数」（2枚24列・2TR11列）→ 播種粒数 ÷ 穴数 → 播種TR数 の順。出せなければ空
+function trayPlan(plan) {
+  const t = String(plan.v['播種の枚数列数'] == null ? '' : plan.v['播種の枚数列数']).normalize('NFKC').match(/(\d+)\s*(?:枚|TR|トレイ)\s*(?:(\d+)\s*列)?/i);
+  if (t) return { tray: t[1], line: t[2] || '0' };
+  const holes = trayHoles(plan), per = trayPerLine(holes);
+  const seeds = Number(plan.v['播種粒数']);
+  if (holes && seeds > 0) {
+    const n = Math.floor(seeds / holes);
+    return { tray: String(n), line: String(Math.ceil((seeds - n * holes) / per - 1e-9)) };
+  }
+  const tr = Number(plan.v['播種TR数']);
+  if (tr > 0) {
+    const n = Math.floor(tr + 1e-9);
+    return { tray: String(n), line: holes ? String(Math.ceil((tr - n) * holes / per - 1e-9)) : '0' };
+  }
+  return { tray: '', line: '' };
+}
+function trayValue(plan, s) { return trayEdit[plan.id + '|' + s.key] || trayPlan(plan); }
+// 数量の入力欄。ふつうは数を1つ。「トレイと列」の工程は「〔 〕トレイ〔 〕列」。dq は data-qty に入れる文字（やること画面は QRID、計画画面は QRID|工程）
+function qtyInputHtml(plan, s, dq, label) {
+  if (!s.needQty) return '';
+  if (!s.trayMode) return `<input class="qty" type="number" inputmode="decimal" step="any" data-qty="${esc(dq)}" value="${esc(defaultQty(plan, s))}" aria-label="${esc(label)}">`;
+  const k = esc(plan.id + '|' + s.key), v = trayValue(plan, s);
+  return `<span class="trayin"><input class="qty" type="number" inputmode="numeric" min="0" step="1" data-tk="${k}" data-tl="tray" value="${esc(v.tray)}" aria-label="トレイの数">トレイ
+    <input class="qty" type="number" inputmode="numeric" min="0" step="1" data-tk="${k}" data-tl="line" value="${esc(v.line)}" aria-label="列の数">列</span>`;
+}
+// 欄を直したら覚える（描き直しても消えない）
+document.addEventListener('input', e => {
+  const el = e.target;
+  if (!el || !el.dataset || !el.dataset.tk) return;
+  const v = {};
+  document.querySelectorAll('[data-tk]').forEach(x => { if (x.dataset.tk === el.dataset.tk) v[x.dataset.tl] = x.value; });
+  trayEdit[el.dataset.tk] = { tray: v.tray === undefined ? '' : v.tray, line: v.line === undefined ? '' : v.line };
+});
+// メモの頭の「2トレイ11列」（記録のときに付ける）。なければ空
+function trayOf(memo) { const m = String(memo || '').match(/^(\d+トレイ\d+列)/); return m ? m[1] : ''; }
+// メモから、頭の「2トレイ11列」を取ったもの（人が書いたメモ）
+function memoRest(memo) { return String(memo || '').replace(/^\d+トレイ\d+列[　\s]*/, ''); }
+// 記録に出す数量：「2トレイ11列（600粒）」。トレイと列の記録でなければ「600粒」
+function qtyText(r, s) {
+  if (!r || r.qty === '' || r.qty == null) return '';
+  const unit = s ? s.unit : '', t = trayOf(r.memo);
+  return t ? esc(t) + '（' + esc(r.qty) + esc(unit) + '）' : esc(r.qty) + esc(unit);
 }
 function bindQty(list) {
   document.querySelectorAll('[data-qty]').forEach(el => el.oninput = () => {
@@ -718,7 +775,7 @@ function renderWorker() {
               <div class="fs">${fieldsHtml(p, m)}</div>
               ${placeHtml(p, s)}${shortHtml(p, s)}
               ${prev ? `<div class="warn">※ 前の工程（${esc(prev)}）が未記録</div>` : ''}</div>
-            <div class="act">${s.needQty ? `<input class="qty" type="number" inputmode="decimal" step="any" data-qty="${esc(p.id)}" value="${esc(defaultQty(p, s))}" aria-label="数量">` : ''}
+            <div class="act">${qtyInputHtml(p, s, p.id, '数量')}
               <button type="button" class="done-btn" data-do="${esc(p.id)}">${majorSteps(m).length > 1 ? esc(taskName(s)) + '<br>' : ''}完了</button></div>
           </div>`;
         }).join('');
@@ -769,8 +826,17 @@ function renderWorker() {
 }
 // 1件分の記録。数量が要る工程は、行の入力欄の数（最初は予定の数）を使う。場所が要る工程は、入れてあればハウス・ベンチも付ける
 function itemFor(p, s) {
-  let qty = '';
-  if (s.needQty) {
+  let qty = '', trayMemo = '';
+  if (s.needQty && s.trayMode) {
+    // 「〇トレイ〇列」：欄の値（なければ計画から出した値）を、粒に直して記録する。メモの頭に「2トレイ11列」と残す
+    const v = Object.assign({}, trayValue(p, s));
+    document.querySelectorAll('[data-tk]').forEach(x => { if (x.dataset.tk === p.id + '|' + s.key) v[x.dataset.tl] = x.value; });
+    const tray = String(v.tray == null ? '' : v.tray).trim(), line = String(v.line == null ? '' : v.line).trim() || '0';
+    if (tray === '' || !/^\d+$/.test(tray) || !/^\d+$/.test(line)) { toast(planName(p) + '：トレイと列の数を入れてください', true); return null; }
+    const holes = trayHoles(p);
+    qty = holes ? Number(tray) * holes + Number(line) * trayPerLine(holes) : Number(tray);   // 穴数が分からない計画は、トレイの数だけ
+    trayMemo = Number(tray) + 'トレイ' + Number(line) + '列';
+  } else if (s.needQty) {
     const el = document.querySelector('[data-qty="' + CSS.escape(p.id + '|' + s.key) + '"]') || document.querySelector('[data-qty="' + CSS.escape(p.id) + '"]');
     qty = el ? el.value : defaultQty(p, s);
     if (qty === '' || isNaN(Number(qty))) { toast(planName(p) + '：数量を入れてください', true); return null; }
@@ -782,7 +848,7 @@ function itemFor(p, s) {
   const short = String(x.short === undefined ? '' : x.short).trim();
   if (short !== '' && (isNaN(Number(short)) || Number(short) < 0)) { toast(planName(p) + '：不足は 0 以上の数字で入れてください', true); return null; }
   return { id: p.id, major: s.major, minor: s.minor, qty: qty, house: String(e.house || '').trim(), bench: e.col ? e.col + e.num : '',
-    short: short === '' ? '' : Number(short), memo: String(x.memo || '').trim() };
+    short: short === '' ? '' : Number(short), memo: [trayMemo, String(x.memo || '').trim()].filter(String).join('　') };
 }
 function logHtml(l) {
   const s = state.steps.find(x => x.major === l.major && x.minor === l.minor);
@@ -790,7 +856,7 @@ function logHtml(l) {
   const unit = s ? s.unit : '';
   return `<div class="log${l.op === '取消' ? ' cancel' : ''}"><div class="body">
     <div>${esc(l.name)} <span class="muted">${esc(l.id)}</span></div>
-    <div class="t">${esc(l.time)}　${esc(task)}${l.op === '取消' ? '（取り消し）' : ''}${l.qty !== '' && l.qty != null ? '　' + esc(l.qty) + esc(unit) : ''}${placeText(l) ? '　' + esc(placeText(l)) : ''}${shortInfo(l) ? '　' + shortInfo(l) : ''}　${esc(l.person)}</div></div>
+    <div class="t">${esc(l.time)}　${esc(task)}${l.op === '取消' ? '（取り消し）' : ''}${l.qty !== '' && l.qty != null ? '　' + qtyText(l, s) : ''}${placeText(l) ? '　' + esc(placeText(l)) : ''}${shortInfo(l) ? '　' + shortInfo(l) : ''}　${esc(l.person)}</div></div>
     ${l.canDelete && (isPlanner() || l.person === getName()) ? `<button type="button" class="del" data-del="${esc(l.logId)}">消す</button>` : ''}</div>`;
 }
 function bindDelete() {
@@ -811,7 +877,7 @@ function renderPlanner() {
         const st = p.status[s.key] || {};
         const tag = st.done ? '<span class="tag ok">完了</span>' : nx && nx.key === s.key ? '<span class="tag now">次の作業</span>' : '<span class="tag ng">未完了</span>';
         return `<li class="${st.done ? 'ok' : 'ng'}">${tag}<span class="what">${esc(fullTask(s, '：'))}</span>
-          <span class="when">${st.done ? esc(st.time) + (st.person ? ' ' + esc(st.person) : '') + (st.qty !== '' && st.qty != null ? ' / <span class="' + (isShortQty(p, s, st.qty) ? 'short' : '') + '">' + esc(st.qty) + esc(s.unit) + '</span>' : '') + (placeText(st) ? ' / ' + esc(placeText(st)) : '') + (Number(st.short) > 0 ? ' / <span class="short">不足 ' + esc(st.short) + '本</span>' : '') : ''}</span></li>`;
+          <span class="when">${st.done ? esc(st.time) + (st.person ? ' ' + esc(st.person) : '') + (st.qty !== '' && st.qty != null ? ' / <span class="' + (isShortQty(p, s, st.qty) ? 'short' : '') + '">' + qtyText(st, s) + '</span>' : '') + (placeText(st) ? ' / ' + esc(placeText(st)) : '') + (Number(st.short) > 0 ? ' / <span class="short">不足 ' + esc(st.short) + '本</span>' : '') : ''}</span></li>`;
       }).join('');
       return `<div class="card"><div class="plan-head">
           <div class="qr">${qrSvg(planUrl(p.id))}<div class="id">${esc(p.id)}</div></div>
@@ -864,7 +930,7 @@ function shortTabHtml() {
     return `<div class="sh${x.fix ? ' ok' : ''}">
       <div class="top"><b class="short">不足 ${esc(x.short)}本</b><a href="${esc(planUrl(x.id))}">${esc(x.name)}</a><span class="muted">${esc(x.id)}</span>
         <span class="tag ${x.fix ? 'ok' : 'now'}">${x.fix ? '対処済み' : '対処まだ'}</span></div>
-      <div class="t">${esc(x.time)}　${esc(s ? fullTask(s, '：') : x.major + '：' + x.minor)}${placeText(x) ? '　' + esc(placeText(x)) : ''}　${esc(x.person)}${x.memo ? '　メモ：' + esc(x.memo) : ''}</div>
+      <div class="t">${esc(x.time)}　${esc(s ? fullTask(s, '：') : x.major + '：' + x.minor)}${placeText(x) ? '　' + esc(placeText(x)) : ''}　${esc(x.person)}${memoRest(x.memo) ? '　メモ：' + esc(memoRest(x.memo)) : ''}</div>
       ${x.fix && !edit ? `<div style="margin-top:6px"><span class="fixed">対処：${esc(x.fix)}</span><span class="muted">　${esc(x.fixBy)} ${esc(x.fixAt)}</span></div>
         <div class="fx"><button type="button" class="sub" data-fixopen="${esc(x.logId)}">対処を直す</button></div>` : `
       <div class="fx"><input type="text" maxlength="200" data-fix="${esc(x.logId)}" value="${esc(val)}" placeholder="対処を書く（例：予備苗から補充、追加播種）" aria-label="対処">
@@ -902,7 +968,7 @@ function renderPlan(plan) {
       const r = plan.status[s.key] || {};
       if (r.done) {
         let info = esc(r.time) + (r.person ? '　' + esc(r.person) : '');
-        if (r.qty !== '' && r.qty != null) info += '　' + esc(r.qty) + esc(s.unit) + diffText(plan, s, r.qty);
+        if (r.qty !== '' && r.qty != null) info += '　' + qtyText(r, s) + diffText(plan, s, r.qty);
         if (placeText(r)) info += '　' + esc(placeText(r));
         if (shortInfo(r)) info += '<br>' + shortInfo(r, !r.pending);
         const log = state.logs.find(l => l.id === plan.id && l.major === s.major && l.minor === s.minor && l.op === '完了');
@@ -918,7 +984,7 @@ function renderPlan(plan) {
         <div class="t">${esc(taskName(s))}${isCur ? '<span class="tag now">次の作業</span>' : '<span class="tag ng">未完了</span>'}</div>
         <div class="desc">${esc(s.note)}</div>
         ${placeHtml(plan, s)}${shortHtml(plan, s)}
-        <div class="row">${s.needQty ? `<input class="qty" type="number" inputmode="decimal" step="any" data-qty="${esc(plan.id + '|' + s.key)}" value="${esc(defaultQty(plan, s))}" aria-label="数量（${esc(s.unit)}）">` : ''}
+        <div class="row">${qtyInputHtml(plan, s, plan.id + '|' + s.key, '数量（' + s.unit + '）')}
           <button type="button" class="do" data-step="${esc(s.key)}">${esc(taskName(s))}を完了にする</button></div></div></li>`;
     }).join('');
     return `<section class="major"><h2>${esc(m)}${head}</h2>
@@ -1297,7 +1363,7 @@ function renderPart() {
       <div class="body"><div class="nm"><a href="#" data-open="${esc(p.id)}">${esc(planName(p))}</a> <span class="muted">${esc(p.id)}</span></div>
         <div class="fs"><b>${esc(fullTask(s, '：'))}</b>　${fieldsHtml(p, s.major)}</div>
         ${placeHtml(p, s)}${shortHtml(p, s)}</div>
-      <div class="act">${s.needQty ? `<input class="qty" type="number" inputmode="decimal" step="any" data-qty="${esc(p.id)}" value="${esc(defaultQty(p, s))}" aria-label="数量">` : ''}
+      <div class="act">${qtyInputHtml(p, s, p.id, '数量')}
         <button type="button" class="done-btn" data-do="${esc(p.id)}">${esc(taskName(s))}<br>完了</button></div>
     </div>`).join('');
   document.getElementById('app').innerHTML = headerHtml('', false) + `
@@ -1365,7 +1431,7 @@ function shortListHtml() {
     return `<div class="sh${x.fix ? ' ok' : ''}">
       <div class="top"><b class="short">不足 ${esc(x.short)}本</b><a href="#" data-open="${esc(x.id)}">${esc(x.name)}</a><span class="muted">${esc(x.id)}</span>
         <span class="tag ${x.fix ? 'ok' : 'now'}">${x.fix ? '対処済み' : '対処まだ'}</span></div>
-      <div class="t">${esc(x.time)}　${esc(s ? fullTask(s, '：') : x.major + '：' + x.minor)}${placeText(x) ? '　' + esc(placeText(x)) : ''}　${esc(x.person)}${x.memo ? '　メモ：' + esc(x.memo) : ''}</div>
+      <div class="t">${esc(x.time)}　${esc(s ? fullTask(s, '：') : x.major + '：' + x.minor)}${placeText(x) ? '　' + esc(placeText(x)) : ''}　${esc(x.person)}${memoRest(x.memo) ? '　メモ：' + esc(memoRest(x.memo)) : ''}</div>
       ${x.fix ? `<div style="margin-top:6px"><span class="fixed">対処：${esc(x.fix)}</span><span class="muted">　${esc(x.fixBy)} ${esc(x.fixAt)}</span></div>` : ''}</div>`;
   }).join('');
 }
@@ -1411,7 +1477,7 @@ function renderPlanView(plan) {
       const r = plan.status[s.key] || {};
       if (r.done) {
         let info = esc(r.time) + (r.person ? '　' + esc(r.person) : '');
-        if (r.qty !== '' && r.qty != null) info += '　' + esc(r.qty) + esc(s.unit) + diffText(plan, s, r.qty);
+        if (r.qty !== '' && r.qty != null) info += '　' + qtyText(r, s) + diffText(plan, s, r.qty);
         if (placeText(r)) info += '　' + esc(placeText(r));
         if (shortInfo(r)) info += '<br>' + shortInfo(r, true);
         return `<li class="done"><span class="mark">✓</span><div class="box"><div class="t">${esc(taskName(s))}<span class="tag ok">完了</span></div><div class="info">${info}</div></div></li>`;

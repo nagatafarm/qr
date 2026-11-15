@@ -185,11 +185,11 @@ function render() {
           <div>${esc(t.qty)}${esc(t.unit)}　必要 ${esc(num(t.hours))} 時間　<span class="lk">あと ${esc(num(t.short))} 時間</span><span class="muted">（1人前で）</span></div></div>`).join('')}</div>
         ${canEdit() ? '<p class="muted">押して選んでから、入れる先のマスを押すと、その人のその日に足せます（固定になる）。</p>' : ''}`
         : '<div class="muted">ありません。予定日までの作業は、全部だれかに入っています。</div>'}
-      <details><summary>時間を出せない作業・予定日がない作業（${sch.unknown.length}件）</summary>
+      <details><summary>時間を出せない作業・予定日がない作業・古い作業（${sch.unknownCount || sch.unknown.length}件${sch.oldCount ? '。うち古い作業 ' + sch.oldCount + '件' : ''}）</summary>
         ${sch.unknown.length ? `<table class="ut"><thead><tr><th>計画</th><th>工程</th><th>予定日</th><th>わけ</th></tr></thead><tbody>${sch.unknown.map(u =>
           `<tr><td><a href="${esc(planUrl(u.id))}">${esc(u.name)}</a> <span class="muted">${esc(u.id)}</span></td><td>${esc(u.task)}</td><td>${esc(u.due)}</td><td>${esc(u.why)}</td></tr>`).join('')}</tbody></table>`
           : '<div class="muted">ありません。</div>'}
-        <p class="muted">「作業ペース」のシートに行を足すか、計画の数量・予定日を入れると、自動の割り振りに入ります。</p></details>
+        <p class="muted">「作業ペース」のシートに行を足すか、計画の数量・予定日を入れると、自動の割り振りに入ります。${sch.oldCount ? '古い作業（予定日を ' + sch.oldDays + ' 日より前に過ぎた未完了の作業）は、割り振りに入れていません。日数は「設定」シートの「古い作業の日数」で変えられます（0 にすると全部入れる）。' + (sch.unknown.length < (sch.unknownCount || 0) ? '一覧は先頭の ' + sch.unknown.length + ' 件だけ出しています。' : '') : ''}</p></details>
     </main>`;
   bind();
   renderPanel();
