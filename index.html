@@ -51,6 +51,14 @@
   /* パートさん用：だれとして記録するかの確認 */
   #ask { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; z-index: 50; }
   #ask[hidden] { display: none; }
+  /* まだ登録していない名札を読んだとき：だれの名札かを選ぶ */
+  #reg { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; z-index: 50; }
+  #reg[hidden] { display: none; }
+  #reg .box { background: #fff; border-radius: 18px; padding: 20px 18px 16px; width: 92%; max-width: 420px; max-height: 86vh; overflow-y: auto; text-align: center; box-shadow: 0 8px 30px rgba(0,0,0,.3); }
+  #reg .msg { font-size: 19px; font-weight: bold; line-height: 1.4; }
+  #reg .sub { font-size: 13px; color: var(--gray); margin: 6px 0 10px; }
+  #reg .names { justify-content: center; }
+  #reg .no { display: block; width: 100%; margin-top: 14px; padding: 14px; font-size: 17px; font-weight: bold; border-radius: 12px; cursor: pointer; background: #fff; border: 2px solid #bbb; color: #444; }
   #ask .box { background: #fff; border-radius: 18px; padding: 24px 22px 20px; width: 88%; max-width: 380px; text-align: center; box-shadow: 0 8px 30px rgba(0,0,0,.3); }
   #ask .msg { font-size: 23px; font-weight: bold; line-height: 1.4; }
   #ask button { display: block; width: 100%; margin-top: 12px; padding: 16px; font-size: 19px; font-weight: bold; border-radius: 12px; cursor: pointer; }
@@ -289,6 +297,8 @@
 <div id="saving" hidden><div class="box" id="saving-box"></div></div>
 <div id="ask" hidden><div class="box"><div class="msg" id="ask-msg"></div>
   <button type="button" class="yes" id="ask-yes">はい</button><button type="button" class="no" id="ask-no">やり直す</button></div></div>
+<div id="reg" hidden><div class="box"><div class="msg" id="reg-msg"></div><div class="sub" id="reg-sub"></div>
+  <div class="names" id="reg-names"></div><button type="button" class="no" id="reg-no">やり直す</button></div></div>
 <div id="scan" hidden>
   <video id="scan-video" playsinline muted></video>
   <div class="bar">
@@ -976,17 +986,18 @@ function qrId(text) {
 function onScan(text) {
   if (!scan) return;
   if (scan.mode === 'badge') {        // 名札を読む：1枚読んだら、その人に切り替えて終わる
-    let who = '';
-    try { who = (new URL(String(text).trim()).searchParams.get('who') || '').trim(); } catch (e) {}
+    if (scan.hold) return;
+    const who = badgeName(text);
     if (who) { stopScan(true); applyWho(who); render(); return; }
+    if (badgeCode(text)) return askBadge(badgeCode(text));
     if (!scan.seen['?' + text]) { scan.seen['?' + text] = true; scan.items.unshift({ ok: false, id: String(text).slice(0, 30), text: '名札の QR ではありません' }); scanDraw(); }
     return;
   }
   if (scan.mode === 'gate') {         // パートさん用：名札を読んだら「〇〇 さんとして記録します」と確かめる
     if (scan.hold) return;
-    let who = '';
-    try { who = (new URL(String(text).trim()).searchParams.get('who') || '').trim(); } catch (e) {}
+    const who = badgeName(text);
     if (who) return askWho(who);
+    if (badgeCode(text)) return askBadge(badgeCode(text));
     if (!scan.seen['?' + text]) { scan.seen['?' + text] = true; scan.items.unshift({ ok: false, id: String(text).slice(0, 30), text: '名札の QR ではありません' }); scanDraw(); }
     return;
   }
@@ -1089,6 +1100,7 @@ function stopScan(keep) {
   try { video.pause(); video.srcObject = null; } catch (e) {}
   document.getElementById('scan').hidden = true;
   if (!asking) document.getElementById('ask').hidden = true;
+  document.getElementById('reg').hidden = true;
   if (keep === true || (me && me.mode === 'badge')) return;   // 名札を読んでいたときは、担当・名前の画面のまま
   if (me && me.mode === 'gate') gateManual = true;            // パートさん用：カメラを閉じた。名前の一覧から選べる
   if (me && me.mode) { if (state) render(); return; }
@@ -1137,6 +1149,57 @@ window.addEventListener('popstate', () => {
 function touchPart() { partAt = Date.now(); save('partAt', String(partAt)); }
 function partExpired() { return Date.now() - (partAt || Number(load('partAt')) || 0) > PART_IDLE_MIN * 60000; }
 function knownPerson(name) { const l = state.people || []; return !l.length || l.some(p => p.name === name); }
+// 名札の番号をそろえる（全角・小文字・空白のちがいを無視して比べる。Code.gs の badgeKey_ と同じ）
+function badgeKey(s) { return String(s == null ? '' : s).normalize('NFKC').replace(/\s+/g, '').toUpperCase(); }
+// 名札の QR の中身 → 名前。「画面のURL?who=名前」の名札か、今ある名札の番号（人の一覧の「名札の番号」。STF-82 など）。分からなければ空
+function badgeName(text) {
+  text = String(text || '').trim();
+  try { const w = (new URL(text).searchParams.get('who') || '').trim(); if (w) return w; } catch (e) {}
+  const k = badgeKey(text);
+  const p = k && (state.people || []).find(x => x.badge && badgeKey(x.badge) === k);
+  return p ? p.name : '';
+}
+// まだ登録していない名札の番号として扱えるか（URL でない、40文字までの文字）。扱えなければ空
+function badgeCode(text) {
+  text = String(text || '').trim();
+  return text && text.length <= 40 && !/^https?:/i.test(text) ? badgeKey(text) : '';
+}
+// まだ登録していない名札を読んだ：だれの名札かを選んでもらい、人の一覧の「名札の番号」に覚える。次からは読むだけで切り替わる
+function askBadge(code) {
+  if (!scan || scan.hold) return;
+  if (scan.seen['b' + code]) return;             // 「やり直す」を押した直後に、同じ名札でまた出ないように少し待つ
+  const all = state.people || [];
+  if (!all.length) { scan.seen['b' + code] = true; return scanDraw('人の一覧が空なので、名札（' + code + '）を登録できません。先に人の一覧に名前を入れてください。', true); }
+  const gate = scan.mode === 'gate';
+  const parts = all.filter(p => p.kubun && p.kubun.indexOf('社員') < 0);
+  const list = (gate && parts.length ? parts.concat(all.filter(p => !parts.includes(p))) : all).filter(p => !p.badge);
+  scan.hold = true;
+  const el = document.getElementById('reg');
+  document.getElementById('reg-msg').textContent = 'この名札（' + code + '）は、まだ登録されていません';
+  document.getElementById('reg-sub').textContent = 'だれの名札ですか？　名前を押すと覚えます。次からは、読むだけで切り替わります。';
+  document.getElementById('reg-names').innerHTML = list.map(p => `<button type="button" class="nmbtn" data-rname="${esc(p.name)}">${esc(p.name)}</button>`).join('')
+    || '<div class="muted">名札をまだ登録していない人が、人の一覧にいません。</div>';
+  el.hidden = false;
+  const close = () => { el.hidden = true; if (scan) { scan.hold = false; scan.seen['b' + code] = true; setTimeout(() => { if (scan) delete scan.seen['b' + code]; }, 4000); } };
+  document.getElementById('reg-no').onclick = () => { close(); if (scan) scanDraw('自分の名札の QR にカメラを向けてください。'); };
+  el.querySelectorAll('[data-rname]').forEach(b => b.onclick = async () => {
+    const name = b.dataset.rname;
+    el.hidden = true;
+    popup('wait', '名札を登録しています…');
+    try {
+      server = await postApi({ action: 'setBadge', code: code, name: name });
+      if (!server.logs) server.logs = [];
+      rebuild(); popup();
+      if (!scan) return;
+      scan.hold = false;
+      if (gate) return askWho(name);
+      stopScan(true); applyWho(name); render();
+    } catch (e) {
+      popup('err', '名札を登録できませんでした', e.message);
+      close();
+    }
+  });
+}
 // 名札を読んだ・名前を選んだ：「〇〇 さんとして記録します」「はい」「やり直す」
 function askWho(name) {
   name = String(name || '').trim().slice(0, 40);
