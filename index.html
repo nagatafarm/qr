@@ -104,7 +104,26 @@
   .place input, .place select { font-size: 16px; padding: 7px 6px; border: 1px solid #ccc; border-radius: 8px; font-family: inherit; background: #fff; color: #222; }
   .place input { width: 62px; text-align: right; }
   .place input.memo { flex: 1; min-width: 120px; width: auto; text-align: left; }
-  /* 不足（足りなかった本数）と、その対処 */
+  /* マイナス（足りなかった本数）：出ない／出た、本数、理由 */
+  .minus { margin-top: 8px; font-size: 13px; color: var(--gray); }
+  .minus .mq { display: flex; gap: 8px; align-items: center; }
+  .minus .mb { padding: 9px 18px; font-size: 15px; font-weight: bold; border-radius: 8px; border: 1px solid #bbb; background: #fff; color: #444; cursor: pointer; font-family: inherit; }
+  .minus .mb.on { background: var(--green); border-color: var(--green); color: #fff; }
+  .minus .mb.warn.on { background: var(--red); border-color: var(--red); }
+  .minus .md[hidden] { display: none; }
+  .minus .mr { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin-top: 8px; }
+  .minus .mr label { display: inline-flex; gap: 5px; align-items: center; font-size: 15px; color: #222; }
+  .minus .mr input[type=checkbox] { width: 22px; height: 22px; }
+  .minus .mr input.memo { flex: 1; min-width: 150px; font-size: 16px; padding: 7px 6px; border: 1px solid #ccc; border-radius: 8px; font-family: inherit; background: #fff; color: #222; }
+  /* マイナスの一覧：② 対処と ③ 解消 */
+  .sh.closed { border-color: #ddd; border-left-color: #999; background: #fafafa; }
+  .sh .fx2 { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin-top: 8px; padding-top: 8px; border-top: 1px dashed #ddd; font-size: 13px; }
+  .sh .fx2 input, .sh .fx2 select { font-size: 16px; padding: 7px; border: 1px solid #ccc; border-radius: 8px; font-family: inherit; background: #fff; color: #222; }
+  .sh .fx2 input[type=number] { width: 84px; text-align: right; }
+  .sh .fx2 input[type=text] { flex: 1; min-width: 150px; }
+  .sh .fx2 button { padding: 8px 12px; font-size: 14px; font-weight: bold; border-radius: 8px; border: none; background: var(--green); color: #fff; cursor: pointer; font-family: inherit; }
+  .sh .fx2 button.ng { background: var(--red); }
+  .sh .fx2 button.sub { background: #fff; color: #444; border: 1px solid #bbb; font-weight: normal; }
   .fixed { color: var(--green-d); }
   .sh { background: #fff; border: 1px solid #e3b4b4; border-left: 5px solid var(--red); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; font-size: 14px; }
   .sh.ok { border-color: #cfe3d4; border-left-color: var(--green); background: var(--green-l); }
@@ -343,7 +362,7 @@ const picked = new Set();          // 一括登録で選んだ計画（QRID）
 const qtyEdit = {};                // 手で直した数量（画面を描き直しても消えないように）
 const trayEdit = {};               // 手で直した「〇トレイ〇列」（計画|工程 → {tray, line}）
 const placeEdit = {};              // 入れた場所と不足（計画|工程 → {house, col, num, short, memo}）。画面を描き直しても消えないように
-const fixEdit = {};                // 「不足」タブで書きかけの対処（記録ID → 文）。fixOpen は、対処済みの行を直すために開いているもの
+const fixEdit = {};                // マイナスの一覧で書きかけの ② 対処・③ 解消（記録ID → {kind, grains, due, note, date}）。fixOpen は、書いてある行を直すために開いているもの（記録ID:2・記録ID:3）
 const fixOpen = {};
 let inSetup = false;               // 担当・名前を選ぶ画面を出しているか（「担当・名前」を押したときも）
 let scan = null;                   // QR をまとめて読んでいる間の状態
@@ -437,23 +456,60 @@ function placeHtml(plan, s) {
   return `<div class="place">ハウス<input type="number" inputmode="numeric" min="1" step="1" data-pk="${k}" data-pl="house" value="${esc(e.house || '')}" aria-label="ハウス番号">
     ベンチ<select data-pk="${k}" data-pl="col" aria-label="ベンチの列">${opt(['A', 'B', 'C'], e.col)}</select><select data-pk="${k}" data-pl="num" aria-label="ベンチの番号">${opt(Array.from({ length: 25 }, (_, i) => i + 1), e.num)}</select></div>`;
 }
-// 不足の入力欄（「不足の入力」が「あり」の工程だけ）。足りなかった本数と、理由などのメモ。入れなくても記録できる
+// マイナスの入力欄（「不足の入力」が「あり」の工程だけ）：鉢上げマイナス報告用紙の ①。
+// 「出ない」「出た」のどちらかを選ぶ。「出た」なら、本数と理由（○付け）を入れる
+const REASONS = ['プラグの本数不足', '苗の奇形'];
 function shortHtml(plan, s) {
   if (!s.needShort) return '';
-  const k = esc(plan.id + '|' + s.key), e = placeEdit[plan.id + '|' + s.key] || {};
-  return `<div class="place">不足<input type="number" inputmode="numeric" min="0" step="1" data-pk="${k}" data-pl="short" value="${esc(e.short || '')}" aria-label="不足の本数">本
-    <input class="memo" type="text" maxlength="100" data-pk="${k}" data-pl="memo" value="${esc(e.memo || '')}" placeholder="理由など（なくてもよい）" aria-label="不足のメモ"></div>`;
+  const key = plan.id + '|' + s.key, k = esc(key), e = placeEdit[key] || {}, yes = e.minus === 'yes';
+  return `<div class="minus" data-mk="${k}">
+    <div class="mq">マイナス<button type="button" class="mb${e.minus === 'no' ? ' on' : ''}" data-mv="no">出ない</button><button type="button" class="mb warn${yes ? ' on' : ''}" data-mv="yes">出た</button></div>
+    <div class="md"${yes ? '' : ' hidden'}>
+      <div class="place">マイナス数<input type="number" inputmode="numeric" min="1" step="1" data-pk="${k}" data-pl="short" value="${esc(e.short || '')}" aria-label="マイナスの本数">本</div>
+      <div class="mr">理由${REASONS.map((r, i) => `<label><input type="checkbox" data-pk="${k}" data-pl="r${i}"${e['r' + i] ? ' checked' : ''}>${r}</label>`).join('')}
+        <label><input type="checkbox" data-pk="${k}" data-pl="rx"${e.rx ? ' checked' : ''}>その他</label>
+        <input class="memo" type="text" maxlength="60" data-pk="${k}" data-pl="memo" value="${esc(e.memo || '')}" placeholder="その他の理由（例：発芽不良）" aria-label="その他の理由"></div>
+    </div></div>`;
 }
-// 記録に出す不足：「不足 12本」（赤）。メモと、計画担当が書いた対処も続けて出す
+function md(key) { const m = /^\d{4}-(\d{2})-(\d{2})/.exec(String(key || '')); return m ? Number(m[1]) + '/' + Number(m[2]) : String(key || ''); }
+function today() { return new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10); }
+// ② 対処の文：「追加播種 200粒 → 解消予定 11/25　メモ」
+function fixText(x) {
+  const a = [];
+  if (x.fixKind) a.push(x.fixKind + (x.fixKind === '追加播種' ? (x.grains !== '' && x.grains != null ? ' ' + x.grains + '粒' : '') + (x.due ? ' → 解消予定 ' + md(x.due) : '') : ''));
+  if (x.fix) a.push(x.fix);
+  return a.join('　');
+}
+// マイナス報告が、今どこまで進んでいるか
+function shortState(x) {
+  if (x.solved === 'できた') return { key: 'ok', label: '解消できた', tag: 'ok', open: false };
+  if (x.solved === 'できなかった') return { key: 'ng', label: '解消できなかった', tag: 'ng', open: false };
+  if (x.fixKind === '解消しない') return { key: 'no', label: '解消しない', tag: 'ng', open: false };
+  if (fixText(x)) return { key: 'wait', label: '解消まち', tag: 'now', open: true };
+  return { key: 'new', label: '対処まだ', tag: 'now', open: true };
+}
+// 記録に出すマイナス：「マイナス 12本（理由）」（赤）。② 対処と ③ 解消も続けて出す
 function shortInfo(r, withFix) {
   if (!r || !(Number(r.short) > 0)) return '';
-  let h = '<span class="short">不足 ' + esc(r.short) + '本</span>' + (memoRest(r.memo) ? '（' + esc(memoRest(r.memo)) + '）' : '');
-  if (withFix) h += r.fix ? '<br><span class="fixed">対処：' + esc(r.fix) + '</span><span class="muted">　' + esc(r.fixBy || '') + ' ' + esc(r.fixAt || '') + '</span>' : '<br><span class="muted">対処はまだ書かれていません</span>';
+  const why = [r.reason, memoRest(r.memo)].filter(String).join('　');
+  let h = '<span class="short">マイナス ' + esc(r.short) + '本</span>' + (why ? '（' + esc(why) + '）' : '');
+  if (withFix) {
+    h += fixText(r) ? '<br><span class="fixed">対処：' + esc(fixText(r)) + '</span><span class="muted">　' + esc(r.fixBy || '') + ' ' + esc(r.fixAt || '') + '</span>' : '<br><span class="muted">対処はまだ書かれていません</span>';
+    if (r.solved) h += '<br><span class="' + (r.solved === 'できた' ? 'fixed' : 'short') + '">解消' + esc(r.solved) + '</span><span class="muted">　' + esc(md(r.solvedDate)) + ' ' + esc(r.solvedBy || '') + '</span>';
+  }
   return h;
 }
 function bindPlace() {
   document.querySelectorAll('[data-pk]').forEach(el => el.oninput = el.onchange = () => {
-    (placeEdit[el.dataset.pk] = placeEdit[el.dataset.pk] || {})[el.dataset.pl] = el.value;
+    (placeEdit[el.dataset.pk] = placeEdit[el.dataset.pk] || {})[el.dataset.pl] = el.type === 'checkbox' ? el.checked : el.value;
+  });
+  // マイナス「出ない」「出た」：押した方に色を付け、「出た」なら本数と理由の欄を開く（画面は描き直さない。入れかけの数を消さないため）
+  document.querySelectorAll('.minus [data-mv]').forEach(b => b.onclick = () => {
+    const box = b.closest('.minus'), k = box.dataset.mk;
+    (placeEdit[k] = placeEdit[k] || {}).minus = b.dataset.mv;
+    box.querySelectorAll('[data-mv]').forEach(x => x.classList.toggle('on', x === b));
+    box.querySelector('.md').hidden = b.dataset.mv !== 'yes';
+    if (b.dataset.mv === 'yes') { const n = box.querySelector('[data-pl="short"]'); if (n) n.focus(); }
   });
 }
 // 記録に出す場所：「ハウス3 ベンチA12」
@@ -592,7 +648,7 @@ function rebuild() {
     if (job.type !== 'record' || job.cancel) return;
     job.items.forEach(it => {
       const plan = state.plans.find(p => p.id === it.id);
-      if (plan) plan.status[it.major + '／' + it.minor] = { done: true, time: '送信中…', person: name, qty: it.qty, house: it.house, bench: it.bench, short: Number(it.short) > 0 ? Number(it.short) : 0, memo: it.memo || '', pending: true };
+      if (plan) plan.status[it.major + '／' + it.minor] = { done: true, time: '送信中…', person: name, qty: it.qty, house: it.house, bench: it.bench, short: Number(it.short) > 0 ? Number(it.short) : 0, reason: it.reason || '', memo: it.memo || '', pending: true };
     });
   });
 }
@@ -843,12 +899,22 @@ function itemFor(p, s) {
   }
   const e = s.needPlace ? (placeEdit[p.id + '|' + s.key] || {}) : {};
   if (!e.col !== !e.num) { toast(planName(p) + '：ベンチは列（A・B・C）と番号の両方を選んでください', true); return null; }
-  // 不足が要る工程は、入れてあれば不足の本数とメモも付ける（空 ＝ 不足なし）
+  // マイナスを聞く工程：「出ない」「出た」のどちらかを選んでもらう。「出た」なら、本数と理由も要る
   const x = s.needShort ? (placeEdit[p.id + '|' + s.key] || {}) : {};
-  const short = String(x.short === undefined ? '' : x.short).trim();
-  if (short !== '' && (isNaN(Number(short)) || Number(short) < 0)) { toast(planName(p) + '：不足は 0 以上の数字で入れてください', true); return null; }
+  let short = '', reason = '';
+  if (s.needShort) {
+    if (x.minus !== 'yes' && x.minus !== 'no') { toast(planName(p) + '：マイナスが「出ない」か「出た」かを選んでください', true); return null; }
+    if (x.minus === 'yes') {
+      const n = String(x.short === undefined ? '' : x.short).trim();
+      if (!/^\d+$/.test(n) || Number(n) <= 0) { toast(planName(p) + '：マイナスの本数を入れてください', true); return null; }
+      const why = REASONS.filter((r, i) => x['r' + i]), other = String(x.memo || '').trim();
+      if (x.rx || other) why.push('その他' + (other ? '：' + other : ''));
+      if (!why.length) { toast(planName(p) + '：マイナスの理由を選んでください', true); return null; }
+      short = Number(n); reason = why.join('、');
+    }
+  }
   return { id: p.id, major: s.major, minor: s.minor, qty: qty, house: String(e.house || '').trim(), bench: e.col ? e.col + e.num : '',
-    short: short === '' ? '' : Number(short), memo: [trayMemo, String(x.memo || '').trim()].filter(String).join('　') };
+    short: short, reason: reason, memo: trayMemo };
 }
 function logHtml(l) {
   const s = state.steps.find(x => x.major === l.major && x.minor === l.minor);
@@ -877,7 +943,7 @@ function renderPlanner() {
         const st = p.status[s.key] || {};
         const tag = st.done ? '<span class="tag ok">完了</span>' : nx && nx.key === s.key ? '<span class="tag now">次の作業</span>' : '<span class="tag ng">未完了</span>';
         return `<li class="${st.done ? 'ok' : 'ng'}">${tag}<span class="what">${esc(fullTask(s, '：'))}</span>
-          <span class="when">${st.done ? esc(st.time) + (st.person ? ' ' + esc(st.person) : '') + (st.qty !== '' && st.qty != null ? ' / <span class="' + (isShortQty(p, s, st.qty) ? 'short' : '') + '">' + qtyText(st, s) + '</span>' : '') + (placeText(st) ? ' / ' + esc(placeText(st)) : '') + (Number(st.short) > 0 ? ' / <span class="short">不足 ' + esc(st.short) + '本</span>' : '') : ''}</span></li>`;
+          <span class="when">${st.done ? esc(st.time) + (st.person ? ' ' + esc(st.person) : '') + (st.qty !== '' && st.qty != null ? ' / <span class="' + (isShortQty(p, s, st.qty) ? 'short' : '') + '">' + qtyText(st, s) + '</span>' : '') + (placeText(st) ? ' / ' + esc(placeText(st)) : '') + (Number(st.short) > 0 ? ' / <span class="short">マイナス ' + esc(st.short) + '本</span>' : '') : ''}</span></li>`;
       }).join('');
       return `<div class="card"><div class="plan-head">
           <div class="qr">${qrSvg(planUrl(p.id))}<div class="id">${esc(p.id)}</div></div>
@@ -903,7 +969,7 @@ function renderPlanner() {
       <div class="toolbar"><div class="tabs" style="margin:0;border:none">
           <button type="button" data-tab="list" class="${tab === 'list' ? 'on' : ''}">一覧</button>
           <button type="button" data-tab="log" class="${tab === 'log' ? 'on' : ''}">履歴<span class="n">${state.logs.length}</span></button>
-          <button type="button" data-tab="short" class="${tab === 'short' ? 'on' : ''}">不足${shortOpen() ? '<span class="n">' + shortOpen() + '</span>' : ''}</button>
+          <button type="button" data-tab="short" class="${tab === 'short' ? 'on' : ''}">マイナス${shortOpen() ? '<span class="n">' + shortOpen() + '</span>' : ''}</button>
           ${pestOn() ? `<button type="button" data-tab="pest" class="${tab === 'pest' ? 'on' : ''}">農薬</button>` : ''}</div>
         <div style="display:flex;flex-wrap:wrap;gap:6px"><a class="btn-link" href="schedule.html">スケジュール</a><a class="btn-link" href="badges.html">名札を印刷する</a><a class="btn-link" href="labels.html">ラベルを印刷する</a></div></div>
       ${body}
@@ -918,40 +984,87 @@ function renderPlanner() {
   if (tab === 'short') bindShortTab();
 }
 
-// ---------- 計画担当の「不足」タブ：不足のある記録の一覧と、その対処（マイナス報告用紙の代わり） ----------
-function shortOpen() { return (state.shorts || []).filter(x => !x.fix).length; }   // まだ対処を書いていない件数
+// ---------- マイナスの一覧（鉢上げマイナス報告用紙の代わり）：① 報告　→　② プラグ担当者の対処　→　③ ハウス担当者の解消 ----------
+// 計画担当の「マイナス」タブと、「作業を調べる」の一覧の両方で使う。② ③ を書けるのは社員（パートさん用のスマホでは見るだけ）
+const FIX_KINDS = ['余剰プラグで対応', '追加播種', '解消しない', 'その他'];
+function shortOpen() { return (state.shorts || []).filter(x => shortState(x).open).length; }   // まだ終わっていない件数
+function shortCard(x, link, editable) {
+  const s = state.steps.find(y => y.major === x.major && y.minor === x.minor), st = shortState(x);
+  const p = state.plans.find(y => y.id === x.id);
+  const pv = c => p ? String((p.w && p.w[c]) || p.v[c] || '').trim() : '';
+  const info = [pv('Pサイズ') && 'ポット ' + pv('Pサイズ'),
+    pv('鉢上予定日') && '鉢上げ予定 ' + pv('鉢上予定日') + (pv('鉢上予定TR数') ? '（' + pv('鉢上予定TR数') + 'TR）' : ''),
+    pv('出荷日') && '出荷予定 ' + pv('出荷日') + (pv('出荷TR数') ? '（' + pv('出荷TR数') + 'TR）' : ''),
+    pv('出荷先') && '出荷先 ' + pv('出荷先')].filter(Boolean).join('／');
+  const why = [x.reason, memoRest(x.memo)].filter(String).join('　');
+  const e = fixEdit[x.logId] || {}, id = esc(x.logId);
+  const val = (k, cur) => e[k] !== undefined ? e[k] : (cur === null || cur === undefined ? '' : cur);
+  // ② 対処
+  let fix;
+  if (fixText(x) && !fixOpen[x.logId + ':2']) {
+    fix = `<div class="fx2"><b>② 対処</b><span class="fixed">${esc(fixText(x))}</span><span class="muted">${esc(x.fixBy)} ${esc(x.fixAt)}</span>
+      ${editable ? `<button type="button" class="sub" data-fixopen="${id}:2">直す</button>` : ''}</div>`;
+  } else if (editable) {
+    const kind = val('kind', x.fixKind);
+    fix = `<div class="fx2"><b>② 対処</b>
+      <select data-fx="${id}" data-ff="kind" aria-label="対処の種類"><option value="">－ 選ぶ －</option>${FIX_KINDS.map(k => `<option${k === kind ? ' selected' : ''}>${k}</option>`).join('')}</select>
+      ${kind === '追加播種' ? `<input type="number" inputmode="numeric" min="0" step="1" data-fx="${id}" data-ff="grains" value="${esc(val('grains', x.grains))}" aria-label="追加播種の粒数">粒　解消予定<input type="date" data-fx="${id}" data-ff="due" value="${esc(val('due', x.due))}" aria-label="解消予定日">` : ''}
+      <input type="text" maxlength="200" data-fx="${id}" data-ff="note" value="${esc(val('note', x.fix))}" placeholder="メモ（例：ふじいろで代替）" aria-label="対処のメモ">
+      <button type="button" data-fixsave="${id}">${fixText(x) ? '直す' : '対処を書く'}</button></div>`;
+  } else fix = '<div class="fx2"><b>② 対処</b><span class="muted">まだ書かれていません</span></div>';
+  // ③ 解消（② が「解消しない」なら要らない）
+  let solve = '';
+  if (x.solved && !fixOpen[x.logId + ':3']) {
+    solve = `<div class="fx2"><b>③ 解消</b><span class="${x.solved === 'できた' ? 'fixed' : 'short'}">解消${esc(x.solved)}</span><span class="muted">実施日 ${esc(md(x.solvedDate))}　${esc(x.solvedBy)}</span>
+      ${editable ? `<button type="button" class="sub" data-fixopen="${id}:3">直す</button>` : ''}</div>`;
+  } else if (editable && x.fixKind !== '解消しない') {
+    solve = `<div class="fx2"><b>③ 解消</b>実施日<input type="date" data-fx="${id}" data-ff="date" value="${esc(val('date', x.solvedDate) || today())}" aria-label="マイナス解消実施日">
+      <button type="button" data-solve="${id}" data-res="できた">解消できた</button><button type="button" class="ng" data-solve="${id}" data-res="できなかった">解消できなかった</button>
+      ${x.solved ? `<button type="button" class="sub" data-solve="${id}" data-res="">消す</button>` : ''}</div>`;
+  }
+  return `<div class="sh${st.key === 'ok' ? ' ok' : st.open ? '' : ' closed'}">
+    <div class="top"><b class="short">マイナス ${esc(x.short)}本</b><a href="${link === 'open' ? '#' : esc(planUrl(x.id))}"${link === 'open' ? ' data-open="' + esc(x.id) + '"' : ''}>${esc(x.name)}</a><span class="muted">${esc(x.id)}</span>
+      <span class="tag ${st.tag}">${st.label}</span></div>
+    <div class="t">① 報告　${esc(x.time)}　${esc(x.person)}　${esc(s ? fullTask(s, '：') : x.major + '：' + x.minor)}${placeText(x) ? '　' + esc(placeText(x)) : ''}</div>
+    <div class="t">理由：${why ? esc(why) : '（書かれていません）'}</div>
+    ${info ? '<div class="t">' + esc(info) + '</div>' : ''}
+    ${fix}${solve}</div>`;
+}
 function shortTabHtml() {
   const list = state.shorts || [];
-  if (!list.length) return '<div class="empty">不足の記録はありません</div><p class="muted">工程シートの「不足の入力」を「あり」にした工程で、完了のときに不足の本数を入れると、ここに並びます。</p>';
-  return list.map(x => {
-    const s = state.steps.find(y => y.major === x.major && y.minor === x.minor);
-    const edit = !x.fix || fixOpen[x.logId];
-    const val = fixEdit[x.logId] !== undefined ? fixEdit[x.logId] : x.fix;
-    return `<div class="sh${x.fix ? ' ok' : ''}">
-      <div class="top"><b class="short">不足 ${esc(x.short)}本</b><a href="${esc(planUrl(x.id))}">${esc(x.name)}</a><span class="muted">${esc(x.id)}</span>
-        <span class="tag ${x.fix ? 'ok' : 'now'}">${x.fix ? '対処済み' : '対処まだ'}</span></div>
-      <div class="t">${esc(x.time)}　${esc(s ? fullTask(s, '：') : x.major + '：' + x.minor)}${placeText(x) ? '　' + esc(placeText(x)) : ''}　${esc(x.person)}${memoRest(x.memo) ? '　メモ：' + esc(memoRest(x.memo)) : ''}</div>
-      ${x.fix && !edit ? `<div style="margin-top:6px"><span class="fixed">対処：${esc(x.fix)}</span><span class="muted">　${esc(x.fixBy)} ${esc(x.fixAt)}</span></div>
-        <div class="fx"><button type="button" class="sub" data-fixopen="${esc(x.logId)}">対処を直す</button></div>` : `
-      <div class="fx"><input type="text" maxlength="200" data-fix="${esc(x.logId)}" value="${esc(val)}" placeholder="対処を書く（例：予備苗から補充、追加播種）" aria-label="対処">
-        <button type="button" data-fixsave="${esc(x.logId)}">${x.fix ? '直す' : '対処を書く'}</button></div>`}
-    </div>`;
-  }).join('') + '<p class="muted">新しい順。対処を書くと、その計画の画面（担当者のスマホ）にも出ます。対処を消すときは、空にして「直す」を押します。</p>';
+  if (!list.length) return '<div class="empty">マイナスの記録はありません</div><p class="muted">工程シートの「不足の入力」を「あり」にした工程で、完了のときに「マイナス：出た」を選ぶと、ここに並びます。</p>';
+  return list.map(x => shortCard(x, 'url', true)).join('') + '<p class="muted">新しい順。② 対処と ③ 解消を書くと、その計画の画面（担当者のスマホ）にも出ます。② を消すときは、種類を「－ 選ぶ －」、メモを空にして「直す」を押します。</p>';
+}
+function shortListHtml() {
+  const list = state.shorts || [];
+  if (!list.length) return '<div class="empty">マイナスの記録はありません</div>';
+  return list.map(x => shortCard(x, 'open', !isPart() && !!getName())).join('');
 }
 function bindShortTab() {
-  document.querySelectorAll('[data-fix]').forEach(el => el.oninput = () => { fixEdit[el.dataset.fix] = el.value; });
+  document.querySelectorAll('[data-fx]').forEach(el => el.oninput = el.onchange = () => {
+    (fixEdit[el.dataset.fx] = fixEdit[el.dataset.fx] || {})[el.dataset.ff] = el.value;
+    if (el.dataset.ff === 'kind') render();   // 「追加播種」なら粒数と解消予定の欄を出す
+  });
   document.querySelectorAll('[data-fixopen]').forEach(b => b.onclick = () => { fixOpen[b.dataset.fixopen] = true; render(); });
-  document.querySelectorAll('[data-fixsave]').forEach(b => b.onclick = async () => {
-    const id = b.dataset.fixsave, el = document.querySelector('[data-fix="' + CSS.escape(id) + '"]');
-    const text = el ? el.value.trim() : '', cur = (state.shorts || []).find(x => x.logId === id);
-    if (!text && !(cur && cur.fix)) { toast('対処を書いてください', true); return; }
+  const send = async (id, body, done) => {
     popup('wait', '書いています…');
     try {
-      server = await postApi({ action: 'fixShort', logId: id, fix: text, person: getName(), planner: isPlanner() });
-      delete fixEdit[id]; delete fixOpen[id];
+      server = await postApi(Object.assign({ logId: id, person: getName(), planner: isPlanner(), staff: !isPart() }, body));
+      delete fixEdit[id]; delete fixOpen[id + ':2']; delete fixOpen[id + ':3'];
       rebuild(); render();
-      popup('ok', text ? '対処を書きました' : '対処を消しました');
+      popup('ok', done);
     } catch (e) { popup('err', '書けませんでした', e.message); }
+  };
+  document.querySelectorAll('[data-fixsave]').forEach(b => b.onclick = () => {
+    const id = b.dataset.fixsave, cur = (state.shorts || []).find(x => x.logId === id) || {}, e = fixEdit[id] || {};
+    const get = (k, c) => String(e[k] !== undefined ? e[k] : (c === null || c === undefined ? '' : c)).trim();
+    const kind = get('kind', cur.fixKind), note = get('note', cur.fix);
+    if (!kind && !note && !fixText(cur)) { toast('対処を選んでください', true); return; }
+    send(id, { action: 'fixShort', kind: kind, grains: get('grains', cur.grains), due: get('due', cur.due), fix: note }, kind || note ? '対処を書きました' : '対処を消しました');
+  });
+  document.querySelectorAll('[data-solve]').forEach(b => b.onclick = () => {
+    const id = b.dataset.solve, el = document.querySelector('[data-fx="' + CSS.escape(id) + '"][data-ff="date"]');
+    send(id, { action: 'solveShort', result: b.dataset.res, date: el ? el.value : '' }, b.dataset.res ? '解消' + b.dataset.res + '、と書きました' : '解消を消しました');
   });
 }
 
@@ -1423,23 +1536,11 @@ function findRowsHtml() {
   }).join('') || '<div class="empty">当てはまる計画がありません</div>') +
     (list.length > max ? `<p class="muted">${list.length}件のうち、はじめの${max}件を出しています。文字を足してしぼってください。</p>` : '');
 }
-function shortListHtml() {
-  const list = state.shorts || [];
-  if (!list.length) return '<div class="empty">不足の記録はありません</div>';
-  return list.map(x => {
-    const s = state.steps.find(y => y.major === x.major && y.minor === x.minor);
-    return `<div class="sh${x.fix ? ' ok' : ''}">
-      <div class="top"><b class="short">不足 ${esc(x.short)}本</b><a href="#" data-open="${esc(x.id)}">${esc(x.name)}</a><span class="muted">${esc(x.id)}</span>
-        <span class="tag ${x.fix ? 'ok' : 'now'}">${x.fix ? '対処済み' : '対処まだ'}</span></div>
-      <div class="t">${esc(x.time)}　${esc(s ? fullTask(s, '：') : x.major + '：' + x.minor)}${placeText(x) ? '　' + esc(placeText(x)) : ''}　${esc(x.person)}${memoRest(x.memo) ? '　メモ：' + esc(memoRest(x.memo)) : ''}</div>
-      ${x.fix ? `<div style="margin-top:6px"><span class="fixed">対処：${esc(x.fix)}</span><span class="muted">　${esc(x.fixBy)} ${esc(x.fixAt)}</span></div>` : ''}</div>`;
-  }).join('');
-}
 function bindOpen() {
   document.querySelectorAll('[data-open]').forEach(b => b.onclick = ev => { ev.preventDefault(); openPlan(b.dataset.open, true); });
 }
 function renderFind() {
-  const nShort = (state.shorts || []).filter(x => !x.fix).length;
+  const nShort = shortOpen();
   document.getElementById('app').innerHTML = `
     <header><div><h1>作業を調べる</h1><div class="sub">計画の中身と進み具合を見る（ここからは記録しません）</div></div>
       <div style="display:flex;gap:6px;flex:none"><button type="button" class="hbtn" id="home">最初へ</button></div></header>
@@ -1448,7 +1549,7 @@ function renderFind() {
       <label class="field" style="margin-top:10px">名前・QRID・注文NO で探す<input id="findq" type="search" value="${esc(findText)}" placeholder="例：ミニトマト、26-00012"></label>
       <div style="display:flex;flex-wrap:wrap;gap:6px;margin:12px 0">
         <a class="btn-link" href="schedule.html">スケジュール</a>
-        <button type="button" class="btn-link" id="findshort">${findShort ? '不足の一覧を閉じる' : '不足の一覧'}${nShort ? '（対処まだ ' + nShort + '件）' : ''}</button></div>
+        <button type="button" class="btn-link" id="findshort">${findShort ? 'マイナスの一覧を閉じる' : 'マイナスの一覧'}${nShort ? '（まだ ' + nShort + '件）' : ''}</button></div>
       ${findShort ? shortListHtml() : ''}
       <div class="day"><h3>計画の一覧<span class="muted" id="findcnt">　${findList().length}件</span></h3></div>
       <div id="findlist">${findRowsHtml()}</div>
@@ -1458,6 +1559,7 @@ function renderFind() {
   document.getElementById('home').onclick = () => goPage('front');
   document.getElementById('findscan').onclick = () => startScan('find');
   document.getElementById('findshort').onclick = () => { findShort = !findShort; render(); };
+  if (findShort) bindShortTab();
   // 探す文字を打っている間は、一覧の所だけ描き直す（入力欄を作り直さない）
   document.getElementById('findq').oninput = e => {
     findText = e.target.value;
