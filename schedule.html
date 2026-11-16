@@ -18,7 +18,14 @@
   main { padding: 12px 16px 110px; }
   .muted { color: var(--gray); font-size: 12px; }
   .card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
-  .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+  /* 週を動かす帯と、表の日付の見出しは、下へ送っても画面の上に残す（--top1・--top2 は描いたあとに高さを測って入れる） */
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: -12px -16px 8px; padding: 8px 16px; position: sticky; top: var(--top1, 52px); z-index: 4; background: var(--bg); border-bottom: 1px solid var(--line); }
+  .bar label { font-size: 12px; color: var(--gray); display: inline-flex; align-items: center; gap: 4px; }
+  .bar input[type=date] { background: #fff; border: 1px solid #bbb; border-radius: 8px; padding: 5px 8px; font-size: 14px; color: #222; }
+  @media (min-width: 1040px) {
+    .wrap { overflow: visible !important; }
+    table.sched thead th { top: var(--top2, 104px) !important; z-index: 3; box-shadow: 0 1px 0 var(--line), 0 -1px 0 var(--line); }
+  }
   .bar .week { font-weight: bold; font-size: 16px; min-width: 190px; text-align: center; }
   .bar button, .bar select { background: #fff; border: 1px solid #bbb; border-radius: 8px; padding: 6px 12px; font-size: 14px; cursor: pointer; color: #222; }
   .bar .auto { background: var(--orange); border-color: var(--orange); color: #fff; font-weight: bold; margin-left: auto; }
@@ -72,6 +79,10 @@
   #panel .danger { border-color: var(--red); color: var(--red); }
   #busy { position: fixed; inset: 0; background: rgba(255,255,255,.55); display: flex; align-items: center; justify-content: center; z-index: 30; font-weight: bold; color: var(--green-d); }
   #busy[hidden] { display: none; }
+  /* 裏で送っている間の小さな印（画面は止めない） */
+  #saving { position: fixed; left: 12px; bottom: 12px; z-index: 31; background: #222; color: #fff; font-size: 12px; border-radius: 999px; padding: 4px 12px; opacity: .85; }
+  #saving[hidden] { display: none; }
+  .job.msel { outline: 3px solid #2f6fb7; }
   #toast { position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%); background: #222; color: #fff; padding: 10px 16px; border-radius: 10px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 40; max-width: 90%; }
   #toast.show { opacity: 1; }
   #toast.err { background: var(--red); }
@@ -81,16 +92,23 @@
 <div id="app"></div>
 <div id="panel" hidden></div>
 <div id="busy" hidden>書き込んでいます…</div>
+<div id="saving" hidden>保存中…</div>
 <div id="toast"></div>
 
 <script>
 // スケジュールの画面：週（金〜木）× 人の表に、作業のカードを並べる。計画担当は、カードを動かして手直しできる
 let sch = null;                    // 窓口から受け取った状態（スケジュール.gs の getSchedule）
-let from = '';                     // 見ている週（空なら今週）
+let from = '';                     // 見ている7日間の始まりの日（yyyy-MM-dd。空なら、週の始まりの好みから決める）
+// 表の始まりの日の好み（このブラウザに覚える。人によって変えられる）：'' ＝ 金曜（標準の週）、'0'〜'6' ＝ その曜日（日〜土）、'today' ＝ 今日から
+let startPref = load('schedStart');
 let fArea = '', fKubun = '';       // しぼりこみ（エリア・区分）
 let sel = null;                    // 選んでいるもの：{ aid }（割り振りのカード）か { id, key }（足りない作業）
 let dragAid = '';
+const multi = new Set();           // Shift を押しながら選んだカード（割り振りID）。まとめて動かす
+const pending = [];                // 窓口へ送る順番待ち（押したらすぐ画面に反映し、裏で送る）
+let sending = false;
 function load(k) { try { return localStorage.getItem('qrdemo.' + k) || ''; } catch (e) { return ''; } }
+function save(k, v) { try { localStorage.setItem('qrdemo.' + k, v); } catch (e) {} }
 const canEdit = () => load('role') === '__all__';     // 手直しできるのは計画担当だけ（index.html の PLANNER と同じ）
 const num = h => String(Math.round(Number(h) * 100) / 100);
 
@@ -101,19 +119,74 @@ function toast(msg, isErr) {
 }
 function busy(on) { document.getElementById('busy').hidden = !on; }
 
+// 今日（この PC・スマホの日付。yyyy-MM-dd）
+function localToday() { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function addDays(key, n) { return new Date(Date.parse(key + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10); }
+// 好みから決めた、表の始まりの日。'' なら窓口に任せる（金曜始まりの週）
+function prefStart() {
+  if (startPref === 'today') return localToday();
+  if (/^[0-6]$/.test(startPref)) {
+    const t = localToday(), dow = new Date(Date.parse(t + 'T00:00:00Z')).getUTCDay();
+    return addDays(t, -((dow - Number(startPref) + 7) % 7));
+  }
+  return '';
+}
+// 上に固定する帯の高さを測って、表の見出しを止める位置を決める
+function stick() {
+  const h = document.querySelector('header'), b = document.querySelector('.bar');
+  if (!h || !b) return;
+  document.documentElement.style.setProperty('--top1', h.offsetHeight + 'px');
+  document.documentElement.style.setProperty('--top2', (h.offsetHeight + b.offsetHeight) + 'px');
+}
+window.addEventListener('resize', stick);
+
 async function reload() {
-  try { sch = await fetchSchedule(from); render(); }
+  try { const f = from || prefStart(); sch = await callApi('api=schedule' + (f ? '&from=' + encodeURIComponent(f) + '&exact=1' : '')); render(); }
   catch (e) { if (!sch) showMessage(e.message); else toast(e.message, true); }
 }
 // 手直しを窓口へ送り、返ってきた状態で描き直す
 async function edit(body) {
   busy(true);
   try {
-    sch = await postApi(Object.assign({ action: 'schedule', planner: canEdit(), from: sch.start }, body));
+    sch = await postApi(Object.assign({ action: 'schedule', planner: canEdit(), from: sch.start, exact: true }, body));
     sel = null;
   } catch (e) { toast(e.message, true); }
   busy(false);
   render();
+}
+
+// 押したらすぐ画面に反映する手直し（動かす・時間・固定・消す）：先に画面の状態を書き換えて描き直し、窓口へは裏で順に送る。
+// 送り終わったら、窓口の返事で描き直す（掛ける数や人手不足の数字が、ここで正しい値になる）
+function saveBadge() { document.getElementById('saving').hidden = !(sending || pending.length); }
+function sendLater(body, apply) {
+  if (apply) apply();
+  render();
+  pending.push(body);
+  saveBadge();
+  pump();
+}
+async function pump() {
+  if (sending) return;
+  sending = true; saveBadge();
+  while (pending.length) {
+    const body = pending.shift(), week = sch.start;
+    try {
+      const s = await postApi(Object.assign({ action: 'schedule', planner: canEdit(), from: week, exact: true }, body));
+      // 続けて送るものが無く、見ている週が同じなら、窓口の返事で描き直す
+      if (!pending.length && sch.start === week && !dragAid) { sch = s; dropGone(); render(); }
+    } catch (e) {
+      pending.length = 0;
+      toast('保存できませんでした：' + e.message + '（画面を読み込み直します）', true);
+      multi.clear(); sel = null;
+      await reload();
+    }
+  }
+  sending = false; saveBadge();
+}
+// 選んでいたカードが、もう無ければ選択から外す
+function dropGone() {
+  [...multi].forEach(aid => { if (!sch.assigns.some(a => a.aid === aid)) multi.delete(aid); });
+  if (sel && sel.aid && !sch.assigns.some(a => a.aid === sel.aid)) sel = null;
 }
 
 function visiblePeople() {
@@ -124,7 +197,7 @@ function taskOf(a) { return sch.tasks.find(t => t.id === a.id && t.key === a.key
 
 function jobHtml(a) {
   const isSel = sel && sel.aid === a.aid;
-  return `<div class="job${a.fixed ? ' fixed' : ''}${a.done ? ' done' : ''}${isSel ? ' sel' : ''}" data-aid="${esc(a.aid)}"${canEdit() ? ' draggable="true"' : ''}
+  return `<div class="job${a.fixed ? ' fixed' : ''}${a.done ? ' done' : ''}${isSel ? ' sel' : ''}${multi.has(a.aid) ? ' msel' : ''}" data-aid="${esc(a.aid)}"${canEdit() ? ' draggable="true"' : ''}
     title="${esc(a.plan)}（${esc(a.id)}）／実際に入る ${esc(num(a.hours))} 時間${a.f && a.f !== 1 ? '・1人前に直すと ' + esc(num(a.std)) + ' 時間（掛ける数 ' + esc(num(a.f)) + '）' : ''}${a.fixed ? '／固定（自動の組み直しで動かない）' : ''}">
     <div class="nm">${esc(a.plan)}</div>
     <div class="tk"><span>${esc(a.task)}${a.done ? '（済）' : ''}${a.fixed ? ' 📌' : ''}${a.f && a.f !== 1 ? ` <small class="fx">×${esc(num(a.f))}</small>` : ''}</span><b>${esc(num(a.hours))}h</b></div></div>`;
@@ -149,7 +222,7 @@ function render() {
     sch.days.map(d => {
       const cap = sch.cap[p.name][d.key] || 0, jobs = jobsOf(p.name, d.key);
       const used = jobs.filter(a => !a.done).reduce((n, a) => n + a.hours, 0);
-      return `<td class="cell${cap ? '' : ' off'}${d.past ? ' past' : ''}${sel && canEdit() ? ' target' : ''}" data-name="${esc(p.name)}" data-date="${esc(d.key)}">
+      return `<td class="cell${cap ? '' : ' off'}${d.past ? ' past' : ''}${(sel || multi.size) && canEdit() ? ' target' : ''}" data-name="${esc(p.name)}" data-date="${esc(d.key)}">
         ${jobs.map(jobHtml).join('')}
         <div class="cap${used > cap + 1e-9 ? ' over' : ''}">${cap ? esc(num(used)) + ' / ' + esc(num(cap)) + 'h' : used ? esc(num(used)) + 'h（休み）' : '休み'}</div></td>`;
     }).join('') + '</tr>').join('');
@@ -165,6 +238,8 @@ function render() {
         <span class="week">${esc(sch.days[0].label)} 〜 ${esc(sch.days[6].label)}</span>
         <button type="button" id="next">次の週 ▶</button>
         <button type="button" id="now">今週</button>
+        <label>始まり<select id="f-start" aria-label="表の始まりの日">${[['', '金曜（標準）'], ['6', '土曜'], ['0', '日曜'], ['1', '月曜'], ['2', '火曜'], ['3', '水曜'], ['4', '木曜'], ['today', '今日から']].map(o => `<option value="${o[0]}"${o[0] === startPref ? ' selected' : ''}>${o[1]}</option>`).join('')}</select></label>
+        <label>この日から<input type="date" id="f-date" value="${esc(sch.start)}" aria-label="この日から7日間を見る"></label>
         <select id="f-area" aria-label="エリア"><option value="">エリア：すべて</option>${areas.map(a => `<option${a === fArea ? ' selected' : ''}>${esc(a)}</option>`).join('')}</select>
         <select id="f-kubun" aria-label="区分"><option value="">区分：すべて</option>${kubuns.map(a => `<option${a === fKubun ? ' selected' : ''}>${esc(a)}</option>`).join('')}</select>
         <button type="button" class="auto" id="auto"${canEdit() ? '' : ' disabled'}>自動で組み直す</button>
@@ -174,9 +249,10 @@ function render() {
       ${!sch.noBook && !sch.hasPace ? '<div class="note">スケジュール用のスプレッドシートに「作業ペース」のシートがありません。メニュー「QRデモ → スケジュール用のスプレッドシートを付け替える」で同じスプレッドシートを選び直すと、足りないシートができます。</div>' : ''}
       ${!sch.noBook && !sch.people.length ? '<div class="note">「人と仕事」シートに人がいません。名前を書くと、ここに行が出ます。</div>' : ''}
       ${sel && canEdit() ? `<div class="note">「${esc(selText)}」を選んでいます。動かす先のマス（人 × 日）を押してください。</div>` : ''}
+      ${multi.size && canEdit() ? `<div class="note">${multi.size} 枚のカードを選んでいます。どれか1枚をつかんで動かすか、動かす先のマス（人 × 日）を押すと、まとめて動きます。<button type="button" id="m-clear" style="margin-left:8px">選ぶのをやめる</button></div>` : ''}
       <div class="wrap"><table class="sched"><thead><tr><th class="who">人</th>${head}</tr></thead><tbody>${rows}</tbody></table></div>
       <p class="muted">カードの時間は、その人が実際に入る時間。「×0.8」は掛ける数で、その人の1時間が1人前の 0.8 時間ぶんに当たるという意味（「人と仕事」シートの A・B・C と「設定」シートで決まる）。必要な時間・人手不足は、1人前の時間で出しています。${canEdit() && sch.bookUrl ? ` <a href="${esc(sch.bookUrl)}" target="_blank" rel="noopener">スケジュール用のスプレッドシートを開く</a>` : ''}</p>
-      <p class="muted">カードは、つかんで別のマスへ動かせます（押して選んでから、動かす先のマスを押してもよい）。動かしたカードは 📌（固定）になり、「自動で組み直す」で動きません。
+      <p class="muted">カードは、つかんで別のマスへ動かせます（押して選んでから、動かす先のマスを押してもよい）。Shift を押しながらカードを押すと何枚でも選べて、まとめて動かせます。動かしたカードは 📌（固定）になり、「自動で組み直す」で動きません。
         自動で組むのは ${esc(sch.today.slice(5).replace('-', '/'))} から ${esc(sch.horizonEnd.slice(5).replace('-', '/'))} まで。</p>
       <h2>人手が足りない作業${lackTasks.length ? `<span class="muted">　${lackTasks.length}件</span>` : ''}</h2>
       ${lackTasks.length ? `<div class="tasks">${lackTasks.map(t => `<div class="task${sel && sel.id === t.id && sel.key === t.key ? ' sel' : ''}" data-tid="${esc(t.id)}" data-tkey="${esc(t.key)}">
@@ -193,11 +269,16 @@ function render() {
     </main>`;
   bind();
   renderPanel();
+  stick();
 }
 
 function bind() {
-  const move = d => { from = d; sel = null; reload(); };
-  const shift = n => new Date(Date.parse(sch.start + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10);
+  const move = d => { from = d; sel = null; multi.clear(); reload(); };
+  const shift = n => addDays(sch.start, n);
+  // 始まりの曜日の好み（このブラウザに覚える）。変えたら、今日をふくむ7日間にもどる
+  document.getElementById('f-start').onchange = e => { startPref = e.target.value; save('schedStart', startPref); move(''); };
+  // この日から：好きな日を始まりにして7日間を見る
+  document.getElementById('f-date').onchange = e => { if (/^\d{4}-\d{2}-\d{2}$/.test(e.target.value)) move(e.target.value); };
   document.getElementById('prev').onclick = () => move(shift(-7));
   document.getElementById('next').onclick = () => move(shift(7));
   document.getElementById('now').onclick = () => move('');
@@ -208,9 +289,25 @@ function bind() {
   };
   // カード：押して選ぶ／つかんで動かす
   document.querySelectorAll('.job').forEach(el => {
-    el.onclick = ev => { ev.stopPropagation(); sel = sel && sel.aid === el.dataset.aid ? null : { aid: el.dataset.aid }; render(); };
+    el.onclick = ev => {
+      ev.stopPropagation();
+      const aid = el.dataset.aid;
+      if (ev.shiftKey && canEdit()) {            // Shift を押しながら：何枚でも選ぶ（もう一度押すと外す）
+        if (sel && sel.aid) multi.add(sel.aid);  // 先に1枚選んであれば、それも仲間に入れる
+        sel = null;
+        if (multi.has(aid)) multi.delete(aid); else multi.add(aid);
+        return render();
+      }
+      multi.clear();
+      sel = sel && sel.aid === aid ? null : { aid: aid };
+      render();
+    };
     if (!canEdit()) return;
-    el.ondragstart = ev => { dragAid = el.dataset.aid; try { ev.dataTransfer.setData('text/plain', dragAid); ev.dataTransfer.effectAllowed = 'move'; } catch (e) {} };
+    el.ondragstart = ev => {
+      dragAid = el.dataset.aid;
+      if (multi.size && !multi.has(dragAid)) multi.clear();   // 選んでいないカードをつかんだら、その1枚だけ動かす
+      try { ev.dataTransfer.setData('text/plain', dragAid); ev.dataTransfer.effectAllowed = 'move'; } catch (e) {}
+    };
     el.ondragend = () => { dragAid = ''; document.querySelectorAll('.dragover').forEach(x => x.classList.remove('dragover')); };
   });
   document.querySelectorAll('.task').forEach(el => el.onclick = () => {
@@ -219,11 +316,13 @@ function bind() {
     render();
   });
   if (!canEdit()) return;
+  const mc = document.getElementById('m-clear'); if (mc) mc.onclick = () => { multi.clear(); render(); };
   document.querySelectorAll('td.cell').forEach(td => {
     td.ondragover = ev => { if (dragAid) { ev.preventDefault(); td.classList.add('dragover'); } };
     td.ondragleave = () => td.classList.remove('dragover');
     td.ondrop = ev => { ev.preventDefault(); const aid = dragAid || ev.dataTransfer.getData('text/plain'); dragAid = ''; if (aid) moveTo(aid, td); };
     td.onclick = () => {
+      if (multi.size) return moveTo([...multi][0], td);   // まとめて選んでいるとき：全部をこのマスへ
       if (!sel) return;
       if (sel.aid) return moveTo(sel.aid, td);
       // 足りない作業を、この人のこの日に足す。時間は、足りない分（その日の空きがあれば、空きまで）
@@ -235,11 +334,17 @@ function bind() {
     };
   });
 }
+// カードを、そのマス（人 × 日）へ動かす。まとめて選んでいて、その中の1枚なら、選んだ全部を動かす。
+// すぐ画面に反映し、窓口へは裏で送る
 function moveTo(aid, td) {
-  const a = sch.assigns.find(x => x.aid === aid);
-  if (!a) return;
-  if (a.name === td.dataset.name && a.date === td.dataset.date) { sel = null; return render(); }
-  edit({ op: 'move', aid: aid, date: td.dataset.date, name: td.dataset.name });
+  const name = td.dataset.name, date = td.dataset.date;
+  const aids = (multi.size && multi.has(aid) ? [...multi] : [aid])
+    .filter(x => { const a = sch.assigns.find(y => y.aid === x); return a && !(a.name === name && a.date === date); });
+  multi.clear(); sel = null;
+  if (!aids.length) return render();
+  const apply = () => aids.forEach(x => { const a = sch.assigns.find(y => y.aid === x); a.name = name; a.date = date; a.fixed = true; });
+  sendLater(aids.length === 1 ? { op: 'move', aid: aids[0], date: date, name: name } : { op: 'moveMany', aids: aids, date: date, name: name }, apply);
+  toast(aids.length === 1 ? '動かしました' : aids.length + ' 枚を動かしました');
 }
 
 // 下の帯：選んだカードの手直し（時間・固定・消す）と、計画の画面へのリンク
@@ -258,9 +363,16 @@ function renderPanel() {
   el.hidden = false;
   document.getElementById('p-x').onclick = () => { sel = null; render(); };
   if (!canEdit()) return;
-  document.getElementById('p-set').onclick = () => edit({ op: 'set', aid: a.aid, hours: document.getElementById('p-h').value });
-  document.getElementById('p-fix').onclick = () => edit({ op: 'fix', aid: a.aid, fixed: !a.fixed });
-  document.getElementById('p-del').onclick = () => { if (confirm('この割り振りを消しますか？')) edit({ op: 'del', aid: a.aid }); };
+  document.getElementById('p-set').onclick = () => {
+    const h = Math.round(Number(document.getElementById('p-h').value) / 0.25) * 0.25;
+    if (!(h > 0)) return toast('時間を入れてください', true);
+    sendLater({ op: 'set', aid: a.aid, hours: h }, () => { if (a.std !== undefined && a.hours) a.std = Math.round(a.std / a.hours * h * 100) / 100; a.hours = h; a.fixed = true; sel = null; });
+  };
+  document.getElementById('p-fix').onclick = () => sendLater({ op: 'fix', aid: a.aid, fixed: !a.fixed }, () => { a.fixed = !a.fixed; sel = null; });
+  document.getElementById('p-del').onclick = () => {
+    if (!confirm('この割り振りを消しますか？')) return;
+    sendLater({ op: 'del', aid: a.aid }, () => { sch.assigns.splice(sch.assigns.indexOf(a), 1); sel = null; });
+  };
 }
 
 function showMessage(msg) {
@@ -268,7 +380,7 @@ function showMessage(msg) {
 }
 showMessage('読み込んでいます…');
 reload();
-setInterval(() => { if (!sel && document.getElementById('busy').hidden) reload(); }, 60000);
+setInterval(() => { if (!sel && !multi.size && !sending && !pending.length && !dragAid && document.getElementById('busy').hidden) reload(); }, 60000);
 </script>
 </body>
 </html>
