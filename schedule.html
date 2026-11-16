@@ -83,6 +83,19 @@
   #saving { position: fixed; left: 12px; bottom: 12px; z-index: 31; background: #222; color: #fff; font-size: 12px; border-radius: 999px; padding: 4px 12px; opacity: .85; }
   #saving[hidden] { display: none; }
   .job.msel { outline: 3px solid #2f6fb7; }
+  /* 人の行：名前をつかんで並び替え／右クリックで非表示 */
+  tbody th.who { cursor: grab; user-select: none; }
+  tbody th.who.pick { background: #dbe8f7; box-shadow: inset 4px 0 0 #2f6fb7; }
+  tbody th.who.drop-before { box-shadow: inset 0 4px 0 var(--orange); }
+  tbody th.who.drop-after { box-shadow: inset 0 -4px 0 var(--orange); }
+  tr.hid th.who { color: #9a9a9a; background: #f0f0f0; }
+  tr.hid th.who .hidtag { display: inline-block; font-size: 10px; font-weight: normal; border: 1px solid #bbb; border-radius: 999px; padding: 0 5px; margin-left: 4px; }
+  tr.hid td.cell { opacity: .45; }
+  #whomenu { position: fixed; z-index: 50; background: #fff; border: 1px solid #bbb; border-radius: 10px; box-shadow: 0 6px 20px rgba(0,0,0,.18); padding: 4px; min-width: 190px; }
+  #whomenu[hidden] { display: none; }
+  #whomenu .ttl { font-size: 11px; color: var(--gray); padding: 4px 10px 2px; }
+  #whomenu button { display: block; width: 100%; text-align: left; background: none; border: none; border-radius: 6px; padding: 7px 10px; font-size: 14px; cursor: pointer; color: #222; }
+  #whomenu button:hover { background: var(--green-l); }
   #toast { position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%); background: #222; color: #fff; padding: 10px 16px; border-radius: 10px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 40; max-width: 90%; }
   #toast.show { opacity: 1; }
   #toast.err { background: var(--red); }
@@ -91,6 +104,7 @@
 <body>
 <div id="app"></div>
 <div id="panel" hidden></div>
+<div id="whomenu" hidden></div>
 <div id="busy" hidden>書き込んでいます…</div>
 <div id="saving" hidden>保存中…</div>
 <div id="toast"></div>
@@ -110,6 +124,14 @@ let sending = false;
 function load(k) { try { return localStorage.getItem('qrdemo.' + k) || ''; } catch (e) { return ''; } }
 function save(k, v) { try { localStorage.setItem('qrdemo.' + k, v); } catch (e) {} }
 const canEdit = () => load('role') === '__all__';     // 手直しできるのは計画担当だけ（index.html の PLANNER と同じ）
+// 人の行の並び順と非表示（このブラウザに覚える。見え方の好みなので、だれでも変えられる）
+function loadList(k) { try { const v = JSON.parse(load(k) || '[]'); return Array.isArray(v) ? v.map(String) : []; } catch (e) { return []; } }
+let rowOrder = loadList('schedOrder');               // 名前の並び。ここに無い人は、シートの順で後ろに付く
+const hiddenWho = new Set(loadList('schedHidden'));  // 非表示にした人（取締役・現場に出ない人など）
+let showHidden = false;                              // 非表示の人も薄く出すか
+const pickedWho = new Set();                         // Shift を押しながら選んだ人
+let dragWho = '';                                    // つかんでいる人の名前
+let menuOpen = false;
 const num = h => String(Math.round(Number(h) * 100) / 100);
 
 function toast(msg, isErr) {
@@ -140,15 +162,61 @@ function stick() {
 }
 window.addEventListener('resize', stick);
 
-async function reload() {
-  try { const f = from || prefStart(); sch = await callApi('api=schedule' + (f ? '&from=' + encodeURIComponent(f) + '&exact=1' : '')); render(); }
-  catch (e) { if (!sch) showMessage(e.message); else toast(e.message, true); }
+// 週ごとの読み込み結果を覚えておく（窓口は1回に7〜10秒かかるため）。表を出したら、前後の週も裏で先に読んでおく。
+// 鍵は表の始まりの日（'' は標準の週）。手直しを送ったら、ほかの週も変わりうるので、覚えた分をすべて捨てる
+const weekCache = new Map();       // 鍵 → { s: 窓口の返事, at: 受け取った時刻 }
+const inflight = new Map();        // 鍵 → 読み込み中の Promise（同じ週を二重に読まない）
+let gen = 0;                       // 捨てるたびに増やす。捨てる前に頼んだ読み込みの返事は覚えない
+let want = null;                   // 今見たい週の鍵（読み込み中に別の週へ移ったら、古い返事で描かない）
+const FRESH_MS = 60000, AROUND_MS = 5 * 60000;
+function remember(key, s) { const v = { s, at: Date.now() }; weekCache.set(key, v); weekCache.set(s.start, v); }
+function forget() { gen++; weekCache.clear(); inflight.clear(); }
+function keep(s) { forget(); remember(s.start, s); }   // 手直しの返事：それだけを覚え直す
+function fetchWeek(key) {
+  if (inflight.has(key)) return inflight.get(key);
+  const g = gen;
+  const p = callApi('api=schedule' + (key ? '&from=' + encodeURIComponent(key) + '&exact=1' : ''))
+    .then(s => { if (g === gen) remember(key, s); return s; })
+    .finally(() => { if (inflight.get(key) === p) inflight.delete(key); });
+  inflight.set(key, p);
+  return p;
+}
+// 前後の週を裏で読んでおく（まだ無いか、5分より古いときだけ）
+function prefetchAround() {
+  if (!sch) return;
+  [7, -7].forEach(n => {
+    const k = addDays(sch.start, n), h = weekCache.get(k);
+    if (!h || Date.now() - h.at >= AROUND_MS) fetchWeek(k).catch(() => {});
+  });
+}
+const busyHere = () => sel || multi.size || sending || pending.length || dragAid || dragWho || menuOpen;
+function loadingLabel(key) {
+  const w = document.querySelector('.bar .week');
+  if (w) w.textContent = (key ? Number(key.slice(5, 7)) + '/' + Number(key.slice(8)) + '〜 を' : '') + '読み込んでいます…';
+}
+// force：覚えている分があっても窓口から読み直す（1分ごとの更新・保存の失敗のあと）
+async function reload(force) {
+  const key = from || prefStart();
+  want = key;
+  const hit = weekCache.get(key);
+  let shown = false;
+  if (hit && !force) {
+    sch = hit.s; dropGone(); render(); shown = true;
+    if (Date.now() - hit.at < FRESH_MS) { prefetchAround(); return; }
+  } else if (sch && !force) loadingLabel(key);
+  try {
+    const s = await fetchWeek(key);
+    if (want !== key) return;                       // 待っている間に別の週へ移った
+    if ((shown || force) && busyHere()) return;     // 裏の読み直し：さわっている最中なら描き直さない
+    sch = s; dropGone(); render(); prefetchAround();
+  } catch (e) { if (want !== key) return; if (!sch) showMessage(e.message); else { toast(e.message, true); if (!shown) render(); } }
 }
 // 手直しを窓口へ送り、返ってきた状態で描き直す
 async function edit(body) {
   busy(true);
   try {
     sch = await postApi(Object.assign({ action: 'schedule', planner: canEdit(), from: sch.start, exact: true }, body));
+    keep(sch); prefetchAround();
     sel = null;
   } catch (e) { toast(e.message, true); }
   busy(false);
@@ -172,16 +240,19 @@ async function pump() {
     const body = pending.shift(), week = sch.start;
     try {
       const s = await postApi(Object.assign({ action: 'schedule', planner: canEdit(), from: week, exact: true }, body));
+      keep(s);
       // 続けて送るものが無く、見ている週が同じなら、窓口の返事で描き直す
       if (!pending.length && sch.start === week && !dragAid) { sch = s; dropGone(); render(); }
     } catch (e) {
       pending.length = 0;
       toast('保存できませんでした：' + e.message + '（画面を読み込み直します）', true);
       multi.clear(); sel = null;
-      await reload();
+      forget();
+      await reload(true);
     }
   }
   sending = false; saveBadge();
+  prefetchAround();
 }
 // 選んでいたカードが、もう無ければ選択から外す
 function dropGone() {
@@ -189,9 +260,20 @@ function dropGone() {
   if (sel && sel.aid && !sch.assigns.some(a => a.aid === sel.aid)) sel = null;
 }
 
-function visiblePeople() {
-  return sch.people.filter(p => (!fArea || p.area === fArea) && (!fKubun || p.kubun === fKubun));
+// 覚えた並び順にそろえた、全員（非表示の人もふくむ）
+function orderedPeople() {
+  const at = new Map(rowOrder.map((n, i) => [n, i]));
+  return sch.people.map((p, i) => ({ p, i })).sort((a, b) => {
+    const x = at.has(a.p.name) ? at.get(a.p.name) : 1e6 + a.i, y = at.has(b.p.name) ? at.get(b.p.name) : 1e6 + b.i;
+    return x - y;
+  }).map(o => o.p);
 }
+// 表に出す人。非表示の人は、日ごとの出勤・割り振りの合計にも入れない（「非表示の人も出す」のときは入れる）
+function visiblePeople() {
+  return orderedPeople().filter(p => (!fArea || p.area === fArea) && (!fKubun || p.kubun === fKubun) && (showHidden || !hiddenWho.has(p.name)));
+}
+function hiddenCount() { return sch.people.filter(p => hiddenWho.has(p.name)).length; }
+function saveRows() { save('schedOrder', JSON.stringify(rowOrder)); save('schedHidden', JSON.stringify([...hiddenWho])); }
 function jobsOf(name, date) { return sch.assigns.filter(a => a.name === name && a.date === date); }
 function taskOf(a) { return sch.tasks.find(t => t.id === a.id && t.key === a.key); }
 
@@ -217,7 +299,7 @@ function render() {
       <div class="sumline std">1人前に直すと ${esc(num(usedStd))} ／ ${esc(num(capStd))}</div>
       ${lack > 0 ? `<span class="lack">人手不足 ${esc(num(lack))} 時間<small>（1人前で）</small></span>` : ''}</th>`;
   }).join('');
-  const rows = people.map(p => `<tr><th class="who">${esc(p.name)}${p.top ? `<span class="rank${p.top === 'A' ? '' : ' b'}">${esc(p.top)}</span>` : ''}
+  const rows = people.map(p => `<tr${hiddenWho.has(p.name) ? ' class="hid"' : ''}><th class="who${pickedWho.has(p.name) ? ' pick' : ''}" data-who="${esc(p.name)}" draggable="true" title="つかんで上下へ動かすと並び替え。右クリックで非表示（Shift を押しながら押すと何人でも選べる）">${esc(p.name)}${p.top ? `<span class="rank${p.top === 'A' ? '' : ' b'}">${esc(p.top)}</span>` : ''}${hiddenWho.has(p.name) ? '<span class="hidtag">非表示</span>' : ''}
       <small>${esc([p.kubun, p.area].filter(String).join('・'))}${(p.jobs || []).length ? '<br>' + esc(p.jobs.slice(0, 6).join(' ')) + (p.jobs.length > 6 ? ' …' : '') : ''}</small></th>` +
     sch.days.map(d => {
       const cap = sch.cap[p.name][d.key] || 0, jobs = jobsOf(p.name, d.key);
@@ -242,6 +324,7 @@ function render() {
         <label>この日から<input type="date" id="f-date" value="${esc(sch.start)}" aria-label="この日から7日間を見る"></label>
         <select id="f-area" aria-label="エリア"><option value="">エリア：すべて</option>${areas.map(a => `<option${a === fArea ? ' selected' : ''}>${esc(a)}</option>`).join('')}</select>
         <select id="f-kubun" aria-label="区分"><option value="">区分：すべて</option>${kubuns.map(a => `<option${a === fKubun ? ' selected' : ''}>${esc(a)}</option>`).join('')}</select>
+        ${hiddenCount() ? `<button type="button" id="f-hidden">${showHidden ? '非表示の人を隠す' : '非表示の人 ' + hiddenCount() + '人を出す'}</button>` : ''}
         <button type="button" class="auto" id="auto"${canEdit() ? '' : ' disabled'}>自動で組み直す</button>
       </div>
       ${canEdit() ? '' : '<div class="note">見るだけの画面です。手直しと組み直しは、一覧の画面で担当を「計画担当」にすると使えます。</div>'}
@@ -254,6 +337,7 @@ function render() {
       <p class="muted">カードの時間は、その人が実際に入る時間。「×0.8」は掛ける数で、その人の1時間が1人前の 0.8 時間ぶんに当たるという意味（「人と仕事」シートの A・B・C と「設定」シートで決まる）。必要な時間・人手不足は、1人前の時間で出しています。${canEdit() && sch.bookUrl ? ` <a href="${esc(sch.bookUrl)}" target="_blank" rel="noopener">スケジュール用のスプレッドシートを開く</a>` : ''}</p>
       <p class="muted">カードは、つかんで別のマスへ動かせます（押して選んでから、動かす先のマスを押してもよい）。Shift を押しながらカードを押すと何枚でも選べて、まとめて動かせます。動かしたカードは 📌（固定）になり、「自動で組み直す」で動きません。
         自動で組むのは ${esc(sch.today.slice(5).replace('-', '/'))} から ${esc(sch.horizonEnd.slice(5).replace('-', '/'))} まで。</p>
+      <p class="muted">人の名前をつかんで上下へ動かすと、行の並び順を変えられます。名前を右クリックすると、非表示にできます（Shift を押しながら名前を押すと何人でも選べて、まとめて非表示にできる）。非表示の人は、日ごとの出勤・割り振りの合計にも入れません。並び順と非表示は、このブラウザに覚えます。</p>
       <h2>人手が足りない作業${lackTasks.length ? `<span class="muted">　${lackTasks.length}件</span>` : ''}</h2>
       ${lackTasks.length ? `<div class="tasks">${lackTasks.map(t => `<div class="task${sel && sel.id === t.id && sel.key === t.key ? ' sel' : ''}" data-tid="${esc(t.id)}" data-tkey="${esc(t.key)}">
           <div class="nm">${esc(t.name)} <span class="muted">${esc(t.id)}</span></div>
@@ -274,7 +358,8 @@ function render() {
 
 function bind() {
   const move = d => { from = d; sel = null; multi.clear(); reload(); };
-  const shift = n => addDays(sch.start, n);
+  // 読み込み中に続けて押しても1週ずつ進むように、見たい週（from）を基準にする
+  const shift = n => addDays(from || sch.start, n);
   // 始まりの曜日の好み（このブラウザに覚える）。変えたら、今日をふくむ7日間にもどる
   document.getElementById('f-start').onchange = e => { startPref = e.target.value; save('schedStart', startPref); move(''); };
   // この日から：好きな日を始まりにして7日間を見る
@@ -284,6 +369,8 @@ function bind() {
   document.getElementById('now').onclick = () => move('');
   document.getElementById('f-area').onchange = e => { fArea = e.target.value; render(); };
   document.getElementById('f-kubun').onchange = e => { fKubun = e.target.value; render(); };
+  const fh = document.getElementById('f-hidden'); if (fh) fh.onclick = () => { showHidden = !showHidden; render(); };
+  bindWho();
   document.getElementById('auto').onclick = () => {
     if (confirm('今日から ' + sch.horizonEnd.slice(5).replace('-', '/') + ' までの割り振りを、自動で組み直しますか？\n📌（固定）のカードは動かしません。')) edit({ op: 'auto' });
   };
@@ -334,6 +421,82 @@ function bind() {
     };
   });
 }
+// ---------- 人の行：並び替え（名前をつかんで動かす）と、非表示（右クリック） ----------
+function bindWho() {
+  const clearDrop = () => document.querySelectorAll('.drop-before,.drop-after').forEach(x => x.classList.remove('drop-before', 'drop-after'));
+  document.querySelectorAll('tbody th.who').forEach(th => {
+    const name = th.dataset.who;
+    th.onclick = ev => {
+      if (ev.shiftKey) { if (pickedWho.has(name)) pickedWho.delete(name); else pickedWho.add(name); return render(); }
+      if (pickedWho.size) { pickedWho.clear(); render(); }
+    };
+    th.oncontextmenu = ev => {
+      ev.preventDefault();
+      if (ev.shiftKey) pickedWho.add(name);
+      else if (!pickedWho.has(name)) { pickedWho.clear(); pickedWho.add(name); }
+      render();
+      openWhoMenu(ev.clientX, ev.clientY);
+    };
+    th.ondragstart = ev => {
+      dragWho = name;
+      if (pickedWho.size && !pickedWho.has(name)) pickedWho.clear();   // 選んでいない人をつかんだら、その人だけ動かす
+      try { ev.dataTransfer.setData('text/plain', 'who:' + name); ev.dataTransfer.effectAllowed = 'move'; } catch (e) {}
+    };
+    th.ondragend = () => { dragWho = ''; clearDrop(); };
+    th.ondragover = ev => {
+      if (!dragWho) return;
+      ev.preventDefault();
+      const r = th.getBoundingClientRect(), after = ev.clientY > r.top + r.height / 2;
+      clearDrop(); th.classList.add(after ? 'drop-after' : 'drop-before');
+    };
+    th.ondragleave = () => th.classList.remove('drop-before', 'drop-after');
+    th.ondrop = ev => {
+      if (!dragWho) return;
+      ev.preventDefault();
+      const r = th.getBoundingClientRect(), after = ev.clientY > r.top + r.height / 2;
+      moveRows(dragWho, name, after);
+      dragWho = ''; clearDrop();
+    };
+  });
+}
+// who（選んでいれば選んだ全員）を、target の前か後ろへ動かす。並びは全員分を覚える（非表示の人・しぼりこみで隠れた人もふくむ）
+function moveRows(who, target, after) {
+  const all = orderedPeople().map(p => p.name);
+  const moving = pickedWho.size > 1 && pickedWho.has(who) ? all.filter(n => pickedWho.has(n)) : [who];
+  if (moving.includes(target)) return;
+  const rest = all.filter(n => !moving.includes(n));
+  const at = rest.indexOf(target) + (after ? 1 : 0);
+  rest.splice(at, 0, ...moving);
+  rowOrder = rest; saveRows(); render();
+}
+function closeWhoMenu() { const m = document.getElementById('whomenu'); m.hidden = true; menuOpen = false; }
+function openWhoMenu(x, y) {
+  const names = sch.people.map(p => p.name).filter(n => pickedWho.has(n));
+  const toHide = names.filter(n => !hiddenWho.has(n)), toShow = names.filter(n => hiddenWho.has(n));
+  const label = names.length === 1 ? names[0] + ' さん' : names.length + '人';
+  const m = document.getElementById('whomenu');
+  m.innerHTML = `<div class="ttl">${esc(label)}</div>
+    ${toHide.length ? `<button type="button" data-op="hide">非表示にする${names.length > 1 ? '（' + toHide.length + '人）' : ''}</button>` : ''}
+    ${toShow.length ? `<button type="button" data-op="show">表示にもどす${names.length > 1 ? '（' + toShow.length + '人）' : ''}</button>` : ''}
+    ${rowOrder.length ? '<button type="button" data-op="reset">並び順を元にもどす（全員）</button>' : ''}
+    ${pickedWho.size ? '<button type="button" data-op="clear">選ぶのをやめる</button>' : ''}`;
+  m.hidden = false; menuOpen = true;
+  const w = m.offsetWidth, h = m.offsetHeight;
+  m.style.left = Math.max(4, Math.min(x, innerWidth - w - 4)) + 'px';
+  m.style.top = Math.max(4, Math.min(y, innerHeight - h - 4)) + 'px';
+  m.querySelectorAll('button').forEach(b => b.onclick = () => {
+    const op = b.dataset.op;
+    if (op === 'hide') { toHide.forEach(n => hiddenWho.add(n)); toast(label + 'を非表示にしました'); }
+    if (op === 'show') { toShow.forEach(n => hiddenWho.delete(n)); toast(label + 'を表示にもどしました'); }
+    if (op === 'reset') rowOrder = [];
+    if (op !== 'reset') pickedWho.clear();
+    saveRows(); closeWhoMenu(); render();
+  });
+}
+document.addEventListener('mousedown', ev => { if (menuOpen && !ev.target.closest('#whomenu')) closeWhoMenu(); });
+document.addEventListener('keydown', ev => { if (ev.key === 'Escape' && menuOpen) closeWhoMenu(); });
+window.addEventListener('scroll', () => { if (menuOpen) closeWhoMenu(); }, true);
+
 // カードを、そのマス（人 × 日）へ動かす。まとめて選んでいて、その中の1枚なら、選んだ全部を動かす。
 // すぐ画面に反映し、窓口へは裏で送る
 function moveTo(aid, td) {
@@ -380,7 +543,7 @@ function showMessage(msg) {
 }
 showMessage('読み込んでいます…');
 reload();
-setInterval(() => { if (!sel && !multi.size && !sending && !pending.length && !dragAid && document.getElementById('busy').hidden) reload(); }, 60000);
+setInterval(() => { if (!sel && !multi.size && !sending && !pending.length && !dragAid && document.getElementById('busy').hidden) reload(true); }, 60000);
 </script>
 </body>
 </html>
