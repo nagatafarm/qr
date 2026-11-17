@@ -456,7 +456,7 @@ function placeHtml(plan, s) {
   const k = esc(plan.id + '|' + s.key), e = placeEdit[plan.id + '|' + s.key] || {};
   const opt = (list, cur) => '<option value="">－</option>' + list.map(x => `<option${String(x) === String(cur || '') ? ' selected' : ''}>${x}</option>`).join('');
   return `<div class="place">ハウス<input type="number" inputmode="numeric" min="1" step="1" data-pk="${k}" data-pl="house" value="${esc(e.house || '')}" aria-label="ハウス番号">
-    ベンチ<select data-pk="${k}" data-pl="col" aria-label="ベンチの列">${opt(['A', 'B', 'C'], e.col)}</select><select data-pk="${k}" data-pl="num" aria-label="ベンチの番号">${opt(Array.from({ length: 25 }, (_, i) => i + 1), e.num)}</select></div>`;
+    ベンチ<select data-pk="${k}" data-pl="col" aria-label="ベンチの列">${opt(['A', 'B', 'C'], e.col)}</select><select data-pk="${k}" data-pl="num" aria-label="ベンチの番号">${opt(Array.from({ length: 25 }, (_, i) => i + 1), e.num)}</select>〜<select data-pk="${k}" data-pl="num2" aria-label="ベンチの番号（ここまで。何本かにまたがるときだけ）">${opt(Array.from({ length: 25 }, (_, i) => i + 1), e.num2)}</select></div>`;
 }
 // マイナスの入力欄（「不足の入力」が「あり」の工程だけ）：鉢上げマイナス報告用紙の ①。
 // 「出ない」「出た」のどちらかを選ぶ。「出た」なら、本数と理由（○付け）を入れる
@@ -901,6 +901,10 @@ function itemFor(p, s) {
   }
   const e = s.needPlace ? (placeEdit[p.id + '|' + s.key] || {}) : {};
   if (!e.col !== !e.num) { toast(planName(p) + '：ベンチは列（A・B・C）と番号の両方を選んでください', true); return null; }
+  if (e.num2 && !e.num) { toast(planName(p) + '：ベンチは、はじめの番号も選んでください', true); return null; }
+  // ベンチ：1本なら「A10」、何本かにまたがるなら「A10〜15」（逆に選んであれば小さいほうから）
+  const n1 = Number(e.num), n2 = Number(e.num2 || e.num);
+  const bench = !e.col ? '' : e.col + (n1 === n2 ? n1 : Math.min(n1, n2) + '〜' + Math.max(n1, n2));
   // マイナスを聞く工程：「出ない」「出た」のどちらかを選んでもらう。「出た」なら、本数と理由も要る
   const x = s.needShort ? (placeEdit[p.id + '|' + s.key] || {}) : {};
   let short = '', reason = '';
@@ -915,7 +919,7 @@ function itemFor(p, s) {
       short = Number(n); reason = why.join('、');
     }
   }
-  return { id: p.id, major: s.major, minor: s.minor, qty: qty, house: String(e.house || '').trim(), bench: e.col ? e.col + e.num : '',
+  return { id: p.id, major: s.major, minor: s.minor, qty: qty, house: String(e.house || '').trim(), bench: bench,
     short: short, reason: reason, memo: trayMemo };
 }
 function logHtml(l) {
