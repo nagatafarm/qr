@@ -252,14 +252,53 @@ function fetchWeek(key) {
   inflight.set(key, p);
   return p;
 }
-// 前後の週を裏で読んでおく（まだ無いか、5分より古いときだけ）
+// 前後の週を裏で読んでおく（まだ無いか、5分より古いときだけ。覚えている週をつないで出せるなら読まない）
 function prefetchAround() {
   if (!sch) return;
   [7, -7].forEach(n => {
     const k = addDays(sch.start, n), h = weekCache.get(k);
-    if (!h || Date.now() - h.at >= AROUND_MS) fetchWeek(k).catch(() => {});
+    if (h ? Date.now() - h.at >= AROUND_MS : !compose(k)) fetchWeek(k).catch(() => {});
   });
 }
+// 覚えている週をつないで、start の日からの7日間を作る（1日ずつ送るとき、窓口を待たずにすぐ出すため）。足りない日があれば null
+function compose(start) {
+  const entries = [...new Set([...weekCache.values()].map(v => v.s))];
+  const keys = Array.from({ length: 7 }, (_, i) => addDays(start, i));
+  const src = keys.map(k => entries.find(s => s.days.some(d => d.key === k)));
+  if (src.some(s => !s)) return null;
+  const base = src[0], used = [...new Set(src)];
+  const cap = {};
+  base.people.forEach(p => { cap[p.name] = {}; keys.forEach((k, i) => { cap[p.name][k] = ((src[i].cap || {})[p.name] || {})[k] || 0; }); });
+  const seenA = new Set(), seenT = new Set();
+  const assigns = [], tasks = [];
+  used.forEach(s => {
+    s.assigns.forEach(a => { if (a.date >= keys[0] && a.date <= keys[6] && !seenA.has(a.aid)) { seenA.add(a.aid); assigns.push(a); } });
+    s.tasks.forEach(t => { const id = t.id + '|' + t.key; if (!seenT.has(id)) { seenT.add(id); tasks.push(t); } });
+  });
+  return Object.assign({}, base, { start: start, end: keys[6], days: keys.map((k, i) => src[i].days.find(d => d.key === k)), cap: cap, assigns: assigns, tasks: tasks });
+}
+// 1日ずつ前後へ送る（Shift＋ホイール）。つなげられれば、すぐ出す。つなげなければ、窓口から読む
+function shiftDays(n) {
+  if (!sch || !n) return;
+  const k = addDays(from || sch.start, n);
+  from = k; sel = null; multi.clear();
+  const h = weekCache.get(k), c = h ? h.s : compose(k);
+  if (!c) return reload();
+  want = k; sch = c; dropGone(); render(); prefetchAround();
+}
+let wheelAcc = 0, wheelDays = 0, wheelRaf = 0;
+document.addEventListener('wheel', ev => {
+  if (!sch || !ev.target.closest || !ev.target.closest('#scroller')) return;
+  if (!(ev.shiftKey || Math.abs(ev.deltaX) > Math.abs(ev.deltaY))) return;   // ふつうのホイールは、表を縦に送る
+  ev.preventDefault();
+  if (dragAid || dragTask || dragWho || menuOpen) return;
+  // Shift を押すと、Chrome は横の量（deltaX）で届ける。行単位の機種はピクセルに直す
+  let d = Math.abs(ev.deltaX) > Math.abs(ev.deltaY) ? ev.deltaX : ev.deltaY;
+  if (ev.deltaMode === 1) d *= 40;
+  wheelAcc += d;
+  while (Math.abs(wheelAcc) >= 100) { const s = Math.sign(wheelAcc); wheelDays += s; wheelAcc -= s * 100; }   // ホイール1目盛り（約100）で1日
+  if (wheelDays && !wheelRaf) wheelRaf = setTimeout(() => { const n = wheelDays; wheelDays = 0; wheelRaf = 0; shiftDays(n); }, 30);   // 続けて回した分は、まとめて1回で描く
+}, { passive: false });
 const busyHere = () => sel || multi.size || sending || pending.length || dragAid || dragTask || dragWho || menuOpen;
 function loadingLabel(key) {
   const w = document.querySelector('.bar .week');
@@ -271,9 +310,12 @@ async function reload(force) {
   want = key;
   const hit = weekCache.get(key);
   let shown = false;
+  const made = !hit && !force && key ? compose(key) : null;   // 覚えている週をつないで出せる
   if (hit && !force) {
     sch = hit.s; dropGone(); render(); shown = true;
     if (Date.now() - hit.at < FRESH_MS) { prefetchAround(); return; }
+  } else if (made) {
+    sch = made; dropGone(); render(); prefetchAround(); return;
   } else if (!sch) {
     const last = loadLast(key);                     // はじめて開いたとき：前の表をすぐ出す
     if (last) { sch = last; stale = true; render(); shown = true; }
@@ -438,7 +480,7 @@ function render() {
         <h3>見方</h3>
         <p class="muted">カードの色は工程（カレンダーと同じ）。時間は、その人が実際に入る時間。「×0.8」は掛ける数で、その人の1時間が1人前の 0.8 時間ぶん（「人と仕事」シートの A・B・C と「設定」シートで決まる）。</p>
         <p class="muted">日付の下は「割り振り ／ 出勤」の時間。その下は1人前に直した時間。赤い「人手不足」は、その日が予定日の作業（過ぎた作業は今日）のうち、まだだれにも割り振られていない時間（1人前で）。割り振られていない作業は、右の「割り振られていない作業」を開くと並んでいる。</p>
-        <p class="muted">カードは、つかんで別のマスへ動かせる（押して選んでから、動かす先のマスを押してもよい）。Shift を押しながらカードを押すと何枚でも選べて、まとめて動かせる。動かしたカードは 📌（固定）になり、「自動で組み直す」で動かない。自動で組むのは ${esc(sch.today.slice(5).replace('-', '/'))} から ${esc(sch.horizonEnd.slice(5).replace('-', '/'))} まで。</p>
+        <p class="muted">Shift を押しながらホイールを回すと、1日ずつ前後へ送れる（タッチパッドは横になぞる）。カードは、つかんで別のマスへ動かせる（押して選んでから、動かす先のマスを押してもよい）。Shift を押しながらカードを押すと何枚でも選べて、まとめて動かせる。動かしたカードは 📌（固定）になり、「自動で組み直す」で動かない。自動で組むのは ${esc(sch.today.slice(5).replace('-', '/'))} から ${esc(sch.horizonEnd.slice(5).replace('-', '/'))} まで。</p>
         ${canEdit() && sch.bookUrl ? `<p><a href="${esc(sch.bookUrl)}" target="_blank" rel="noopener">スケジュール用のスプレッドシートを開く</a></p>` : ''}
         <details><summary>時間を出せない作業・古い作業（${sch.unknownCount || sch.unknown.length}件）</summary>
           ${sch.unknown.length ? sch.unknown.map(u => `<div class="uk"><a href="${esc(planUrl(u.id))}">${esc(u.name)}</a>　${esc(u.task)}${u.due ? '　' + esc(u.due) : ''}<div class="muted">${esc(u.why)}</div></div>`).join('') : '<div class="muted">ありません。</div>'}
