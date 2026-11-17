@@ -17,102 +17,94 @@
 <script src="config.js"></script>
 <script src="common.js"></script>
 <style>
-  :root { --orange: #d4834a; --orange-d: #9a5320; --orange-l: #fdf5ee; --green: #4f9363; --green-d: #2f6b3a; --green-l: #f0f6f1; --line: #d6e2d8; --gray: #6b6b6b; --red: #c33; --bg: #f6f7f5; }
+  :root { --orange: #d4834a; --orange-d: #9a5320; --orange-l: #fdf5ee; --green: #4f9363; --green-d: #2f6b3a; --green-l: #f0f6f1; --line: #dfe5e0; --gray: #6b6b6b; --red: #c33; --bg: #f6f7f5; --side: 250px; --whow: 132px; }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: #222; font-family: "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif; font-size: 14px; line-height: 1.45; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--bg); color: #222; font-family: "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif; font-size: 14px; line-height: 1.4; display: flex; flex-direction: column; }
   button, select, input { font-family: inherit; }
-  header { background: var(--green); color: #fff; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; gap: 8px; position: sticky; top: 0; z-index: 5; }
+  header { background: var(--green); color: #fff; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex: none; flex-wrap: wrap; }
   header h1 { font-size: 17px; margin: 0; }
   header .sub { font-size: 12px; opacity: .9; }
   header a { color: #fff; font-size: 13px; white-space: nowrap; border: 1px solid rgba(255,255,255,.6); border-radius: 8px; padding: 4px 10px; text-decoration: none; }
-  main { padding: 12px 16px 110px; }
-  .muted { color: var(--gray); font-size: 12px; }
-  .card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
-  /* 週を動かす帯と、表の日付の見出しは、下へ送っても画面の上に残す（--top1・--top2 は描いたあとに高さを測って入れる） */
-  .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: -12px -16px 8px; padding: 8px 16px; position: sticky; top: var(--top1, 52px); z-index: 4; background: var(--bg); border-bottom: 1px solid var(--line); }
-  .bar label { font-size: 12px; color: var(--gray); display: inline-flex; align-items: center; gap: 4px; }
-  .bar input[type=date] { background: #fff; border: 1px solid #bbb; border-radius: 8px; padding: 5px 8px; font-size: 14px; color: #222; }
-  @media (min-width: 1040px) {
-    .wrap { overflow: visible !important; }
-    table.sched thead th { top: var(--top2, 104px) !important; z-index: 3; box-shadow: 0 1px 0 var(--line), 0 -1px 0 var(--line); }
-  }
-  .bar .week { font-weight: bold; font-size: 16px; min-width: 190px; text-align: center; }
-  .bar button, .bar select { background: #fff; border: 1px solid #bbb; border-radius: 8px; padding: 6px 12px; font-size: 14px; cursor: pointer; color: #222; }
-  .bar .auto { background: var(--orange); border-color: var(--orange); color: #fff; font-weight: bold; margin-left: auto; }
-  .bar button:disabled { opacity: .5; cursor: default; }
-  .note { background: var(--orange-l); border: 1px solid #ecc3a3; color: var(--orange-d); border-radius: 10px; padding: 8px 12px; margin-bottom: 10px; }
-  .wrap { overflow-x: auto; background: #fff; border: 1px solid var(--line); border-radius: 12px; }
-  table.sched { border-collapse: collapse; width: 100%; min-width: 980px; table-layout: fixed; }
-  table.sched th, table.sched td { border: 1px solid var(--line); vertical-align: top; padding: 4px; }
-  table.sched thead th { background: var(--green-l); position: sticky; top: 0; font-size: 13px; text-align: center; }
-  table.sched thead th.today { background: #fbe4d2; }
-  table.sched thead th.past { color: #999; }
-  table.sched th.who { width: 118px; text-align: left; background: #fafafa; font-size: 14px; }
-  table.sched th.who small { display: block; font-weight: normal; color: var(--gray); font-size: 11px; }
-  .rank { display: inline-block; font-size: 11px; border-radius: 999px; padding: 0 6px; margin-left: 4px; background: #e1efe4; color: var(--green-d); }
-  .rank.b { background: #eee; color: #666; }
-  .sumline.std { color: #8a8a8a; font-size: 11px; }
-  .job .fx { color: var(--orange-d); font-size: 10px; }
-  .lack small { font-weight: normal; }
-  .sumline { font-weight: normal; font-size: 11px; color: var(--gray); }
-  .sumline.over, .cap.over { color: var(--red); font-weight: bold; }
-  .lack { display: inline-block; margin-top: 2px; font-size: 11px; font-weight: bold; color: #fff; background: var(--red); border-radius: 999px; padding: 0 7px; }
-  td.cell { min-height: 54px; height: 54px; }
-  td.cell.off { background: repeating-linear-gradient(45deg, #f3f3f3, #f3f3f3 6px, #fafafa 6px, #fafafa 12px); }
-  td.cell.past { background: #fafafa; }
-  td.cell.target { outline: 2px dashed var(--orange); outline-offset: -3px; cursor: pointer; }
-  td.cell.dragover { background: var(--orange-l); }
-  .cap { font-size: 10px; color: #999; text-align: right; }
-  .job { background: var(--green-l); border: 1px solid #cfe3d4; border-left: 4px solid var(--green); border-radius: 8px; padding: 3px 6px; margin-bottom: 3px; font-size: 12px; cursor: pointer; }
-  .job[draggable=true] { cursor: grab; }
-  .job .nm { font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .job .tk { display: flex; justify-content: space-between; gap: 4px; color: #444; }
-  .job.fixed { border-left-color: var(--orange); background: var(--orange-l); border-color: #ecc3a3; }
-  .job.done { opacity: .55; border-left-color: #999; background: #f1f1f1; border-color: #ddd; }
-  .job.sel { outline: 3px solid var(--orange); }
-  h2 { font-size: 15px; margin: 18px 0 6px; }
-  .tasks { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 6px; }
-  .task { background: #fff; border: 1px solid #e3b4b4; border-left: 4px solid var(--red); border-radius: 8px; padding: 6px 8px; font-size: 13px; cursor: pointer; }
-  .task.sel { outline: 3px solid var(--orange); }
-  .task .nm { font-weight: bold; }
-  .task .lk { color: var(--red); font-weight: bold; }
-  details { margin-top: 14px; }
-  details summary { cursor: pointer; font-weight: bold; }
-  table.ut { border-collapse: collapse; width: 100%; font-size: 12px; margin-top: 6px; background: #fff; }
-  table.ut th, table.ut td { border: 1px solid var(--line); padding: 3px 6px; text-align: left; }
-  table.ut th { background: var(--green-l); }
-  #panel { position: fixed; left: 0; right: 0; bottom: 0; background: #fff; border-top: 2px solid var(--orange); padding: 10px 16px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; z-index: 6; box-shadow: 0 -4px 14px rgba(0,0,0,.08); }
-  #panel[hidden] { display: none; }
-  #panel .ttl { font-weight: bold; margin-right: 6px; }
-  #panel input { width: 70px; font-size: 16px; padding: 6px; border: 1px solid #ccc; border-radius: 8px; text-align: right; }
-  #panel button, #panel a { background: #fff; border: 1px solid #bbb; border-radius: 8px; padding: 7px 12px; font-size: 14px; cursor: pointer; color: #222; text-decoration: none; }
-  #panel .danger { border-color: var(--red); color: var(--red); }
-  #busy { position: fixed; inset: 0; background: rgba(255,255,255,.55); display: flex; align-items: center; justify-content: center; z-index: 30; font-weight: bold; color: var(--green-d); }
-  #busy[hidden] { display: none; }
-  /* 裏で送っている間の小さな印（画面は止めない） */
-  #saving { position: fixed; left: 12px; bottom: 12px; z-index: 31; background: #222; color: #fff; font-size: 12px; border-radius: 999px; padding: 4px 12px; opacity: .85; }
-  #saving[hidden] { display: none; }
-  .job.msel { outline: 3px solid #2f6fb7; }
-  /* 右の引き出し：まだ割り振られていない作業。開くと表の右に場所をあける */
-  #drawer { position: fixed; right: 0; top: var(--top1, 52px); bottom: 0; z-index: 7; pointer-events: none; }
-  /* つまみは縦書き。画面の縦の真ん中に置く */
-  #drawer .dtab { pointer-events: auto; position: absolute; right: 0; top: 50%; transform: translateY(-50%); writing-mode: vertical-rl; letter-spacing: .12em; background: var(--red); color: #fff; border: none; border-radius: 10px 0 0 10px; padding: 12px 8px; font-size: 14px; font-weight: bold; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.2); white-space: nowrap; font-family: inherit; }
-  #drawer .dtab b { display: inline-block; margin-top: 8px; background: #fff; color: var(--red); border-radius: 999px; padding: 6px 2px; font-size: 12px; letter-spacing: 0; text-combine-upright: all; }
-  #drawer .dbody { pointer-events: auto; position: absolute; right: 0; top: 0; bottom: 0; width: min(330px, 86vw); background: #fff; border-left: 2px solid var(--red); box-shadow: -4px 0 14px rgba(0,0,0,.1); overflow-y: auto; padding: 10px 10px 120px; }
-  #drawer .dbody[hidden] { display: none; }
-  body.drawer-on #drawer .dtab { right: min(330px, 86vw); }
-  #drawer .dhead { font-weight: bold; margin-bottom: 4px; }
-  #drawer .task { margin-bottom: 6px; }
-  #drawer .task[draggable=true] { cursor: grab; }
-  @media (min-width: 1040px) { body.drawer-on main { margin-right: 330px; } }
-  /* index.html にはめ込まれたとき：上の帯は index.html の方に出すので、ここでは隠す */
-  html.embed header { display: none; }
-  .bar .upd { font-size: 11px; color: var(--gray); }
-  /* 上の帯の下段：3つのボタン（index.html と同じ） */
-  header { flex-wrap: wrap; }
   header .gnav { order: 9; flex: 1 0 100%; display: flex; gap: 6px; }
   header .gnav a { flex: 1; text-align: center; font-size: 14px; padding: 6px 4px; }
   header .gnav .on { background: #fff; color: var(--green-d); font-weight: bold; }
+  /* index.html にはめ込まれたとき：上の帯は index.html の方に出すので、ここでは隠す */
+  html.embed header { display: none; }
+  .muted { color: var(--gray); font-size: 12px; }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin: 12px; }
+
+  /* 上の帯：今日・前・次・見出し（カレンダーと同じ形） */
+  .bar { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 8px 12px; background: #fff; border-bottom: 1px solid var(--line); }
+  .bar button { background: #fff; border: 1px solid #bbb; border-radius: 999px; padding: 5px 14px; font-size: 14px; cursor: pointer; color: #222; }
+  .bar .nav { border-radius: 50%; width: 34px; height: 34px; padding: 0; font-size: 15px; }
+  .bar .week { font-size: 19px; font-weight: bold; min-width: 10em; }
+  .bar .sp { flex: 1; }
+  .bar .upd { font-size: 11px; color: var(--gray); white-space: nowrap; }
+  .bar .auto { background: var(--orange); border-color: var(--orange); color: #fff; font-weight: bold; }
+  .bar button:disabled { opacity: .5; cursor: default; }
+  .bar .pill { display: inline-flex; align-items: center; background: var(--orange-l); border: 1px solid #ecc3a3; color: var(--orange-d); border-radius: 999px; padding: 3px 12px; font-size: 12px; white-space: nowrap; }
+  .bar .pill.gray { background: #f3f3f3; border-color: #ddd; color: #666; }
+  .bar a.link { font-size: 13px; color: var(--green-d); white-space: nowrap; display: none; }
+  #fbtn { display: none; }
+
+  .body { flex: 1; min-height: 0; display: flex; }
+  /* 左の列：表の始まり・しぼりこみ・見方 */
+  #side { width: var(--side); flex: none; overflow-y: auto; background: #fff; border-right: 1px solid var(--line); padding: 10px 12px 60px; }
+  #side h3 { font-size: 13px; margin: 16px 0 6px; color: #333; }
+  #side h3:first-child { margin-top: 2px; }
+  #side select, #side input[type=date] { width: 100%; padding: 6px; border: 1px solid #bbb; border-radius: 8px; font-size: 14px; background: #fff; color: #222; margin-bottom: 6px; }
+  #side label.f { display: block; font-size: 12px; color: var(--gray); margin-bottom: 2px; }
+  #side .wbtn { width: 100%; background: #fff; border: 1px solid #bbb; border-radius: 8px; padding: 6px; font-size: 13px; cursor: pointer; }
+  #side .wbtn:disabled { opacity: .4; cursor: default; }
+  #side p.muted { margin: 6px 0; }
+  #side a { color: var(--green-d); font-size: 13px; }
+  #side details summary { cursor: pointer; font-size: 13px; font-weight: bold; margin-top: 16px; }
+  #side .uk { font-size: 12px; border-top: 1px solid #eee; padding: 4px 0; }
+  #side .uk a { font-size: 12px; }
+
+  main { flex: 1; min-width: 0; display: flex; flex-direction: column; background: #fff; }
+  .note { margin: 8px 12px 0; background: var(--orange-l); border: 1px solid #ecc3a3; color: var(--orange-d); border-radius: 10px; padding: 6px 10px; font-size: 13px; flex: none; }
+  #scroller { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; }
+
+  /* 表：人 × 日。見出しの行と名前の列は、スクロールしても止めておく */
+  table.sched { border-collapse: separate; border-spacing: 0; width: 100%; min-width: calc(var(--whow) + 7 * 132px); table-layout: fixed; }
+  table.sched th, table.sched td { border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); vertical-align: top; padding: 4px; }
+  table.sched thead th { position: sticky; top: 0; z-index: 3; background: #fff; text-align: center; font-weight: normal; padding: 6px 4px; }
+  table.sched thead th.past { background: #f7f7f7; }
+  table.sched th.who { width: var(--whow); text-align: left; position: sticky; left: 0; z-index: 2; background: #fff; }
+  table.sched thead th.who { z-index: 4; vertical-align: bottom; font-size: 12px; color: var(--gray); }
+  .dh .w { font-size: 11px; color: var(--gray); }
+  .dh .w.sun { color: #c44; } .dh .w.sat { color: #2f6fb7; }
+  .dh .d { font-size: 20px; line-height: 1.3; }
+  .dh.today .d b { background: #1a73e8; color: #fff; border-radius: 999px; padding: 0 8px; font-weight: normal; }
+  .sumline { font-size: 11px; color: var(--gray); }
+  .sumline.std { color: #9a9a9a; font-size: 10px; }
+  .sumline.over { color: var(--red); font-weight: bold; }
+  .lack { display: inline-block; margin-top: 2px; font-size: 11px; font-weight: bold; color: #fff; background: var(--red); border-radius: 999px; padding: 0 7px; }
+  .lack small { font-weight: normal; }
+  tbody th.who { font-size: 14px; font-weight: bold; }
+  tbody th.who small { display: block; font-weight: normal; color: var(--gray); font-size: 11px; }
+  .rank { display: inline-block; font-size: 11px; font-weight: normal; border-radius: 999px; padding: 0 6px; margin-left: 4px; background: #e1efe4; color: var(--green-d); }
+  .rank.b { background: #eee; color: #666; }
+  td.cell { height: 64px; }
+  td.cell.off { background: repeating-linear-gradient(45deg, #f3f3f3, #f3f3f3 6px, #fafafa 6px, #fafafa 12px); }
+  td.cell.past { background-color: #f9f9f9; }
+  td.cell.target { outline: 2px dashed var(--orange); outline-offset: -3px; cursor: pointer; }
+  td.cell.dragover { background: var(--orange-l); }
+  .cap { font-size: 10px; color: #999; text-align: right; }
+  .cap.over { color: var(--red); font-weight: bold; }
+  /* カード：カレンダーと同じ工程の色 */
+  .job { background: var(--c, var(--green)); color: #fff; border-radius: 5px; padding: 2px 6px; margin-bottom: 3px; font-size: 12px; cursor: pointer; }
+  .job[draggable=true] { cursor: grab; }
+  .job .tk { display: flex; justify-content: space-between; gap: 4px; white-space: nowrap; }
+  .job .tk span { overflow: hidden; text-overflow: ellipsis; }
+  .job .nm { font-size: 11px; opacity: .92; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .job .fx { font-size: 10px; opacity: .9; }
+  .job.fixed { box-shadow: inset 4px 0 0 rgba(255,255,255,.75); padding-left: 9px; }
+  .job.done { opacity: .42; }
+  .job.sel { outline: 3px solid var(--orange); outline-offset: 1px; }
+  .job.msel { outline: 3px solid #1a73e8; outline-offset: 1px; }
   /* 人の行：名前をつかんで並び替え／右クリックで非表示 */
   tbody th.who { cursor: grab; user-select: none; }
   tbody th.who.pick { background: #dbe8f7; box-shadow: inset 4px 0 0 #2f6fb7; }
@@ -121,6 +113,35 @@
   tr.hid th.who { color: #9a9a9a; background: #f0f0f0; }
   tr.hid th.who .hidtag { display: inline-block; font-size: 10px; font-weight: normal; border: 1px solid #bbb; border-radius: 999px; padding: 0 5px; margin-left: 4px; }
   tr.hid td.cell { opacity: .45; }
+
+  /* 下の帯：選んだカードの手直し・まとめて選んでいるときの案内（表の上に出さないので、表がずれない） */
+  #panel { position: fixed; left: 0; right: 0; bottom: 0; background: #fff; border-top: 2px solid var(--orange); padding: 10px 16px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; z-index: 8; box-shadow: 0 -4px 14px rgba(0,0,0,.08); }
+  #panel[hidden] { display: none; }
+  #panel .ttl { font-weight: bold; margin-right: 6px; }
+  #panel input { width: 70px; font-size: 16px; padding: 6px; border: 1px solid #ccc; border-radius: 8px; text-align: right; }
+  #panel button, #panel a { background: #fff; border: 1px solid #bbb; border-radius: 999px; padding: 6px 14px; font-size: 14px; cursor: pointer; color: #222; text-decoration: none; }
+  #panel .danger { border-color: var(--red); color: var(--red); }
+  body.panel-on #scroller { padding-bottom: 90px; }
+  #busy { position: fixed; inset: 0; background: rgba(255,255,255,.55); display: flex; align-items: center; justify-content: center; z-index: 30; font-weight: bold; color: var(--green-d); }
+  #busy[hidden] { display: none; }
+  #saving { position: fixed; left: 12px; bottom: 12px; z-index: 31; background: #222; color: #fff; font-size: 12px; border-radius: 999px; padding: 4px 12px; opacity: .85; }
+  #saving[hidden] { display: none; }
+
+  /* 右の引き出し：まだ割り振られていない作業。つまみは縦書きで、画面の縦の真ん中 */
+  #drawer { position: fixed; right: 0; top: var(--top1, 52px); bottom: 0; z-index: 7; pointer-events: none; }
+  #drawer .dtab { pointer-events: auto; position: absolute; right: 0; top: 50%; transform: translateY(-50%); writing-mode: vertical-rl; letter-spacing: .12em; background: var(--red); color: #fff; border: none; border-radius: 10px 0 0 10px; padding: 12px 8px; font-size: 14px; font-weight: bold; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.2); white-space: nowrap; font-family: inherit; }
+  #drawer .dtab b { display: inline-block; margin-top: 8px; background: #fff; color: var(--red); border-radius: 999px; padding: 6px 2px; font-size: 12px; letter-spacing: 0; text-combine-upright: all; }
+  #drawer .dbody { pointer-events: auto; position: absolute; right: 0; top: 0; bottom: 0; width: min(330px, 86vw); background: #fff; border-left: 2px solid var(--red); box-shadow: -4px 0 14px rgba(0,0,0,.1); overflow-y: auto; padding: 10px 10px 120px; }
+  #drawer .dbody[hidden] { display: none; }
+  body.drawer-on #drawer .dtab { right: min(330px, 86vw); }
+  #drawer .dhead { font-weight: bold; margin-bottom: 4px; }
+  .task { background: #fff; border: 1px solid #e3b4b4; border-left: 5px solid var(--c, var(--red)); border-radius: 8px; padding: 6px 8px; font-size: 13px; cursor: pointer; margin-bottom: 6px; }
+  .task[draggable=true] { cursor: grab; }
+  .task.sel { outline: 3px solid var(--orange); }
+  .task .nm { font-weight: bold; }
+  .task .lk { color: var(--red); font-weight: bold; }
+  @media (min-width: 1040px) { body.drawer-on main { margin-right: 330px; } }
+
   #whomenu { position: fixed; z-index: 50; background: #fff; border: 1px solid #bbb; border-radius: 10px; box-shadow: 0 6px 20px rgba(0,0,0,.18); padding: 4px; min-width: 190px; }
   #whomenu[hidden] { display: none; }
   #whomenu .ttl { font-size: 11px; color: var(--gray); padding: 4px 10px 2px; }
@@ -129,6 +150,21 @@
   #toast { position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%); background: #222; color: #fff; padding: 10px 16px; border-radius: 10px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 40; max-width: 90%; }
   #toast.show { opacity: 1; }
   #toast.err { background: var(--red); }
+
+  /* せまい画面：左の列は「設定」ボタンで出す。はめ込まれたときは、カレンダーへのリンクを帯に出す（上の緑の帯に切り替えがないため） */
+  @media (max-width: 820px) {
+    #fbtn { display: inline-block; }
+    html.embed .bar a.link { display: inline; }
+    #side { position: fixed; z-index: 30; left: 0; top: 0; bottom: 0; width: min(300px, 86vw); box-shadow: 4px 0 18px rgba(0,0,0,.18); transform: translateX(-105%); transition: transform .2s; }
+    body.side-on #side { transform: none; }
+    body.side-on::after { content: ''; position: fixed; inset: 0; background: rgba(0,0,0,.2); z-index: 29; }
+    .bar .week { font-size: 16px; min-width: 0; }
+    .bar .upd { display: none; }
+    :root { --whow: 92px; }
+    table.sched { min-width: calc(var(--whow) + 7 * 112px); }
+    tbody th.who { font-size: 13px; }
+  }
+  #app { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 </style>
 </head>
 <body>
@@ -190,12 +226,10 @@ function prefStart() {
   }
   return '';
 }
-// 上に固定する帯の高さを測って、表の見出しを止める位置を決める
+// 右の引き出しの上端を、表（左の列と表）の上端にそろえる
 function stick() {
-  const h = document.querySelector('header'), b = document.querySelector('.bar');
-  if (!h || !b) return;
-  document.documentElement.style.setProperty('--top1', h.offsetHeight + 'px');
-  document.documentElement.style.setProperty('--top2', (h.offsetHeight + b.offsetHeight) + 'px');
+  const b = document.querySelector('.body');
+  if (b) document.documentElement.style.setProperty('--top1', Math.max(0, b.getBoundingClientRect().top) + 'px');
 }
 window.addEventListener('resize', stick);
 
@@ -318,27 +352,44 @@ function saveRows() { save('schedOrder', JSON.stringify(rowOrder)); save('schedH
 function jobsOf(name, date) { return sch.assigns.filter(a => a.name === name && a.date === date); }
 function taskOf(a) { return sch.tasks.find(t => t.id === a.id && t.key === a.key); }
 
+// 工程の色（カレンダーと同じ）
+const STEP_COLORS = { '播種': '#8e44ad', '土入れ': '#a0662b', '土並べ': '#b08900', '鉢上げ': '#2e8b57', '接木': '#d0457a', '出荷': '#1a8fd8' };
+const MORE_COLORS = ['#e07b39', '#5c6bc0', '#00897b', '#6d4c41', '#c0392b', '#7f8c8d'];
+const moreSeen = [];
+function colorOf(s) {
+  if (!s) return '#4f9363';
+  if (STEP_COLORS[s]) return STEP_COLORS[s];
+  if (!moreSeen.includes(s)) moreSeen.push(s);
+  return MORE_COLORS[moreSeen.indexOf(s) % MORE_COLORS.length];
+}
+const WD = '日月火水木金土';
+const dowOf = k => new Date(Date.parse(k + 'T00:00:00Z')).getUTCDay();
+
 function jobHtml(a) {
   const isSel = sel && sel.aid === a.aid;
-  return `<div class="job${a.fixed ? ' fixed' : ''}${a.done ? ' done' : ''}${isSel ? ' sel' : ''}${multi.has(a.aid) ? ' msel' : ''}" data-aid="${esc(a.aid)}"${canEdit() ? ' draggable="true"' : ''}
-    title="${esc(a.plan)}（${esc(a.id)}）／実際に入る ${esc(num(a.hours))} 時間${a.f && a.f !== 1 ? '・1人前に直すと ' + esc(num(a.std)) + ' 時間（掛ける数 ' + esc(num(a.f)) + '）' : ''}${a.fixed ? '／固定（自動の組み直しで動かない）' : ''}">
-    <div class="nm">${esc(a.plan)}</div>
-    <div class="tk"><span>${esc(a.task)}${a.done ? '（済）' : ''}${a.fixed ? ' 📌' : ''}${a.f && a.f !== 1 ? ` <small class="fx">×${esc(num(a.f))}</small>` : ''}</span><b>${esc(num(a.hours))}h</b></div></div>`;
+  return `<div class="job${a.fixed ? ' fixed' : ''}${a.done ? ' done' : ''}${isSel ? ' sel' : ''}${multi.has(a.aid) ? ' msel' : ''}" style="--c:${colorOf(a.major)}" data-aid="${esc(a.aid)}"${canEdit() ? ' draggable="true"' : ''}
+    title="${esc(a.plan)}（${esc(a.id)}）／${esc(a.task)}／実際に入る ${esc(num(a.hours))} 時間${a.f && a.f !== 1 ? '・1人前に直すと ' + esc(num(a.std)) + ' 時間（掛ける数 ' + esc(num(a.f)) + '）' : ''}${a.fixed ? '／固定（自動の組み直しで動かない）' : ''}">
+    <div class="tk"><span><b>${esc(a.task)}</b>${a.done ? '（済）' : ''}${a.fixed ? ' 📌' : ''}${a.f && a.f !== 1 ? ` <small class="fx">×${esc(num(a.f))}</small>` : ''}</span><b>${esc(num(a.hours))}h</b></div>
+    <div class="nm">${esc(a.plan)}</div></div>`;
 }
 
 function render() {
   const people = visiblePeople(), names = people.map(p => p.name);
-  const areas = [...new Set(sch.people.map(p => p.area).filter(String))], kubuns = [...new Set(sch.people.map(p => p.kubun).filter(String))];
+  // エリアは「全体」を先に、あとは名前の中の数の順（第1・第2・第3）
+  const areaRank = a => /全体/.test(a) ? -1 : (Number(String(a).normalize('NFKC').replace(/\D/g, '')) || 999);
+  const areas = [...new Set(sch.people.map(p => p.area).filter(String))].sort((a, b) => areaRank(a) - areaRank(b) || a.localeCompare(b, 'ja')), kubuns = [...new Set(sch.people.map(p => p.kubun).filter(String))];
   const head = sch.days.map(d => {
     const capSum = people.reduce((n, p) => n + (sch.cap[p.name][d.key] || 0), 0);
     const capStd = people.reduce((n, p) => n + (sch.cap[p.name][d.key] || 0) * (p.eff || 1), 0);   // 1人前に直した出勤の時間（その人の掛ける数のならしで）
     const mine = sch.assigns.filter(a => a.date === d.key && names.includes(a.name) && !a.done);
     const used = mine.reduce((n, a) => n + a.hours, 0), usedStd = mine.reduce((n, a) => n + (a.std === undefined ? a.hours : a.std), 0);
     const lack = sch.tasks.filter(t => t.short > 0 && (t.due === d.key || (d.today && t.late))).reduce((n, t) => n + t.short, 0);
-    return `<th class="${d.today ? 'today' : d.past ? 'past' : ''}">${esc(d.label)}${d.today ? '　今日' : ''}
-      <div class="sumline${used > capSum + 1e-9 ? ' over' : ''}">割り振り ${esc(num(used))} ／ 出勤 ${esc(num(capSum))} 時間</div>
-      <div class="sumline std">1人前に直すと ${esc(num(usedStd))} ／ ${esc(num(capStd))}</div>
-      ${lack > 0 ? `<span class="lack">人手不足 ${esc(num(lack))} 時間<small>（1人前で）</small></span>` : ''}</th>`;
+    const w = dowOf(d.key);
+    return `<th class="dh${d.today ? ' today' : d.past ? ' past' : ''}"><div class="w ${w === 0 ? 'sun' : w === 6 ? 'sat' : ''}">${WD[w]}</div>
+      <div class="d"><b>${d.key.slice(8) === '01' ? Number(d.key.slice(5, 7)) + '/' : ''}${Number(d.key.slice(8))}</b></div>
+      <div class="sumline${used > capSum + 1e-9 ? ' over' : ''}" title="割り振り ／ 出勤（実際の時間）">${esc(num(used))} ／ ${esc(num(capSum))}h</div>
+      <div class="sumline std" title="1人前に直すと">1人前 ${esc(num(usedStd))} ／ ${esc(num(capStd))}</div>
+      ${lack > 0 ? `<span class="lack" title="まだだれにも割り振られていない時間（1人前で）">人手不足 ${esc(num(lack))}h</span>` : ''}</th>`;
   }).join('');
   const rows = people.map(p => `<tr${hiddenWho.has(p.name) ? ' class="hid"' : ''}><th class="who${pickedWho.has(p.name) ? ' pick' : ''}" data-who="${esc(p.name)}" draggable="true" title="つかんで上下へ動かすと並び替え。右クリックで非表示（Shift を押しながら押すと何人でも選べる）">${esc(p.name)}${p.top ? `<span class="rank${p.top === 'A' ? '' : ' b'}">${esc(p.top)}</span>` : ''}${hiddenWho.has(p.name) ? '<span class="hidtag">非表示</span>' : ''}
       <small>${esc([p.kubun, p.area].filter(String).join('・'))}${(p.jobs || []).length ? '<br>' + esc(p.jobs.slice(0, 6).join(' ')) + (p.jobs.length > 6 ? ' …' : '') : ''}</small></th>` +
@@ -350,44 +401,61 @@ function render() {
         <div class="cap${used > cap + 1e-9 ? ' over' : ''}">${cap ? esc(num(used)) + ' / ' + esc(num(cap)) + 'h' : used ? esc(num(used)) + 'h（休み）' : '休み'}</div></td>`;
     }).join('') + '</tr>').join('');
   const lackTasks = sch.tasks.filter(t => t.short > 0);
-  const selText = !sel ? '' : sel.aid ? (() => { const a = sch.assigns.find(x => x.aid === sel.aid); return a ? a.plan + '：' + a.task : ''; })()
-    : (() => { const t = sch.tasks.find(x => x.id === sel.id && x.key === sel.key); return t ? t.name + '：' + t.task : ''; })();
-  document.getElementById('app').innerHTML = `
-    <header><div><h1>スケジュール</h1><div class="sub">いつまでに・どの作業を・だれが　／　最終更新 ${esc(sch.updated)}</div></div>
+  const y = sch.days[0].key.slice(0, 4);
+  const md = k => Number(k.slice(5, 7)) + '/' + Number(k.slice(8));
+  const app = document.getElementById('app');
+  // 描き直しても、表と左の列のスクロールの位置は変えない
+  const oldSc = document.getElementById('scroller'), oldSide = document.getElementById('side');
+  const keep = oldSc ? { t: oldSc.scrollTop, l: oldSc.scrollLeft, s: oldSide ? oldSide.scrollTop : 0, start: app.dataset.start } : null;
+  app.dataset.start = sch.start;
+  app.innerHTML = `
+    <header><div><h1>人の割り振り表</h1><div class="sub">いつまでに・どの作業を・だれが</div></div>
       <div style="display:flex;gap:6px"><a href="index.html">最初へ</a></div>
-      <nav class="gnav"><a href="index.html?go=reg">作業を登録する</a><a href="index.html?go=find">作業を調べる</a><a href="schedule.html" class="on">スケジュール</a></nav></header>
-    <main>
-      <div class="bar">
-        <button type="button" id="prev">◀ 前の週</button>
-        <span class="week">${esc(sch.days[0].label)} 〜 ${esc(sch.days[6].label)}</span>
-        <button type="button" id="next">次の週 ▶</button>
-        <button type="button" id="now">今週</button>
-        <label>始まり<select id="f-start" aria-label="表の始まりの日">${[['', '金曜（標準）'], ['6', '土曜'], ['0', '日曜'], ['1', '月曜'], ['2', '火曜'], ['3', '水曜'], ['4', '木曜'], ['today', '今日から']].map(o => `<option value="${o[0]}"${o[0] === startPref ? ' selected' : ''}>${o[1]}</option>`).join('')}</select></label>
-        <label>この日から<input type="date" id="f-date" value="${esc(sch.start)}" aria-label="この日から7日間を見る"></label>
+      <nav class="gnav"><a href="index.html?go=reg">作業を登録する</a><a href="index.html?go=find">作業を調べる</a><a href="index.html?go=calendar" class="on">スケジュール</a></nav></header>
+    <div class="bar">
+      <button type="button" id="fbtn">設定</button>
+      <button type="button" id="now">今週</button>
+      <button type="button" class="nav" id="prev" aria-label="前の週">‹</button>
+      <button type="button" class="nav" id="next" aria-label="次の週">›</button>
+      <span class="week">${esc(y)}年 ${esc(md(sch.days[0].key))}〜${esc(md(sch.days[6].key))}</span>
+      ${stale ? '<span class="pill">前に開いたときの表です。最新を読み込んでいます…</span>' : canEdit() ? '' : '<span class="pill gray" title="手直しと組み直しは、一覧の画面で担当を「計画担当」にすると使えます">見るだけ</span>'}
+      <span class="sp"></span>
+      <span class="upd">最終更新 ${esc(sch.updated)}</span>
+      <button type="button" class="auto" id="auto"${canEdit() ? '' : ' disabled'}>自動で組み直す</button>
+      <a class="link" href="index.html?go=calendar">カレンダー →</a>
+    </div>
+    <div class="body">
+      <aside id="side">
+        <h3>表の始まり</h3>
+        <select id="f-start" aria-label="表の始まりの日">${[['', '金曜（標準）'], ['6', '土曜'], ['0', '日曜'], ['1', '月曜'], ['2', '火曜'], ['3', '水曜'], ['4', '木曜'], ['today', '今日から']].map(o => `<option value="${o[0]}"${o[0] === startPref ? ' selected' : ''}>${o[1]}</option>`).join('')}</select>
+        <label class="f" for="f-date">この日から7日間</label>
+        <input type="date" id="f-date" value="${esc(sch.start)}">
+        <h3>しぼりこみ</h3>
         <select id="f-area" aria-label="エリア"><option value="">エリア：すべて</option>${areas.map(a => `<option${a === fArea ? ' selected' : ''}>${esc(a)}</option>`).join('')}</select>
         <select id="f-kubun" aria-label="区分"><option value="">区分：すべて</option>${kubuns.map(a => `<option${a === fKubun ? ' selected' : ''}>${esc(a)}</option>`).join('')}</select>
-        ${hiddenCount() ? `<button type="button" id="f-hidden">${showHidden ? '非表示の人を隠す' : '非表示の人 ' + hiddenCount() + '人を出す'}</button>` : ''}
-        <span class="upd">最終更新 ${esc(sch.updated)}</span>
-        <button type="button" class="auto" id="auto"${canEdit() ? '' : ' disabled'}>自動で組み直す</button>
-      </div>
-      ${stale ? `<div class="note">前に開いたときの表（${esc(sch.updated)} 時点）を出しています。最新を読み込んでいます…（読み終わるまで手直しはできません）</div>` : canEdit() ? '' : '<div class="note">見るだけの画面です。手直しと組み直しは、一覧の画面で担当を「計画担当」にすると使えます。</div>'}
-      ${sch.noBook ? '<div class="note">スケジュール用のスプレッドシートが、まだありません。QR一元管理デモのスプレッドシートのメニュー「QRデモ → スケジュール用のスプレッドシートを作る」を実行してください。</div>' : ''}
-      ${!sch.noBook && !sch.hasPace ? '<div class="note">スケジュール用のスプレッドシートに「作業ペース」のシートがありません。メニュー「QRデモ → スケジュール用のスプレッドシートを付け替える」で同じスプレッドシートを選び直すと、足りないシートができます。</div>' : ''}
-      ${!sch.noBook && !sch.people.length ? '<div class="note">「人と仕事」シートに人がいません。名前を書くと、ここに行が出ます。</div>' : ''}
-      ${sel && canEdit() ? `<div class="note">「${esc(selText)}」を選んでいます。動かす先のマス（人 × 日）を押してください。</div>` : ''}
-      ${multi.size && canEdit() ? `<div class="note">${multi.size} 枚のカードを選んでいます。どれか1枚をつかんで動かすか、動かす先のマス（人 × 日）を押すと、まとめて動きます。<button type="button" id="m-clear" style="margin-left:8px">選ぶのをやめる</button></div>` : ''}
-      <div class="wrap"><table class="sched"><thead><tr><th class="who">人</th>${head}</tr></thead><tbody>${rows}</tbody></table></div>
-      <p class="muted">カードの時間は、その人が実際に入る時間。「×0.8」は掛ける数で、その人の1時間が1人前の 0.8 時間ぶんに当たるという意味（「人と仕事」シートの A・B・C と「設定」シートで決まる）。必要な時間・人手不足は、1人前の時間で出しています。${canEdit() && sch.bookUrl ? ` <a href="${esc(sch.bookUrl)}" target="_blank" rel="noopener">スケジュール用のスプレッドシートを開く</a>` : ''}</p>
-      <p class="muted">カードは、つかんで別のマスへ動かせます（押して選んでから、動かす先のマスを押してもよい）。Shift を押しながらカードを押すと何枚でも選べて、まとめて動かせます。動かしたカードは 📌（固定）になり、「自動で組み直す」で動きません。
-        自動で組むのは ${esc(sch.today.slice(5).replace('-', '/'))} から ${esc(sch.horizonEnd.slice(5).replace('-', '/'))} まで。</p>
-      <p class="muted">人の名前をつかんで上下へ動かすと、行の並び順を変えられます。名前を右クリックすると、非表示にできます（Shift を押しながら名前を押すと何人でも選べて、まとめて非表示にできる）。非表示の人は、日ごとの出勤・割り振りの合計にも入れません。並び順と非表示は、このブラウザに覚えます。</p>
-      <p class="muted">日付の下の赤い「人手不足」は、その日が予定日の作業（予定日を過ぎた作業は今日）のうち、まだだれにも割り振られていない時間です。割り振られていない作業は、右の「割り振られていない作業」を開くと並んでいます。</p>
-      <details><summary>時間を出せない作業・予定日がない作業・古い作業（${sch.unknownCount || sch.unknown.length}件${sch.oldCount ? '。うち古い作業 ' + sch.oldCount + '件' : ''}）</summary>
-        ${sch.unknown.length ? `<table class="ut"><thead><tr><th>計画</th><th>工程</th><th>予定日</th><th>わけ</th></tr></thead><tbody>${sch.unknown.map(u =>
-          `<tr><td><a href="${esc(planUrl(u.id))}">${esc(u.name)}</a> <span class="muted">${esc(u.id)}</span></td><td>${esc(u.task)}</td><td>${esc(u.due)}</td><td>${esc(u.why)}</td></tr>`).join('')}</tbody></table>`
-          : '<div class="muted">ありません。</div>'}
-        <p class="muted">「作業ペース」のシートに行を足すか、計画の数量・予定日を入れると、自動の割り振りに入ります。${sch.oldCount ? '古い作業（予定日を ' + sch.oldDays + ' 日より前に過ぎた未完了の作業）は、割り振りに入れていません。日数は「設定」シートの「古い作業の日数」で変えられます（0 にすると全部入れる）。' + (sch.unknown.length < (sch.unknownCount || 0) ? '一覧は先頭の ' + sch.unknown.length + ' 件だけ出しています。' : '') : ''}</p></details>
-    </main>`;
+        <button type="button" class="wbtn" id="f-hidden"${hiddenCount() ? '' : ' disabled'}>${showHidden ? '非表示の人を隠す' : '非表示の人' + (hiddenCount() ? ' ' + hiddenCount() + '人' : '') + 'を出す'}</button>
+        <p class="muted">人の名前をつかんで上下へ動かすと、並び順を変えられる。名前を右クリックすると非表示にできる（Shift を押しながら押すと何人でも選べる）。非表示の人は、日ごとの合計にも入れない。並び順と非表示は、このブラウザに覚える。</p>
+        <h3>見方</h3>
+        <p class="muted">カードの色は工程（カレンダーと同じ）。時間は、その人が実際に入る時間。「×0.8」は掛ける数で、その人の1時間が1人前の 0.8 時間ぶん（「人と仕事」シートの A・B・C と「設定」シートで決まる）。</p>
+        <p class="muted">日付の下は「割り振り ／ 出勤」の時間。その下は1人前に直した時間。赤い「人手不足」は、その日が予定日の作業（過ぎた作業は今日）のうち、まだだれにも割り振られていない時間（1人前で）。割り振られていない作業は、右の「割り振られていない作業」を開くと並んでいる。</p>
+        <p class="muted">カードは、つかんで別のマスへ動かせる（押して選んでから、動かす先のマスを押してもよい）。Shift を押しながらカードを押すと何枚でも選べて、まとめて動かせる。動かしたカードは 📌（固定）になり、「自動で組み直す」で動かない。自動で組むのは ${esc(sch.today.slice(5).replace('-', '/'))} から ${esc(sch.horizonEnd.slice(5).replace('-', '/'))} まで。</p>
+        ${canEdit() && sch.bookUrl ? `<p><a href="${esc(sch.bookUrl)}" target="_blank" rel="noopener">スケジュール用のスプレッドシートを開く</a></p>` : ''}
+        <details><summary>時間を出せない作業・古い作業（${sch.unknownCount || sch.unknown.length}件）</summary>
+          ${sch.unknown.length ? sch.unknown.map(u => `<div class="uk"><a href="${esc(planUrl(u.id))}">${esc(u.name)}</a>　${esc(u.task)}${u.due ? '　' + esc(u.due) : ''}<div class="muted">${esc(u.why)}</div></div>`).join('') : '<div class="muted">ありません。</div>'}
+          <p class="muted">「作業ペース」のシートに行を足すか、計画の数量・予定日を入れると、自動の割り振りに入る。${sch.oldCount ? '古い作業（予定日を ' + sch.oldDays + ' 日より前に過ぎた未完了の作業）は、割り振りに入れない。日数は「設定」シートの「古い作業の日数」で変えられる（0 にすると全部入れる）。' : ''}${sch.unknown.length < (sch.unknownCount || 0) ? '先頭の ' + sch.unknown.length + ' 件だけ出している。' : ''}</p></details>
+      </aside>
+      <main>
+        ${sch.noBook ? '<div class="note">スケジュール用のスプレッドシートが、まだありません。QR一元管理デモのスプレッドシートのメニュー「QRデモ → スケジュール用のスプレッドシートを作る」を実行してください。</div>' : ''}
+        ${!sch.noBook && !sch.hasPace ? '<div class="note">スケジュール用のスプレッドシートに「作業ペース」のシートがありません。メニュー「QRデモ → スケジュール用のスプレッドシートを付け替える」で同じスプレッドシートを選び直すと、足りないシートができます。</div>' : ''}
+        ${!sch.noBook && !sch.people.length ? '<div class="note">「人と仕事」シートに人がいません。名前を書くと、ここに行が出ます。</div>' : ''}
+        <div id="scroller"><table class="sched"><thead><tr><th class="who">人</th>${head}</tr></thead><tbody>${rows}</tbody></table></div>
+      </main>
+    </div>`;
+  if (keep) {
+    const sc = document.getElementById('scroller');
+    sc.scrollTop = keep.t; if (keep.start === sch.start) sc.scrollLeft = keep.l;
+    document.getElementById('side').scrollTop = keep.s;
+  }
   document.getElementById('drawer').innerHTML = drawerHtml(lackTasks);
   document.body.classList.toggle('drawer-on', drawerOpen);
   bind();
@@ -401,7 +469,7 @@ function drawerHtml(list) {
     <div class="dbody"${drawerOpen ? '' : ' hidden'}>
       <div class="dhead">まだ割り振られていない作業<span class="muted">　${list.length}件</span></div>
       <p class="muted" style="margin:0 0 8px">${canEdit() ? 'つかんで表のマス（人 × 日）へ落とすと、その人のその日に足せます（固定 📌 になる）。押して選んでからマスを押してもよい。' : '見るだけです。足すのは計画担当だけ。'}</p>
-      ${items.length ? items.map(t => `<div class="task${sel && sel.id === t.id && sel.key === t.key ? ' sel' : ''}" data-tid="${esc(t.id)}" data-tkey="${esc(t.key)}"${canEdit() ? ' draggable="true"' : ''}>
+      ${items.length ? items.map(t => `<div class="task${sel && sel.id === t.id && sel.key === t.key ? ' sel' : ''}" style="--c:${colorOf(t.major)}" data-tid="${esc(t.id)}" data-tkey="${esc(t.key)}"${canEdit() ? ' draggable="true"' : ''}>
           <div class="nm">${esc(t.name)} <span class="muted">${esc(t.id)}</span></div>
           <div>${esc(t.task)}　予定日 ${esc(t.dueLabel)}${t.late ? '<span class="lk">（過ぎています）</span>' : ''}</div>
           <div>${esc(t.qty)}${esc(t.unit)}　必要 ${esc(num(t.hours))} 時間　<span class="lk">あと ${esc(num(t.short))} 時間</span><span class="muted">（1人前で）</span></div></div>`).join('')
@@ -430,6 +498,7 @@ function bind() {
   document.getElementById('f-kubun').onchange = e => { fKubun = e.target.value; render(); };
   const fh = document.getElementById('f-hidden'); if (fh) fh.onclick = () => { showHidden = !showHidden; render(); };
   bindWho();
+  document.getElementById('fbtn').onclick = ev => { ev.stopPropagation(); document.body.classList.toggle('side-on'); };
   document.getElementById('auto').onclick = () => {
     if (confirm('今日から ' + sch.horizonEnd.slice(5).replace('-', '/') + ' までの割り振りを、自動で組み直しますか？\n📌（固定）のカードは動かしません。')) edit({ op: 'auto' });
   };
@@ -567,6 +636,7 @@ function openWhoMenu(x, y) {
     saveRows(); closeWhoMenu(); render();
   });
 }
+document.addEventListener('click', ev => { if (document.body.classList.contains('side-on') && !ev.target.closest('#side') && ev.target.id !== 'fbtn') document.body.classList.remove('side-on'); });
 document.addEventListener('mousedown', ev => { if (menuOpen && !ev.target.closest('#whomenu')) closeWhoMenu(); });
 document.addEventListener('keydown', ev => { if (ev.key === 'Escape' && menuOpen) closeWhoMenu(); });
 window.addEventListener('scroll', () => { if (menuOpen) closeWhoMenu(); }, true);
@@ -584,11 +654,26 @@ function moveTo(aid, td) {
   toast(aids.length === 1 ? '動かしました' : aids.length + ' 枚を動かしました');
 }
 
-// 下の帯：選んだカードの手直し（時間・固定・消す）と、計画の画面へのリンク
+// 下の帯：選んだカードの手直し（時間・固定・消す）と、計画の画面へのリンク。
+// まとめて選んでいるとき・引き出しの作業を選んでいるときの案内もここに出す（表の上に出すと、表がずれるため）
 function renderPanel() {
   const el = document.getElementById('panel');
   const a = sel && sel.aid ? sch.assigns.find(x => x.aid === sel.aid) : null;
-  if (!a) { el.hidden = true; return; }
+  const t0 = sel && !sel.aid ? sch.tasks.find(x => x.id === sel.id && x.key === sel.key) : null;
+  const show = on => { el.hidden = !on; document.body.classList.toggle('panel-on', on); };
+  if (!a && multi.size && canEdit()) {
+    el.innerHTML = `<span class="ttl">${multi.size} 枚のカードを選んでいます</span><span class="muted">どれか1枚をつかんで動かすか、動かす先のマス（人 × 日）を押すと、まとめて動きます</span><button type="button" id="m-clear">選ぶのをやめる</button>`;
+    show(true);
+    document.getElementById('m-clear').onclick = () => { multi.clear(); render(); };
+    return;
+  }
+  if (!a && t0 && canEdit()) {
+    el.innerHTML = `<span class="ttl">${esc(t0.name)}：${esc(t0.task)}</span><span class="muted">を選んでいます。足す先のマス（人 × 日）を押してください</span><button type="button" id="p-x">やめる</button>`;
+    show(true);
+    document.getElementById('p-x').onclick = () => { sel = null; render(); };
+    return;
+  }
+  if (!a) { show(false); return; }
   const t = taskOf(a);
   el.innerHTML = `<span class="ttl">${esc(a.plan)}：${esc(a.task)}</span><span class="muted">${esc(a.name)}　${esc(a.date.slice(5).replace('-', '/'))}${t ? '　必要 ' + esc(num(t.hours)) + ' 時間（1人前で。予定日 ' + esc(t.dueLabel) + '）' : ''}${a.f && a.f !== 1 ? '　この人は ×' + esc(num(a.f)) + '（1人前に直すと ' + esc(num(a.std)) + ' 時間）' : ''}</span>
     ${canEdit() ? `<input id="p-h" type="number" inputmode="decimal" step="0.25" min="0.25" value="${esc(num(a.hours))}" aria-label="時間">時間
@@ -597,7 +682,7 @@ function renderPanel() {
       <button type="button" class="danger" id="p-del">消す</button>` : ''}
     <a href="${esc(planUrl(a.id))}">この計画の進み具合</a>
     <button type="button" id="p-x">やめる</button>`;
-  el.hidden = false;
+  show(true);
   document.getElementById('p-x').onclick = () => { sel = null; render(); };
   if (!canEdit()) return;
   document.getElementById('p-set').onclick = () => {
@@ -613,7 +698,7 @@ function renderPanel() {
 }
 
 function showMessage(msg) {
-  document.getElementById('app').innerHTML = `<header><h1>スケジュール</h1><a href="index.html">一覧へ</a></header><main><div class="card">${esc(msg)}</div></main>`;
+  document.getElementById('app').innerHTML = `<header><h1>人の割り振り表</h1><a href="index.html">最初へ</a></header><div class="card">${esc(msg)}</div>`;
 }
 showMessage('読み込んでいます…');
 reload();

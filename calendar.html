@@ -41,6 +41,10 @@
   .bar .sp { flex: 1; }
   .bar .loading { font-size: 12px; color: var(--green-d); }
   .bar .loading[hidden] { display: none; }
+  /* 絞り込み中の札：上の帯の中に出す（出ても消えても、カレンダーの大きさは変わらない） */
+  .bar .fnote { display: inline-flex; align-items: center; gap: 6px; background: var(--orange-l); border: 1px solid #ecc3a3; color: #9a5320; border-radius: 999px; padding: 3px 4px 3px 12px; font-size: 12px; white-space: nowrap; }
+  .bar .fnote[hidden] { display: none; }
+  .bar .fnote button { background: #fff; border: 1px solid #ecc3a3; color: #9a5320; border-radius: 999px; padding: 2px 10px; font-size: 12px; }
   .bar a.link { font-size: 13px; color: var(--green-d); white-space: nowrap; }
   #fbtn { display: none; }
 
@@ -66,6 +70,8 @@
   aside .preset select { flex: 1 1 100%; padding: 6px; border: 1px solid #bbb; border-radius: 8px; font-size: 14px; background: #fff; }
   aside .preset button, aside .allbtn { background: #fff; border: 1px solid #bbb; border-radius: 8px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
   aside .allbtn { width: 100%; margin-top: 6px; padding: 6px; font-size: 13px; }
+  /* 使えないときも消さずに薄くする（出たり消えたりして、下の行がずれないように） */
+  aside button:disabled { opacity: .4; cursor: default; }
   aside .opt { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--gray); }
   aside .opt select { font-size: 13px; padding: 3px 6px; border: 1px solid #bbb; border-radius: 6px; }
 
@@ -96,7 +102,9 @@
   .wait { color: #bbb; font-size: 11px; text-align: center; }
 
   /* 週表示：日の列を横に続ける */
-  #scroller.week { display: flex; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x proximity; }
+  #scroller.week { display: flex; overflow-x: auto; overflow-y: hidden; }
+  /* 列の頭に吸い付くのはスマホ（指で送る）だけ。PC で付けると、ホイールで少し動かしても元の列へ引き戻される */
+  @media (max-width: 820px) and (pointer: coarse) { #scroller.week { scroll-snap-type: x proximity; } }
   .col { flex: none; width: max(150px, calc((100vw - var(--side) - 2px) / 7));border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; scroll-snap-align: start; }
   .col.past { background: #f7f7f7; }
   .col .ch { flex: none; text-align: center; padding: 6px 4px; border-bottom: 1px solid var(--line); background: #fff; }
@@ -139,6 +147,10 @@
   /* せまい画面：左の列は「絞り込み」ボタンで出す */
   @media (max-width: 820px) {
     #fbtn { display: inline-block; }
+    html.embed .bar a.link { display: inline; }   /* 上の緑の帯に切り替えを出さないので、ここに出す */
+    /* スマホは札を出さず、「絞り込み（◯）」ボタンの色で知らせる（帯の段がふえて、カレンダーの大きさが変わらないように） */
+    .bar .fnote { display: none !important; }
+    #fbtn.on { background: var(--orange-l); border-color: #ecc3a3; color: #9a5320; font-weight: bold; }
     aside { position: fixed; z-index: 30; left: 0; top: 0; bottom: 0; width: min(300px, 86vw); box-shadow: 4px 0 18px rgba(0,0,0,.18); transform: translateX(-105%); transition: transform .2s; }
     body.side-on aside { transform: none; }
     body.side-on::after { content: ''; position: fixed; inset: 0; background: rgba(0,0,0,.2); z-index: 29; }
@@ -164,6 +176,7 @@
   <button type="button" class="nav" id="next" aria-label="次へ">›</button>
   <span class="ttl" id="ttl"></span>
   <span class="loading" id="loading" hidden>読み込んでいます…</span>
+  <span class="fnote" id="fnote" hidden></span>
   <span class="sp"></span>
   <span class="seg"><button type="button" data-view="month">月</button><button type="button" data-view="week">週</button></span>
   <a class="link" href="index.html?go=schedule">人の割り振り表 →</a>
@@ -339,9 +352,9 @@ function drawSide() {
   sideEl.innerHTML = `
     <h3>自分の担当</h3>
     <div class="preset"><select id="preset" aria-label="自分の担当"><option value="">全部を見る</option>${names.map(n => `<option${n === presetName ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select>
-      <button type="button" id="psave">今のチェックを保存</button>${presetName ? '<button type="button" id="pdel">この担当を消す</button>' : ''}</div>
+      <button type="button" id="psave">今のチェックを保存</button><button type="button" id="pdel"${presetName ? '' : ' disabled'}>この担当を消す</button></div>
     <p class="muted" style="margin:4px 0 0">よく見る組み合わせ（例：播種＋ヒューケラ）にチェックして保存すると、次から選ぶだけで出せる。</p>
-    ${offCount() ? '<button type="button" class="allbtn" id="all">全部を見る（隠しているもの ' + offCount() + '）</button>' : ''}
+    <button type="button" class="allbtn" id="all"${offCount() ? '' : ' disabled'}>全部を見る${offCount() ? '（隠しているもの ' + offCount() + '）' : ''}</button>
     <h3>工程 <button type="button" data-only="s">全部</button></h3>
     ${steps.map(s => `<label style="--c:${colorOf(s)}"><input type="checkbox" data-s="${esc(s)}"${off.s.has(s) ? '' : ' checked'}><span class="dot"></span>${esc(s)}<span class="n">${stepCnt[s] || 0}</span></label>`).join('') || '<div class="muted">読み込んでいます…</div>'}
     <h3>分類 <button type="button" data-only="t">全部</button></h3>
@@ -349,8 +362,8 @@ function drawSide() {
     <h3>取引先 <button type="button" data-only="c">全部</button></h3>
     ${custs.map(c => `<label><input type="checkbox" data-c="${esc(c)}"${off.c.has(c) ? '' : ' checked'}>${esc(c)}<span class="n">${custCnt[c]}</span></label>`).join('') || '<div class="muted">まだありません</div>'}
     <h3>表示</h3>
-    <div class="opt">週の始まり<select id="wds">${[0, 1, 5].map(d => `<option value="${d}"${d === wdStart ? ' selected' : ''}>${WD[d]}曜</option>`).join('')}</select></div>
-    <p class="muted">チップの数は TR 数（トレイ）。下の「作業 ◯h / 出勤 ◯h」は、その日の残りの作業の時間（絞り込みに関係なく全部）と、出勤する人の時間の合計。作業が出勤を超える日は赤。</p>`;
+    <div class="opt">週の始まり<select id="wds">${[0, 1, 2, 3, 4, 5, 6].map(d => `<option value="${d}"${d === wdStart ? ' selected' : ''}>${WD[d]}曜</option>`).join('')}</select></div>
+    <p class="muted">チップの数は TR 数（トレイ）。下の「作業 ◯h / 出勤 ◯h」（作業のある日だけ）は、その日の残りの作業の時間（絞り込みに関係なく全部）と、出勤する人の時間の合計。作業が出勤を超える日は赤。</p>`;
   document.querySelectorAll('#side input[data-mix="1"]').forEach(x => { x.indeterminate = true; });
   sideEl.scrollTop = sideTop;
   bindSide();
@@ -378,7 +391,7 @@ function bindSide() {
   side.querySelectorAll('details[data-open]').forEach(d => d.ontoggle = () => { const o = loadJson('calOpen', {}); o[d.dataset.open] = d.open; save('calOpen', JSON.stringify(o)); });
   side.querySelectorAll('summary label').forEach(l => l.onclick = ev => { if (ev.target.tagName !== 'INPUT') { ev.preventDefault(); } });
   side.querySelectorAll('[data-only]').forEach(b => b.onclick = () => { off[b.dataset.only].clear(); changed(); });
-  const all = document.getElementById('all'); if (all) all.onclick = () => { off = fromSaved({}); changed(); };
+  const all = document.getElementById('all'); if (offCount()) all.onclick = () => { off = fromSaved({}); changed(); };
   document.getElementById('preset').onchange = ev => {
     const n = ev.target.value;
     off = fromSaved(n && presets[n] ? presets[n] : {}); presetName = n; save('calPreset', n); saveOff(); drawSide(); draw(true);
@@ -389,7 +402,7 @@ function bindSide() {
     presets[n] = toSaved(off); save('calPresets', JSON.stringify(presets)); presetName = n; save('calPreset', n); drawSide(); toast('「' + n + '」を保存しました');
   };
   const del = document.getElementById('pdel');
-  if (del) del.onclick = () => { if (!confirm('「' + presetName + '」を消しますか？')) return; delete presets[presetName]; save('calPresets', JSON.stringify(presets)); presetName = ''; save('calPreset', ''); drawSide(); };
+  if (presetName) del.onclick = () => { if (!confirm('「' + presetName + '」を消しますか？')) return; delete presets[presetName]; save('calPresets', JSON.stringify(presets)); presetName = ''; save('calPreset', ''); drawSide(); };
   document.getElementById('wds').onchange = ev => { wdStart = Number(ev.target.value); save('calDow', String(wdStart)); const keep = anchorDay(); reset(keep); };
 }
 
@@ -406,7 +419,7 @@ function qtyText(g) { return g.q > 0 ? num(g.q) + 'TR' : g.es.length + '件'; }
 function loadHtml(k) {
   if (k < TODAY || !byDay.has(k) && !capOf.has(k)) return '';
   const h = (byDay.get(k) || []).filter(e => !e.done && e.h != null).reduce((n, e) => n + e.h, 0), cap = capOf.get(k) || 0;
-  if (!h && !cap) return '';
+  if (!(h > 0)) return '';   // 作業のない日は出さない（「作業 0h」が並ぶと見づらい）
   return `<div class="load${h > cap + 1e-9 ? ' over' : ''}" title="残りの作業の時間（1人前で）${num(h)}h／出勤する人の時間の合計 ${num(cap)}h"><span class="lx">作業 </span>${num(h)}h<span class="lx"> / 出勤 ${num(cap)}h</span></div>`;
 }
 const loaded = k => blocks.has(blockOf(k));
@@ -512,11 +525,15 @@ function title() {
   t.textContent = view === 'month' ? mk.slice(0, 4) + '年' + Number(mk.slice(5, 7)) + '月' : mk.slice(0, 4) + '年 ' + md(k) + '〜' + md(addDays(k, 6));
 }
 function notes() {
-  const n = [];
-  if (noBook) n.push('スケジュール用のスプレッドシートがまだないため、出勤の時間は出ません。');
-  if (offCount()) n.push(`絞り込み中：${presetName ? '「' + presetName + '」' : ''}隠しているもの ${offCount()}（左の列で変えられます）`);
-  document.getElementById('notes').innerHTML = n.map(x => `<div class="note">${esc(x)}</div>`).join('');
+  // 出勤の表がないときの知らせは、一度出したら出しっぱなし（出たり消えたりして、カレンダーの大きさが変わらないように）
+  const nb = document.getElementById('notes');
+  if (noBook && !nb.innerHTML) nb.innerHTML = '<div class="note">スケジュール用のスプレッドシートがまだないため、出勤の時間は出ません。</div>';
+  const f = document.getElementById('fnote');
+  f.hidden = !offCount();
+  f.innerHTML = offCount() ? `絞り込み中：${presetName ? esc('「' + presetName + '」') : '隠しているもの ' + offCount()}<button type="button" id="fclear">全部を見る</button>` : '';
+  if (offCount()) document.getElementById('fclear').onclick = () => { off = fromSaved({}); changed(); };
   document.getElementById('fbtn').textContent = offCount() ? '絞り込み（' + offCount() + '）' : '絞り込み';
+  document.getElementById('fbtn').classList.toggle('on', !!offCount());
 }
 let ticking = false;
 function onScroll() {
@@ -538,8 +555,12 @@ sc().addEventListener('scroll', onScroll, { passive: true });
 // 縦のホイールで、週表示を横に送る
 sc().addEventListener('wheel', ev => {
   if (view !== 'week' || Math.abs(ev.deltaX) > Math.abs(ev.deltaY)) return;
-  if (ev.target.closest('.cb') && ev.target.closest('.cb').scrollHeight > ev.target.closest('.cb').clientHeight) return;   // 列の中が長いときは、その列を縦に送る
-  sc().scrollLeft += ev.deltaY; ev.preventDefault();
+  // 列の中が長いときは、Shift を押しながら回すと、その列を縦に送る
+  const cb = ev.target.closest('.cb');
+  if (ev.shiftKey && cb && cb.scrollHeight > cb.clientHeight) return;
+  // ホイールの1目盛りが行単位・ページ単位の機種もあるので、ピクセルに直す
+  const px = ev.deltaMode === 1 ? ev.deltaY * 40 : ev.deltaMode === 2 ? ev.deltaY * sc().clientWidth : ev.deltaY;
+  sc().scrollLeft += px; ev.preventDefault();
 }, { passive: false });
 
 function step(n) {
