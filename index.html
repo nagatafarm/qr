@@ -74,6 +74,12 @@
   .findrow .fs span { margin-right: 10px; white-space: nowrap; }
   .findrow .fs .ok { color: var(--green-d); }
   button.btn-link { cursor: pointer; font-family: inherit; }
+  .btn-link.on { background: var(--green); color: #fff; }
+  /* どの画面でも上の帯に出す3つのボタン（作業を登録する・作業を調べる・スケジュール） */
+  header { flex-wrap: wrap; }
+  header .gnav { order: 9; flex: 1 0 100%; display: flex; gap: 6px; }
+  header .gnav a, header .gnav .hbtn { flex: 1; text-align: center; font-size: 14px; padding: 6px 4px; }
+  header .gnav .on { background: #fff; color: var(--green-d); font-weight: bold; }
 
   /* タブ */
   .tabs { display: flex; gap: 6px; margin-bottom: 12px; border-bottom: 2px solid var(--line); }
@@ -351,7 +357,7 @@ let partAt = 0;                    // パートさん用：最後にさわった
 let gateManual = false;            // 名札の読み取りを手で閉じた（カメラを自動で開き直さない）
 let asking = null;                 // 「〇〇 さんとして記録します」を出している間の名前
 let findText = '';                 // 調べる画面：探す文字
-let findShort = false;             // 調べる画面：不足の一覧を出すか
+let findShort = '';                // 調べる画面：マイナスの一覧（'' 出さない／'open' 未完了／'done' 完了）
 let server = null;                 // 窓口から受け取った最新の状態
 let state = null;                  // 画面に出す状態（server に、まだ送り終わっていない記録を重ねたもの）
 const queue = [];                  // 送る順番待ち（送信中のものも含む）
@@ -366,6 +372,8 @@ const trayEdit = {};               // 手で直した「〇トレイ〇列」（
 const placeEdit = {};              // 入れた場所と不足（計画|工程 → {house, col, num, short, memo}）。画面を描き直しても消えないように
 const fixEdit = {};                // マイナスの一覧で書きかけの ② 対処・③ 解消（記録ID → {kind, grains, due, note, date}）。fixOpen は、書いてある行を直すために開いているもの（記録ID:2・記録ID:3）
 const fixOpen = {};
+const shortPatch = {};             // 送っている途中の ② 対処・③ 解消（記録ID → {seq, f: 書き換える項目}）。窓口の返事が来るまで、画面にはこれを重ねて出す
+const shortExpand = {};            // マイナスの一覧で「対処・解消も登録する」を押して、② ③ の欄を開いている記録（記録ID → true）
 let inSetup = false;               // 担当・名前を選ぶ画面を出しているか（「担当・名前」を押したときも）
 let scan = null;                   // QR をまとめて読んでいる間の状態
 const JSQR_URL = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';   // BarcodeDetector がないブラウザ（iPhone など）で使う
@@ -645,6 +653,7 @@ function popup(kind, msg, sub, onUndo) {
 function rebuild() {
   state = JSON.parse(JSON.stringify(server));
   if (!state.logs) state.logs = [];
+  (state.shorts || []).forEach(x => { if (shortPatch[x.logId]) Object.assign(x, shortPatch[x.logId].f); });   // 送っている途中の対処・解消
   const name = getName();
   queue.forEach(job => {
     if (job.type !== 'record' || job.cancel) return;
@@ -740,7 +749,7 @@ function renderSetup() {
   const canBack = !!getName() && !!role;     // 「担当・名前」から来たときは、変えずにもどれる
   document.getElementById('app').innerHTML = `
     <header><div><h1>QR一元管理</h1><div class="sub">あなたの担当と名前を選んでください</div></div>
-      <div style="display:flex;gap:6px;flex:none"><button type="button" class="hbtn" id="home">最初へ</button></div></header>
+      <div style="display:flex;gap:6px;flex:none"><button type="button" class="hbtn" id="home">最初へ</button></div>${navHtml()}</header>
     <main style="max-width:520px">
       <div class="roles">${roles().map(r => `<button type="button" class="role${r.key === role ? ' sel' : ''}" data-role="${esc(r.key)}">${esc(r.label)}<small>${esc(r.desc)}</small></button>`).join('')}
         <button type="button" class="role part" id="partbtn">パートさん用<small>共有のスマホ用。名札の QR を読んで、その人として記録する</small></button></div>
@@ -775,13 +784,22 @@ function renderSetup() {
   const back = document.getElementById('back'); if (back) back.onclick = () => { inSetup = false; render(); };
   document.getElementById('badgebtn').onclick = () => startScan('badge');
 }
+// どの画面でも上の帯の下段に出す3つのボタン（最初の画面と同じ行き先）。今いる画面のボタンは白くする
+function navHtml() {
+  const cur = inSetup ? '' : page;
+  return `<nav class="gnav"><button type="button" class="hbtn${cur === 'reg' ? ' on' : ''}" data-nav="reg">作業を登録する</button><button type="button" class="hbtn${cur === 'find' ? ' on' : ''}" data-nav="find">作業を調べる</button><a href="schedule.html">スケジュール</a></nav>`;
+}
+document.addEventListener('click', ev => {
+  const b = ev.target.closest && ev.target.closest('[data-nav]');
+  if (b) { ev.preventDefault(); goPage(b.dataset.nav); }
+});
 // 上の帯：題名の下に今の担当と名前。右に「最初へ」「一覧へ」と、「担当・名前」（パートさん用のスマホでは「次の人」）
 function headerHtml(sub, back) {
   return `<header><div style="min-width:0"><h1>QR一元管理${sub ? '<span style="font-size:12px;font-weight:normal">　' + esc(sub) + '</span>' : ''}</h1>
       <div class="sub">${esc(roleLabel())}・${esc(getName())}</div></div>
     <span id="sync" hidden></span>
     <div style="display:flex;gap:6px;flex:none"><button type="button" class="hbtn" id="home">最初へ</button>${back ? '<button type="button" class="hbtn" id="tolist">一覧へ</button>' : ''}${
-      isPart() ? '<button type="button" class="hbtn" id="nextp">次の人</button>' : '<button type="button" class="hbtn" id="chg">担当・名前</button>'}</div></header>`;
+      isPart() ? '<button type="button" class="hbtn" id="nextp">次の人</button>' : '<button type="button" class="hbtn" id="chg">担当・名前</button>'}</div>${navHtml()}</header>`;
 }
 function bindHeader() {
   const c = document.getElementById('chg'); if (c) c.onclick = () => renderSetup();   // 今の担当・名前を選んだまま開く（名前だけ変えるのも2回押すだけ）
@@ -1006,10 +1024,19 @@ function shortCard(x, link, editable) {
   const e = fixEdit[x.logId] || {}, id = esc(x.logId);
   const val = (k, cur) => e[k] !== undefined ? e[k] : (cur === null || cur === undefined ? '' : cur);
   // ② 対処
+  const fixSum = fixText(x) ? `<div class="fx2"><b>② 対処</b><span class="fixed">${esc(fixText(x))}</span><span class="muted">${esc(x.fixBy)} ${esc(x.fixAt)}</span>
+      ${editable ? `<button type="button" class="sub" data-fixopen="${id}:2">直す</button>` : ''}</div>` : '';
+  // ① → ② → ③ の流れ。③ に着くまでは、今の段階だけを出す（① だけ／② の対処まで）。
+  // ② と ③ は書く人がちがうので、書き込む欄は「対処・解消も登録する」を押したときだけ開く
+  const reached3 = ['ok', 'ng', 'no'].includes(st.key);
+  const expanded = reached3 || shortExpand[x.logId] || fixOpen[x.logId + ':2'] || fixOpen[x.logId + ':3'];
+  if (!expanded) {
+    const more = editable ? `<div class="fx2"><button type="button" class="sub" data-shopen="${id}">${fixText(x) ? '解消も登録する' : '対処・解消も登録する'}</button></div>` : '';
+    return shortHead(x, s, st, link, why, info) + fixSum + more + '</div>';
+  }
   let fix;
   if (fixText(x) && !fixOpen[x.logId + ':2']) {
-    fix = `<div class="fx2"><b>② 対処</b><span class="fixed">${esc(fixText(x))}</span><span class="muted">${esc(x.fixBy)} ${esc(x.fixAt)}</span>
-      ${editable ? `<button type="button" class="sub" data-fixopen="${id}:2">直す</button>` : ''}</div>`;
+    fix = fixSum;
   } else if (editable) {
     const kind = val('kind', x.fixKind);
     fix = `<div class="fx2"><b>② 対処</b>
@@ -1028,22 +1055,27 @@ function shortCard(x, link, editable) {
       <button type="button" data-solve="${id}" data-res="できた">解消できた</button><button type="button" class="ng" data-solve="${id}" data-res="できなかった">解消できなかった</button>
       ${x.solved ? `<button type="button" class="sub" data-solve="${id}" data-res="">消す</button>` : ''}</div>`;
   }
+  const close = !reached3 && editable ? `<div class="fx2"><button type="button" class="sub" data-shclose="${id}">閉じる</button></div>` : '';
+  return shortHead(x, s, st, link, why, info) + fix + solve + close + '</div>';
+}
+// マイナスのカードの頭（① 報告）。閉じタグは呼ぶ側で付ける
+function shortHead(x, s, st, link, why, info) {
   return `<div class="sh${st.key === 'ok' ? ' ok' : st.open ? '' : ' closed'}">
     <div class="top"><b class="short">マイナス ${esc(x.short)}本</b><a href="${link === 'open' ? '#' : esc(planUrl(x.id))}"${link === 'open' ? ' data-open="' + esc(x.id) + '"' : ''}>${esc(x.name)}</a><span class="muted">${esc(x.id)}</span>
       <span class="tag ${st.tag}">${st.label}</span></div>
     <div class="t">① 報告　${esc(x.time)}　${esc(x.person)}　${esc(s ? fullTask(s, '：') : x.major + '：' + x.minor)}${placeText(x) ? '　' + esc(placeText(x)) : ''}</div>
     <div class="t">理由：${why ? esc(why) : '（書かれていません）'}</div>
-    ${info ? '<div class="t">' + esc(info) + '</div>' : ''}
-    ${fix}${solve}</div>`;
+    ${info ? '<div class="t">' + esc(info) + '</div>' : ''}`;
 }
 function shortTabHtml() {
   const list = state.shorts || [];
   if (!list.length) return '<div class="empty">マイナスの記録はありません</div><p class="muted">工程シートの「不足の入力」を「あり」にした工程で、完了のときに「マイナス：出た」を選ぶと、ここに並びます。</p>';
   return list.map(x => shortCard(x, 'url', true)).join('') + '<p class="muted">新しい順。② 対処と ③ 解消を書くと、その計画の画面（担当者のスマホ）にも出ます。② を消すときは、種類を「－ 選ぶ －」、メモを空にして「直す」を押します。</p>';
 }
-function shortListHtml() {
-  const list = state.shorts || [];
-  if (!list.length) return '<div class="empty">マイナスの記録はありません</div>';
+// which：'open'（未完了＝③ に着いていない）／'done'（完了）
+function shortListHtml(which) {
+  const list = (state.shorts || []).filter(x => !which || shortState(x).open === (which === 'open'));
+  if (!list.length) return '<div class="empty">' + (which === 'open' ? '未完了のマイナスはありません' : which === 'done' ? '完了したマイナスはありません' : 'マイナスの記録はありません') + '</div>';
   return list.map(x => shortCard(x, 'open', !isPart() && !!getName())).join('');
 }
 function bindShortTab() {
@@ -1052,25 +1084,46 @@ function bindShortTab() {
     if (el.dataset.ff === 'kind') render();   // 「追加播種」なら粒数と解消予定の欄を出す
   });
   document.querySelectorAll('[data-fixopen]').forEach(b => b.onclick = () => { fixOpen[b.dataset.fixopen] = true; render(); });
-  const send = async (id, body, done) => {
-    popup('wait', '書いています…');
-    try {
-      server = await postApi(Object.assign({ logId: id, person: getName(), planner: isPlanner(), staff: !isPart() }, body));
-      delete fixEdit[id]; delete fixOpen[id + ':2']; delete fixOpen[id + ':3'];
+  document.querySelectorAll('[data-shopen]').forEach(b => b.onclick = () => { shortExpand[b.dataset.shopen] = true; render(); });
+  document.querySelectorAll('[data-shclose]').forEach(b => b.onclick = () => {
+    const id = b.dataset.shclose;
+    delete shortExpand[id]; delete fixOpen[id + ':2']; delete fixOpen[id + ':3']; delete fixEdit[id];
+    render();
+  });
+  // 押したらすぐ画面に反映し（shortPatch）、窓口へは裏で送る。窓口は返事に数秒かかるため、待たせない
+  const send = (id, body, done, patch) => {
+    const seq = (shortPatch[id] ? shortPatch[id].seq : 0) + 1;
+    shortPatch[id] = { seq: seq, f: Object.assign({}, shortPatch[id] ? shortPatch[id].f : {}, patch) };
+    delete fixEdit[id]; delete fixOpen[id + ':2']; delete fixOpen[id + ':3']; delete shortExpand[id];   // 書いたら、今の段階だけの表示にもどす
+    rebuild(); render();
+    toast(done);
+    postApi(Object.assign({ logId: id, person: getName(), planner: isPlanner(), staff: !isPart() }, body)).then(s => {
+      server = s;
+      if (shortPatch[id] && shortPatch[id].seq === seq) delete shortPatch[id];
+      rebuild();
+      if (!(document.activeElement && /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName))) render();   // 入力中は描き直さない
+    }).catch(e => {
+      delete shortPatch[id];
       rebuild(); render();
-      popup('ok', done);
-    } catch (e) { popup('err', '書けませんでした', e.message); }
+      popup('err', '書けませんでした（元にもどしました）', e.message);
+    });
   };
+  const now = () => { const d = new Date(), p = n => String(n).padStart(2, '0'); return p(d.getMonth() + 1) + '/' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()); };
   document.querySelectorAll('[data-fixsave]').forEach(b => b.onclick = () => {
     const id = b.dataset.fixsave, cur = (state.shorts || []).find(x => x.logId === id) || {}, e = fixEdit[id] || {};
     const get = (k, c) => String(e[k] !== undefined ? e[k] : (c === null || c === undefined ? '' : c)).trim();
     const kind = get('kind', cur.fixKind), note = get('note', cur.fix);
     if (!kind && !note && !fixText(cur)) { toast('対処を選んでください', true); return; }
-    send(id, { action: 'fixShort', kind: kind, grains: get('grains', cur.grains), due: get('due', cur.due), fix: note }, kind || note ? '対処を書きました' : '対処を消しました');
+    const grains = get('grains', cur.grains), due = get('due', cur.due), has = !!(kind || note);
+    send(id, { action: 'fixShort', kind: kind, grains: grains, due: due, fix: note }, has ? '対処を書きました' : '対処を消しました',
+      has ? { fixKind: kind, grains: kind === '追加播種' ? grains : '', due: kind === '追加播種' ? due : '', fix: note, fixBy: getName(), fixAt: now() }
+        : { fixKind: '', grains: '', due: '', fix: '', fixBy: '', fixAt: '' });
   });
   document.querySelectorAll('[data-solve]').forEach(b => b.onclick = () => {
     const id = b.dataset.solve, el = document.querySelector('[data-fx="' + CSS.escape(id) + '"][data-ff="date"]');
-    send(id, { action: 'solveShort', result: b.dataset.res, date: el ? el.value : '' }, b.dataset.res ? '解消' + b.dataset.res + '、と書きました' : '解消を消しました');
+    const res = b.dataset.res, date = el ? el.value : '';
+    send(id, { action: 'solveShort', result: res, date: date }, res ? '解消' + res + '、と書きました' : '解消を消しました',
+      { solved: res, solvedDate: res ? date : '', solvedBy: res ? getName() : '' });
   });
 }
 
@@ -1437,7 +1490,7 @@ function renderGate() {
   const names = parts.length ? parts : all;
   document.getElementById('app').innerHTML = `
     <header><div><h1>QR一元管理</h1><div class="sub">パートさん用</div></div>
-      <div style="display:flex;gap:6px;flex:none"><button type="button" class="hbtn" id="home">最初へ</button></div></header>
+      <div style="display:flex;gap:6px;flex:none"><button type="button" class="hbtn" id="home">最初へ</button></div>${navHtml()}</header>
     <main style="max-width:520px">
       <div class="card" style="text-align:center">
         <div class="name" style="font-size:20px">自分の名札の QR を読んでください</div>
@@ -1547,17 +1600,17 @@ function bindOpen() {
   document.querySelectorAll('[data-open]').forEach(b => b.onclick = ev => { ev.preventDefault(); openPlan(b.dataset.open, true); });
 }
 function renderFind() {
-  const nShort = shortOpen();
+  const nShort = shortOpen(), nDone = (state.shorts || []).length - nShort;
   document.getElementById('app').innerHTML = `
     <header><div><h1>作業を調べる</h1><div class="sub">計画の中身と進み具合を見る（ここからは記録しません）</div></div>
-      <div style="display:flex;gap:6px;flex:none"><button type="button" class="hbtn" id="home">最初へ</button></div></header>
+      <div style="display:flex;gap:6px;flex:none"><button type="button" class="hbtn" id="home">最初へ</button></div>${navHtml()}</header>
     <main style="max-width:720px">
       <button type="button" class="scanbtn" id="findscan">QR を読む</button>
       <label class="field" style="margin-top:10px">名前・QRID・注文NO で探す<input id="findq" type="search" value="${esc(findText)}" placeholder="例：ミニトマト、26-00012"></label>
       <div style="display:flex;flex-wrap:wrap;gap:6px;margin:12px 0">
-        <a class="btn-link" href="schedule.html">スケジュール</a>
-        <button type="button" class="btn-link" id="findshort">${findShort ? 'マイナスの一覧を閉じる' : 'マイナスの一覧'}${nShort ? '（まだ ' + nShort + '件）' : ''}</button></div>
-      ${findShort ? shortListHtml() : ''}
+        <button type="button" class="btn-link${findShort === 'open' ? ' on' : ''}" data-fs="open">未完了のマイナス（${nShort}件）</button>
+        <button type="button" class="btn-link${findShort === 'done' ? ' on' : ''}" data-fs="done">完了したマイナス（${nDone}件）</button></div>
+      ${findShort ? shortListHtml(findShort) : ''}
       <div class="day"><h3>計画の一覧<span class="muted" id="findcnt">　${findList().length}件</span></h3></div>
       <div id="findlist">${findRowsHtml()}</div>
       <p class="muted">最終更新 ${esc(state.updated)}（自動で更新）。</p>
@@ -1565,7 +1618,8 @@ function renderFind() {
   document.getElementById('bulkbar').hidden = true;
   document.getElementById('home').onclick = () => goPage('front');
   document.getElementById('findscan').onclick = () => startScan('find');
-  document.getElementById('findshort').onclick = () => { findShort = !findShort; render(); };
+  // もう一度押すと閉じる
+  document.querySelectorAll('[data-fs]').forEach(b => b.onclick = () => { findShort = findShort === b.dataset.fs ? '' : b.dataset.fs; render(); });
   if (findShort) bindShortTab();
   // 探す文字を打っている間は、一覧の所だけ描き直す（入力欄を作り直さない）
   document.getElementById('findq').oninput = e => {
@@ -1601,7 +1655,7 @@ function renderPlanView(plan) {
   }).join('');
   document.getElementById('app').innerHTML = `
     <header><div style="min-width:0"><h1>作業を調べる</h1><div class="sub">見るだけの画面です</div></div>
-      <div style="display:flex;gap:6px;flex:none"><button type="button" class="hbtn" id="home">最初へ</button><button type="button" class="hbtn" id="tofind">一覧へ</button></div></header>
+      <div style="display:flex;gap:6px;flex:none"><button type="button" class="hbtn" id="home">最初へ</button><button type="button" class="hbtn" id="tofind">一覧へ</button></div>${navHtml()}</header>
     <main style="max-width:560px">
       <div class="card plan-card">
         <span class="badge">${esc(plan.id)}</span>
