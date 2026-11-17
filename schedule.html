@@ -83,6 +83,17 @@
   #saving { position: fixed; left: 12px; bottom: 12px; z-index: 31; background: #222; color: #fff; font-size: 12px; border-radius: 999px; padding: 4px 12px; opacity: .85; }
   #saving[hidden] { display: none; }
   .job.msel { outline: 3px solid #2f6fb7; }
+  /* 右の引き出し：まだ割り振られていない作業。開くと表の右に場所をあける */
+  #drawer { position: fixed; right: 0; top: var(--top1, 52px); bottom: 0; z-index: 7; pointer-events: none; }
+  #drawer .dtab { pointer-events: auto; position: absolute; right: 0; top: 45%; background: var(--red); color: #fff; border: none; border-radius: 10px 0 0 10px; padding: 10px 10px; font-size: 14px; font-weight: bold; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.2); white-space: nowrap; font-family: inherit; }
+  #drawer .dtab b { display: inline-block; margin-left: 6px; background: #fff; color: var(--red); border-radius: 999px; padding: 0 7px; font-size: 12px; }
+  #drawer .dbody { pointer-events: auto; position: absolute; right: 0; top: 0; bottom: 0; width: min(330px, 86vw); background: #fff; border-left: 2px solid var(--red); box-shadow: -4px 0 14px rgba(0,0,0,.1); overflow-y: auto; padding: 10px 10px 120px; }
+  #drawer .dbody[hidden] { display: none; }
+  body.drawer-on #drawer .dtab { right: min(330px, 86vw); }
+  #drawer .dhead { font-weight: bold; margin-bottom: 4px; }
+  #drawer .task { margin-bottom: 6px; }
+  #drawer .task[draggable=true] { cursor: grab; }
+  @media (min-width: 1040px) { body.drawer-on main { margin-right: 330px; } }
   /* 上の帯の下段：3つのボタン（index.html と同じ） */
   header { flex-wrap: wrap; }
   header .gnav { order: 9; flex: 1 0 100%; display: flex; gap: 6px; }
@@ -110,6 +121,7 @@
 <div id="app"></div>
 <div id="panel" hidden></div>
 <div id="whomenu" hidden></div>
+<aside id="drawer"></aside>
 <div id="busy" hidden>書き込んでいます…</div>
 <div id="saving" hidden>保存中…</div>
 <div id="toast"></div>
@@ -123,12 +135,18 @@ let startPref = load('schedStart');
 let fArea = '', fKubun = '';       // しぼりこみ（エリア・区分）
 let sel = null;                    // 選んでいるもの：{ aid }（割り振りのカード）か { id, key }（足りない作業）
 let dragAid = '';
+let dragTask = null;               // 引き出しからつかんでいる足りない作業 { id, key }
+let drawerOpen = load('schedDrawer') === '1';   // 右の引き出し（足りない作業）を開いているか。このブラウザに覚える
 const multi = new Set();           // Shift を押しながら選んだカード（割り振りID）。まとめて動かす
 const pending = [];                // 窓口へ送る順番待ち（押したらすぐ画面に反映し、裏で送る）
 let sending = false;
 function load(k) { try { return localStorage.getItem('qrdemo.' + k) || ''; } catch (e) { return ''; } }
 function save(k, v) { try { localStorage.setItem('qrdemo.' + k, v); } catch (e) {} }
-const canEdit = () => load('role') === '__all__';     // 手直しできるのは計画担当だけ（index.html の PLANNER と同じ）
+// 前に開いたときの表（このブラウザに取っておく）。開いたらまずこれを出し、最新が届いたら差し替える。古い表の間は手直しできない
+let stale = false;
+function saveLast(key, s) { try { localStorage.setItem('qrdemo.schedLast', JSON.stringify({ key: key, s: s })); } catch (e) {} }
+function loadLast(key) { try { const v = JSON.parse(localStorage.getItem('qrdemo.schedLast') || 'null'); return v && v.key === key && v.s && v.s.days ? v.s : null; } catch (e) { return null; } }
+const canEdit = () => !stale && load('role') === '__all__';     // 手直しできるのは計画担当だけ（index.html の PLANNER と同じ）
 // 人の行の並び順と非表示（このブラウザに覚える。見え方の好みなので、だれでも変えられる）
 function loadList(k) { try { const v = JSON.parse(load(k) || '[]'); return Array.isArray(v) ? v.map(String) : []; } catch (e) { return []; } }
 let rowOrder = loadList('schedOrder');               // 名前の並び。ここに無い人は、シートの順で後ろに付く
@@ -176,7 +194,7 @@ let want = null;                   // 今見たい週の鍵（読み込み中に
 const FRESH_MS = 60000, AROUND_MS = 5 * 60000;
 function remember(key, s) { const v = { s, at: Date.now() }; weekCache.set(key, v); weekCache.set(s.start, v); }
 function forget() { gen++; weekCache.clear(); inflight.clear(); }
-function keep(s) { forget(); remember(s.start, s); }   // 手直しの返事：それだけを覚え直す
+function keep(s) { forget(); remember(s.start, s); if (!from) saveLast(prefStart(), s); }   // 手直しの返事：それだけを覚え直す
 function fetchWeek(key) {
   if (inflight.has(key)) return inflight.get(key);
   const g = gen;
@@ -194,7 +212,7 @@ function prefetchAround() {
     if (!h || Date.now() - h.at >= AROUND_MS) fetchWeek(k).catch(() => {});
   });
 }
-const busyHere = () => sel || multi.size || sending || pending.length || dragAid || dragWho || menuOpen;
+const busyHere = () => sel || multi.size || sending || pending.length || dragAid || dragTask || dragWho || menuOpen;
 function loadingLabel(key) {
   const w = document.querySelector('.bar .week');
   if (w) w.textContent = (key ? Number(key.slice(5, 7)) + '/' + Number(key.slice(8)) + '〜 を' : '') + '読み込んでいます…';
@@ -208,12 +226,16 @@ async function reload(force) {
   if (hit && !force) {
     sch = hit.s; dropGone(); render(); shown = true;
     if (Date.now() - hit.at < FRESH_MS) { prefetchAround(); return; }
-  } else if (sch && !force) loadingLabel(key);
+  } else if (!sch) {
+    const last = loadLast(key);                     // はじめて開いたとき：前の表をすぐ出す
+    if (last) { sch = last; stale = true; render(); shown = true; }
+  } else if (!force) loadingLabel(key);
   try {
     const s = await fetchWeek(key);
     if (want !== key) return;                       // 待っている間に別の週へ移った
-    if ((shown || force) && busyHere()) return;     // 裏の読み直し：さわっている最中なら描き直さない
-    sch = s; dropGone(); render(); prefetchAround();
+    if ((shown || force) && !stale && busyHere()) return;     // 裏の読み直し：さわっている最中なら描き直さない
+    stale = false; sch = s; dropGone(); render(); prefetchAround();
+    if (!from) saveLast(key, s);                    // 取っておくのは、開いたときに出す週（今週）だけ
   } catch (e) { if (want !== key) return; if (!sch) showMessage(e.message); else { toast(e.message, true); if (!shown) render(); } }
 }
 // 手直しを窓口へ送り、返ってきた状態で描き直す
@@ -333,7 +355,7 @@ function render() {
         ${hiddenCount() ? `<button type="button" id="f-hidden">${showHidden ? '非表示の人を隠す' : '非表示の人 ' + hiddenCount() + '人を出す'}</button>` : ''}
         <button type="button" class="auto" id="auto"${canEdit() ? '' : ' disabled'}>自動で組み直す</button>
       </div>
-      ${canEdit() ? '' : '<div class="note">見るだけの画面です。手直しと組み直しは、一覧の画面で担当を「計画担当」にすると使えます。</div>'}
+      ${stale ? `<div class="note">前に開いたときの表（${esc(sch.updated)} 時点）を出しています。最新を読み込んでいます…（読み終わるまで手直しはできません）</div>` : canEdit() ? '' : '<div class="note">見るだけの画面です。手直しと組み直しは、一覧の画面で担当を「計画担当」にすると使えます。</div>'}
       ${sch.noBook ? '<div class="note">スケジュール用のスプレッドシートが、まだありません。QR一元管理デモのスプレッドシートのメニュー「QRデモ → スケジュール用のスプレッドシートを作る」を実行してください。</div>' : ''}
       ${!sch.noBook && !sch.hasPace ? '<div class="note">スケジュール用のスプレッドシートに「作業ペース」のシートがありません。メニュー「QRデモ → スケジュール用のスプレッドシートを付け替える」で同じスプレッドシートを選び直すと、足りないシートができます。</div>' : ''}
       ${!sch.noBook && !sch.people.length ? '<div class="note">「人と仕事」シートに人がいません。名前を書くと、ここに行が出ます。</div>' : ''}
@@ -344,22 +366,38 @@ function render() {
       <p class="muted">カードは、つかんで別のマスへ動かせます（押して選んでから、動かす先のマスを押してもよい）。Shift を押しながらカードを押すと何枚でも選べて、まとめて動かせます。動かしたカードは 📌（固定）になり、「自動で組み直す」で動きません。
         自動で組むのは ${esc(sch.today.slice(5).replace('-', '/'))} から ${esc(sch.horizonEnd.slice(5).replace('-', '/'))} まで。</p>
       <p class="muted">人の名前をつかんで上下へ動かすと、行の並び順を変えられます。名前を右クリックすると、非表示にできます（Shift を押しながら名前を押すと何人でも選べて、まとめて非表示にできる）。非表示の人は、日ごとの出勤・割り振りの合計にも入れません。並び順と非表示は、このブラウザに覚えます。</p>
-      <h2>人手が足りない作業${lackTasks.length ? `<span class="muted">　${lackTasks.length}件</span>` : ''}</h2>
-      ${lackTasks.length ? `<div class="tasks">${lackTasks.map(t => `<div class="task${sel && sel.id === t.id && sel.key === t.key ? ' sel' : ''}" data-tid="${esc(t.id)}" data-tkey="${esc(t.key)}">
-          <div class="nm">${esc(t.name)} <span class="muted">${esc(t.id)}</span></div>
-          <div>${esc(t.task)}　予定日 ${esc(t.dueLabel)}${t.late ? '（過ぎています）' : ''}</div>
-          <div>${esc(t.qty)}${esc(t.unit)}　必要 ${esc(num(t.hours))} 時間　<span class="lk">あと ${esc(num(t.short))} 時間</span><span class="muted">（1人前で）</span></div></div>`).join('')}</div>
-        ${canEdit() ? '<p class="muted">押して選んでから、入れる先のマスを押すと、その人のその日に足せます（固定になる）。</p>' : ''}`
-        : '<div class="muted">ありません。予定日までの作業は、全部だれかに入っています。</div>'}
+      <p class="muted">日付の下の赤い「人手不足」は、その日が予定日の作業（予定日を過ぎた作業は今日）のうち、まだだれにも割り振られていない時間です。割り振られていない作業は、右の「足りない作業」を開くと並んでいます。</p>
       <details><summary>時間を出せない作業・予定日がない作業・古い作業（${sch.unknownCount || sch.unknown.length}件${sch.oldCount ? '。うち古い作業 ' + sch.oldCount + '件' : ''}）</summary>
         ${sch.unknown.length ? `<table class="ut"><thead><tr><th>計画</th><th>工程</th><th>予定日</th><th>わけ</th></tr></thead><tbody>${sch.unknown.map(u =>
           `<tr><td><a href="${esc(planUrl(u.id))}">${esc(u.name)}</a> <span class="muted">${esc(u.id)}</span></td><td>${esc(u.task)}</td><td>${esc(u.due)}</td><td>${esc(u.why)}</td></tr>`).join('')}</tbody></table>`
           : '<div class="muted">ありません。</div>'}
         <p class="muted">「作業ペース」のシートに行を足すか、計画の数量・予定日を入れると、自動の割り振りに入ります。${sch.oldCount ? '古い作業（予定日を ' + sch.oldDays + ' 日より前に過ぎた未完了の作業）は、割り振りに入れていません。日数は「設定」シートの「古い作業の日数」で変えられます（0 にすると全部入れる）。' + (sch.unknown.length < (sch.unknownCount || 0) ? '一覧は先頭の ' + sch.unknown.length + ' 件だけ出しています。' : '') : ''}</p></details>
     </main>`;
+  document.getElementById('drawer').innerHTML = drawerHtml(lackTasks);
+  document.body.classList.toggle('drawer-on', drawerOpen);
   bind();
   renderPanel();
   stick();
+}
+// 右の引き出し：まだ割り振られていない作業（人手が足りない作業）。予定日の順。つかんでマスへ落とすと、その人のその日に足す
+function drawerHtml(list) {
+  const items = list.slice().sort((a, b) => a.due < b.due ? -1 : a.due > b.due ? 1 : 0);
+  return `<button type="button" class="dtab" id="dtab" aria-expanded="${drawerOpen}">${drawerOpen ? '▶ しまう' : '◀ 足りない作業'}${list.length ? `<b>${list.length}</b>` : ''}</button>
+    <div class="dbody"${drawerOpen ? '' : ' hidden'}>
+      <div class="dhead">まだ割り振られていない作業<span class="muted">　${list.length}件</span></div>
+      <p class="muted" style="margin:0 0 8px">${canEdit() ? 'つかんで表のマス（人 × 日）へ落とすと、その人のその日に足せます（固定 📌 になる）。押して選んでからマスを押してもよい。' : '見るだけです。足すのは計画担当だけ。'}</p>
+      ${items.length ? items.map(t => `<div class="task${sel && sel.id === t.id && sel.key === t.key ? ' sel' : ''}" data-tid="${esc(t.id)}" data-tkey="${esc(t.key)}"${canEdit() ? ' draggable="true"' : ''}>
+          <div class="nm">${esc(t.name)} <span class="muted">${esc(t.id)}</span></div>
+          <div>${esc(t.task)}　予定日 ${esc(t.dueLabel)}${t.late ? '<span class="lk">（過ぎています）</span>' : ''}</div>
+          <div>${esc(t.qty)}${esc(t.unit)}　必要 ${esc(num(t.hours))} 時間　<span class="lk">あと ${esc(num(t.short))} 時間</span><span class="muted">（1人前で）</span></div></div>`).join('')
+        : '<div class="muted">ありません。予定日までの作業は、全部だれかに入っています。</div>'}
+    </div>`;
+}
+// 足りない作業 t を、そのマス（人 × 日）に足す。時間は、足りない分（その日の空きがあれば、空きまで）
+function addTask(t, td) {
+  const cap = sch.cap[td.dataset.name][td.dataset.date] || 0;
+  const free = cap - jobsOf(td.dataset.name, td.dataset.date).filter(a => !a.done).reduce((n, a) => n + a.hours, 0);
+  edit({ op: 'add', date: td.dataset.date, name: td.dataset.name, id: t.id, key: t.key, hours: free >= 0.25 ? Math.min(t.short, free) : t.short });   // 足したあと、掛ける数で足りなければ「あと ◯ 時間」が残る
 }
 
 function bind() {
@@ -403,27 +441,42 @@ function bind() {
     };
     el.ondragend = () => { dragAid = ''; document.querySelectorAll('.dragover').forEach(x => x.classList.remove('dragover')); };
   });
-  document.querySelectorAll('.task').forEach(el => el.onclick = () => {
+  document.getElementById('dtab').onclick = () => { drawerOpen = !drawerOpen; save('schedDrawer', drawerOpen ? '1' : ''); render(); };
+  document.querySelectorAll('.task').forEach(el => {
+    el.onclick = () => {
+      if (!canEdit()) return;
+      sel = sel && sel.id === el.dataset.tid && sel.key === el.dataset.tkey ? null : { id: el.dataset.tid, key: el.dataset.tkey };
+      render();
+    };
     if (!canEdit()) return;
-    sel = sel && sel.id === el.dataset.tid && sel.key === el.dataset.tkey ? null : { id: el.dataset.tid, key: el.dataset.tkey };
-    render();
+    el.ondragstart = ev => {
+      dragTask = { id: el.dataset.tid, key: el.dataset.tkey };
+      try { ev.dataTransfer.setData('text/plain', 'task:' + el.dataset.tid); ev.dataTransfer.effectAllowed = 'copy'; } catch (e) {}
+    };
+    el.ondragend = () => { dragTask = null; document.querySelectorAll('.dragover').forEach(x => x.classList.remove('dragover')); };
   });
   if (!canEdit()) return;
   const mc = document.getElementById('m-clear'); if (mc) mc.onclick = () => { multi.clear(); render(); };
   document.querySelectorAll('td.cell').forEach(td => {
-    td.ondragover = ev => { if (dragAid) { ev.preventDefault(); td.classList.add('dragover'); } };
+    td.ondragover = ev => { if (dragAid || dragTask) { ev.preventDefault(); td.classList.add('dragover'); } };
     td.ondragleave = () => td.classList.remove('dragover');
-    td.ondrop = ev => { ev.preventDefault(); const aid = dragAid || ev.dataTransfer.getData('text/plain'); dragAid = ''; if (aid) moveTo(aid, td); };
+    td.ondrop = ev => {
+      ev.preventDefault();
+      if (dragTask) {   // 引き出しの「足りない作業」を落とした
+        const t = sch.tasks.find(x => x.id === dragTask.id && x.key === dragTask.key);
+        dragTask = null; sel = null;
+        if (t) addTask(t, td);
+        return;
+      }
+      const aid = dragAid || ev.dataTransfer.getData('text/plain'); dragAid = '';
+      if (aid && aid.indexOf('task:') !== 0) moveTo(aid, td);
+    };
     td.onclick = () => {
       if (multi.size) return moveTo([...multi][0], td);   // まとめて選んでいるとき：全部をこのマスへ
       if (!sel) return;
       if (sel.aid) return moveTo(sel.aid, td);
-      // 足りない作業を、この人のこの日に足す。時間は、足りない分（その日の空きがあれば、空きまで）
-      const t = sch.tasks.find(x => x.id === sel.id && x.key === sel.key);
-      if (!t) return;
-      const cap = sch.cap[td.dataset.name][td.dataset.date] || 0;
-      const free = cap - jobsOf(td.dataset.name, td.dataset.date).filter(a => !a.done).reduce((n, a) => n + a.hours, 0);
-      edit({ op: 'add', date: td.dataset.date, name: td.dataset.name, id: t.id, key: t.key, hours: free >= 0.25 ? Math.min(t.short, free) : t.short });   // 足したあと、掛ける数で足りなければ「あと ◯ 時間」が残る
+      const t = sch.tasks.find(x => x.id === sel.id && x.key === sel.key);   // 足りない作業を、この人のこの日に足す
+      if (t) addTask(t, td);
     };
   });
 }
