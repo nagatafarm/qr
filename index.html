@@ -440,7 +440,7 @@ function roles() {
       const label = (names.length === 1 && names[0] === m ? m : names.join('・')) + '担当';
       return { key: m, label: label, desc: 'やること：' + names.join(' → ') };
     }))
-    .concat(pestOn() ? [sprayRole()] : []);   // 農薬のシートがあれば「農薬散布担当」も（spray.js）
+    ;   // 「農薬散布担当」は作らない。薬剤散布は、どの担当でも計画の画面の「薬剤散布」から記録する（spray.js）
 }
 function roleLabel() { if (isPart()) return 'パートさん'; const r = roles().find(x => x.key === getRole()); return r ? r.label : ''; }
 function myMajors() { return isPlanner() || isPart() ? majors() : sprayMode() ? [] : [getRole()]; }
@@ -1249,11 +1249,10 @@ function renderPlan(plan) {
       </div>
       ${stepperHtml(plan, false)}
       ${isPlanner() ? `<div class="next ${nx ? '' : 'all'}">${nx ? '次の作業：' + nextFlowHtml(plan, nx) : '✓ すべての工程が完了しました'}</div>` : ''}
-      ${sprayMode() ? pestHistoryHtml(plan) : ''}
       ${sections}
+      ${hasSpray() ? pestHistoryHtml(plan) : ''}
       ${isPlanner() || isPart() ? '' : `<button type="button" class="others" id="others">${showAll ? '自分の担当だけにする' : 'ほかの工程も見る'}</button>`}
       ${isPart() ? '<button type="button" class="primary" id="p-more">ほかの作業を登録する</button><button type="button" class="backbtn" id="p-next">次の人に替わる</button>' : ''}
-      ${sprayMode() || !hasSpray() ? '' : pestHistoryHtml(plan)}
     </main>`;
   bindHeader();
   document.getElementById('bulkbar').hidden = true;
@@ -1851,6 +1850,6 @@ fetchState()
   })
   .catch(e => showMessage(e.message));
 </script>
-<script src="spray.js"></script>
+<script src="spray.js?v=3"></script>
 </body>
 </html>
