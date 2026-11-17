@@ -194,12 +194,17 @@ function bindPhotoInputs() {
 
 // ---------- 画面：農薬散布担当 ----------
 
-function renderSpray() {
-  if (!tab) tab = 'new';
+// 散布の対象に選んであるロット（計画から消えたものは外す）
+function sprayLotList() {
   const lots = sprayLots().map(id => state.plans.find(p => p.id === id)).filter(Boolean);
   if (lots.length !== sprayLots().length) setSprayLots(lots.map(p => p.id));
+  return lots;
+}
+
+// 散布の入力（① ロット ② 薬剤 ③ 使用量・機材・場所）。fixedId があれば、そのロットは外せない（計画画面の「薬剤散布」の中の入力）
+function sprayFormHtml(lots, fixedId) {
   let body;
-  if (tab === 'new') {
+  {
     const names = sprayForm.products.map(p => p.name);
     const chk = sprayCheck(lots, names.filter(Boolean));
     const overAll = chk.some(c => c.over.length);
@@ -210,8 +215,8 @@ function renderSpray() {
     body = `
       <div class="card sp">
         <h3>① 散布したロット <span class="muted">${lots.length}ロット</span></h3>
-        <div class="chips">${lots.map(p => `<span class="chip">${esc(planName(p))} <small>${esc(p.id)}・${esc(p.regItem)}</small><button type="button" data-unlot="${esc(p.id)}" aria-label="外す">×</button></span>`).join('') || '<span class="muted">まだ選んでいません。下の「ロットを選ぶ」か、ロットの QR を読んで「散布の対象に入れる」で足します。</span>'}</div>
-        <button type="button" class="sub-btn" id="pick">${pickerOpen ? '選び終わった' : '＋ ロットを選ぶ'}</button>
+        <div class="chips">${lots.map(p => `<span class="chip">${esc(planName(p))} <small>${esc(p.id)}・${esc(p.regItem)}</small>${p.id === fixedId ? '&nbsp;' : `<button type="button" data-unlot="${esc(p.id)}" aria-label="外す">×</button>`}</span>`).join('') || '<span class="muted">まだ選んでいません。下の「ロットを選ぶ」か、ロットの QR を読んで「散布の対象に入れる」で足します。</span>'}</div>
+        <button type="button" class="sub-btn" id="pick">${pickerOpen ? '選び終わった' : fixedId ? '＋ 一緒に散布したロットを足す' : '＋ ロットを選ぶ'}</button>
         ${pickerOpen ? `<div class="picker">
           <input type="search" id="pq" placeholder="品種・品目・QRID で探す" autocomplete="off">
           <div id="plist"></div></div>` : ''}
@@ -246,7 +251,16 @@ function renderSpray() {
       ${overAll ? '<div class="overbox">使用回数の上限を超えるロットがあるので、記録できません。ロットか薬剤を変えてください。</div>' : ''}
       <button type="button" class="primary" id="spgo"${ready ? '' : ' disabled'}>散布を記録する（${lots.length}ロット × ${names.filter(Boolean).length}剤）</button>
       <p class="muted">使用量は、ロットの TR 数で分けて、ロットごとの量（按分量）も残します。</p>`;
-  } else {
+  }
+  return body;
+}
+
+function renderSpray() {
+  if (!tab) tab = 'new';
+  const lots = sprayLotList();
+  let body;
+  if (tab === 'new') body = sprayFormHtml(lots, '');
+  else {
     const events = sprayEvents(state.pest.sprays.filter(s => isPlanner() || s.person === getName()));
     body = events.map(eventHtml).join('') || '<div class="empty">散布の記録はまだありません</div>';
     body += '<p class="muted">押しまちがえた記録は、24時間以内なら「消す」で消せます（散布記録シートからも消えます）。</p>';
@@ -261,7 +275,9 @@ function renderSpray() {
   document.getElementById('bulkbar').hidden = true;
   document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { tab = b.dataset.tab; render(); });
   bindSprayDelete();
-  if (tab !== 'new') return;
+  if (tab === 'new') bindSprayForm(lots);
+}
+function bindSprayForm(lots) {
   document.querySelectorAll('[data-unlot]').forEach(b => b.onclick = () => { setSprayLots(sprayLots().filter(id => id !== b.dataset.unlot)); render(); });
   document.getElementById('pick').onclick = () => { pickerOpen = !pickerOpen; render(); };
   if (pickerOpen) {
@@ -361,6 +377,7 @@ async function submitSpray() {
     server = s; rebuild();
     const created = s.created || [];
     setSprayLots([]);
+    sprayOpenId = '';
     Object.assign(sprayForm, { products: [{ name: '', dilution: '' }], amount: '', area: '', regChecked: false, washed: false, memo: '' });
     pickerOpen = false;
     render();
@@ -414,16 +431,26 @@ function pestHistoryHtml(plan) {
     const bad = reg && reg.max && c.p[name] >= reg.max;
     return `<span class="tag ${bad ? 'now' : 'ok'}">${esc(name)} ${c.p[name]}${reg && reg.max ? '/' + reg.max : ''}</span>`;
   }).join(' ');
-  const inList = sprayLots().includes(plan.id);
-  return `<section class="major"><h2>農薬の使用履歴<span class="tag ng">${rows.length}件</span></h2>
-    ${isSpray() ? `<button type="button" class="${inList ? 'others' : 'do'}" id="addlot" style="width:100%;margin-bottom:10px">${inList ? '✓ 散布の対象に入っています（外す）' : 'このロットを散布の対象に入れる'}</button>` : ''}
+  // 「薬剤散布を記録する」を押すと、この計画の画面の中で入力する（担当に関係なく、誰でも記録できる）
+  const open = sprayOpenId === plan.id;
+  inlineLots = [];
+  if (open) {
+    inlineLots = sprayLotList();
+    if (!inlineLots.some(p => p.id === plan.id)) inlineLots = [plan].concat(inlineLots);   // このロットは必ず入れる
+    if (inlineLots.length !== sprayLots().length) setSprayLots(inlineLots.map(p => p.id));
+  }
+  return `<section class="major"><h2>薬剤散布<span class="tag ng">${rows.length}件</span></h2>
+    ${open ? sprayFormHtml(inlineLots, plan.id) + '<button type="button" class="others" id="sprayclose" style="width:100%;margin:8px 0 14px">記録せずに閉じる</button>'
+      : '<button type="button" class="primary" id="sprayopen" style="margin-bottom:10px">薬剤散布を記録する</button>'}
+    ${rows.length || open ? '<h3 style="font-size:14px;margin:6px 0">この苗の散布履歴</h3>' : ''}
     ${chips ? `<div style="margin-bottom:8px">${chips}</div>` : ''}
     ${rows.length ? '<button type="button" class="sub-btn" id="pesthprint" style="margin:0 0 8px">この苗の散布履歴を印刷する（A4 横）</button>' : ''}
     ${rows.map(r => `<div class="log">${bottleImg(r.product, 'th')}<div class="body"><div><b>${esc(r.product)}</b>（${esc(r.dilution)}）　${esc(r.share)}L</div>
       <div class="t">${esc(r.time)}　${esc(r.timing)}　${esc(r.place)}　${esc(r.equipment)}　${esc(r.person)}　本剤 ${esc(r.count)}　${esc(r.ingCount)}</div></div></div>`).join('')
-      || '<div class="empty">まだ散布の記録はありません</div>'}
-    ${isSpray() && sprayLots().length ? `<a class="open" href="${esc(APP_URL)}">散布の記録へ（${sprayLots().length}ロット選択中）</a>` : ''}</section>`;
+      || '<div class="empty">まだ散布の記録はありません</div>'}</section>`;
 }
+let sprayOpenId = '';     // 計画画面で「薬剤散布」の入力を開いているロット
+let inlineLots = [];      // その入力の対象のロット（このロット ＋ 一緒に散布したロット）
 // 和暦の日付（記入シートと同じ「令和 年 月 日」）
 function wareki(ymd) {
   const m = String(ymd || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -475,13 +502,11 @@ function printPestHistory(plan) {
 function bindPest(plan) {
   const hp = document.getElementById('pesthprint');
   if (hp) hp.onclick = () => printPestHistory(plan);
-  const b = document.getElementById('addlot');
-  if (b) b.onclick = () => {
-    const ids = sprayLots();
-    setSprayLots(ids.includes(plan.id) ? ids.filter(id => id !== plan.id) : ids.concat(plan.id));
-    toast(ids.includes(plan.id) ? '対象から外しました' : '散布の対象に入れました（' + sprayLots().length + 'ロット）');
-    render();
-  };
+  const o = document.getElementById('sprayopen');
+  if (o) o.onclick = () => { sprayOpenId = plan.id; setSprayLots([plan.id]); pickerOpen = false; render(); };   // 対象は、このロットだけから始める
+  const c = document.getElementById('sprayclose');
+  if (c) c.onclick = () => { sprayOpenId = ''; setSprayLots([]); pickerOpen = false; render(); };
+  if (sprayOpenId === plan.id && document.getElementById('spgo')) bindSprayForm(inlineLots);
 }
 
 // ---------- 計画担当：「農薬」タブ ----------
