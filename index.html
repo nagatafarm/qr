@@ -81,10 +81,28 @@
   header .gnav a, header .gnav .hbtn { flex: 1; text-align: center; font-size: 14px; padding: 6px 4px; }
   header .gnav .on { background: #fff; color: var(--green-d); font-weight: bold; }
   header .hbtn.on { background: rgba(255,255,255,.25); font-weight: bold; }
+  /* 右上の札：今使っている人と役割 */
+  header:has(.me) > div:first-child { flex: 1 1 auto; }
+  header .me { order: 3; display: inline-flex; align-items: center; gap: 8px; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.6); border-radius: 999px; padding: 3px 12px 3px 4px; color: #fff; cursor: pointer; font-family: inherit; text-align: left; max-width: 46vw; }
+  header .me:hover { background: rgba(255,255,255,.22); }
+  header .me .ic { width: 30px; height: 30px; border-radius: 50%; background: #fff; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+  header .me .ic svg { width: 20px; height: 20px; fill: var(--green-d); }
+  header .me .tx { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
+  header .me b { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  header .me small { font-size: 11px; opacity: .9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* スマホ：名前だけの小さな札にして、見出しと同じ段に収める（役割は押した先の画面で分かる） */
+  @media (max-width: 600px) {
+    header .me { padding: 2px 8px 2px 2px; gap: 5px; max-width: 34vw; }
+    header .me .ic { width: 24px; height: 24px; }
+    header .me .ic svg { width: 16px; height: 16px; }
+    header .me small { display: none; }
+    header .me b { font-size: 13px; }
+    header:has(.me) > div:first-child { flex: 1 1 0; }
+  }
   /* スマホのスケジュール画面：上の緑の帯は3つのボタンの1段だけにする（カレンダーと割り振り表の切り替えは、中の白い帯のリンクで） */
   @media (max-width: 820px) {
     header.schedhead { padding: 6px 8px; }
-    header.schedhead .ht, header.schedhead .hsw { display: none !important; }
+    header.schedhead .ht, header.schedhead .hsw, header.schedhead .me { display: none !important; }
     header.schedhead .gnav { gap: 4px; }
     header.schedhead .gnav .hbtn { padding: 5px 2px; font-size: 13px; }
   }
@@ -810,13 +828,23 @@ function renderSetup() {
   document.getElementById('badgebtn').onclick = () => startScan('badge');
 }
 // どの画面でも上の帯の下段に出す3つのボタン（最初の画面と同じ行き先）。今いる画面のボタンは白くする
+// 右上の札：今このスマホ・PC を使っている人の名前と役割（人のアイコン付き）。押すと担当・名前を変える（パートさん用は次の人）
+const ME_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7z"/></svg>';
+function meHtml() {
+  if (inSetup) return '';
+  // スケジュールの画面は、窓口の状態が届く前に描く。そのときは担当の名前が作れないので、計画担当かどうかだけ出す
+  const name = getName(), role = state ? roleLabel() : isPart() ? 'パートさん' : isPlanner() ? '計画担当' : '';
+  return `<button type="button" class="me" data-me title="${isPart() ? '次の人に替わる' : '担当・名前を変える'}"><span class="ic">${ME_ICON}</span><span class="tx"><b>${esc(name || (isPart() ? '名札を読む' : '名前を選ぶ'))}</b><small>${esc(role || '担当なし')}</small></span></button>`;
+}
 function navHtml() {
   const cur = inSetup ? '' : page;
-  return `<nav class="gnav"><button type="button" class="hbtn${cur === 'reg' ? ' on' : ''}" data-nav="reg">作業を登録する</button><button type="button" class="hbtn${cur === 'find' ? ' on' : ''}" data-nav="find">作業を調べる</button><button type="button" class="hbtn${cur === 'schedule' || cur === 'calendar' ? ' on' : ''}" data-nav="calendar">スケジュール</button></nav>`;
+  return meHtml() + `<nav class="gnav"><button type="button" class="hbtn${cur === 'reg' ? ' on' : ''}" data-nav="reg">作業を登録する</button><button type="button" class="hbtn${cur === 'find' ? ' on' : ''}" data-nav="find">作業を調べる</button><button type="button" class="hbtn${cur === 'schedule' || cur === 'calendar' ? ' on' : ''}" data-nav="calendar">スケジュール</button></nav>`;
 }
 document.addEventListener('click', ev => {
   const b = ev.target.closest && ev.target.closest('[data-nav]');
   if (b) { ev.preventDefault(); goPage(b.dataset.nav); }
+  const m = ev.target.closest && ev.target.closest('[data-me]');
+  if (m) { ev.preventDefault(); if (isPart()) nextPerson(); else renderSetup(); }
 });
 // 上の帯：題名の下に今の担当と名前。右に「最初へ」「一覧へ」と、「担当・名前」（パートさん用のスマホでは「次の人」）
 function headerHtml(sub, back) {
@@ -1435,7 +1463,12 @@ function renderFront() {
 function renderSchedule() {
   const src = page === 'calendar' ? 'calendar.html?embed=1' : 'schedule.html?embed=1';
   const old = document.getElementById('schedframe');
-  if (old && old.getAttribute('src') === src) return;
+  if (old && old.getAttribute('src') === src) {
+    // はめ込んだ画面は作り直さず、右上の札だけ新しくする（窓口の状態が届くと、担当の名前が分かる）
+    const me = document.querySelector('#app header .me');
+    if (me) me.outerHTML = meHtml();
+    return;
+  }
   const cal = page === 'calendar';
   document.getElementById('app').innerHTML = `
     <header class="schedhead"><div class="ht"><h1>スケジュール</h1><div class="sub">${cal ? 'いつ・どの作業が・どれだけあるか' : 'いつまでに・どの作業を・だれが'}</div></div>
