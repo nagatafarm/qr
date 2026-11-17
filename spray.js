@@ -52,6 +52,146 @@ function sprayCheck(lots, names) {
   return out;
 }
 
+// ---------- 農薬計画の対象農薬・ボトルの写真 ----------
+// 対象農薬：「農薬計画」シート（NAS の農薬使用計画書から取り込む）のうち、選んだロットの品目の行。
+// ボトルの写真：「農薬」シートの「写真」の列（URL）。画面から撮って登録できる。
+
+(function () {
+  const st = document.createElement('style');
+  st.textContent = `
+  .tg-h { font-size: 13px; font-weight: bold; color: var(--gray); margin: 10px 0 4px; }
+  .tg { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 6px; }
+  .tg-t { display: flex; flex-direction: column; align-items: center; gap: 2px; border: 1px solid #ccc; border-radius: 10px; background: #fff;
+    padding: 6px 4px; font-size: 12px; font-family: inherit; cursor: pointer; text-align: center; line-height: 1.3; color: #222; }
+  .tg-t.on { border-color: var(--green); background: var(--green-l); box-shadow: inset 0 0 0 1px var(--green); }
+  .tg-t.no { opacity: .55; }
+  .tg-t img, .tg-t .noimg { width: 64px; height: 64px; object-fit: contain; border-radius: 6px; background: #f4f4f4; }
+  .noimg { display: flex; align-items: center; justify-content: center; color: #aaa; font-size: 11px; }
+  .tg-t b { font-size: 12px; word-break: break-all; }
+  .tg-t small { color: var(--gray); }
+  .tg-t small.warn { color: var(--orange-d); }
+  .tg-end { border-bottom: 1px dashed #ddd; margin: 12px 0 4px; }
+  .bottle { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 6px; }
+  .bottle img, .bottle .noimg { width: 120px; height: 150px; object-fit: contain; border: 1px solid #ddd; border-radius: 8px; background: #fff; flex: none; }
+  label.sub-btn { display: inline-block; }
+  .log img.th { width: 36px; height: 36px; object-fit: contain; border-radius: 4px; background: #f4f4f4; flex: none; margin-right: 6px; }
+  #printarea { display: none; }
+  @media print {
+    body.pest-print > *:not(#printarea) { display: none !important; }
+    body.pest-print { background: #fff; }
+    body.pest-print #printarea { display: block; color: #000; font-size: 10pt; }
+    #printarea h1 { font-size: 15pt; margin: 0 0 6px; }
+    #printarea table { border-collapse: collapse; width: 100%; }
+    #printarea th, #printarea td { border: 1px solid #000; padding: 3px 4px; vertical-align: top; text-align: left; font-size: 9pt; }
+    #printarea th { background: #eee; font-weight: bold; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    #printarea table.pi { margin-bottom: 8px; }
+    #printarea table.pi th { width: 9em; }
+    #printarea thead { display: table-header-group; }
+    #printarea tr { break-inside: avoid; }
+    #printarea p { margin: 6px 0 0; font-size: 9pt; }
+  }`;
+  document.head.appendChild(st);
+})();
+
+function pestPhoto(name) { const p = pestProduct(name); return p && p.photo ? p.photo : ''; }
+function bottleImg(name, cls) {
+  const u = pestPhoto(name);
+  return u ? `<img${cls ? ' class="' + cls + '"' : ''} src="${esc(u)}" alt="${esc(name)}のボトル" loading="lazy" referrerpolicy="no-referrer">`
+    : (cls ? '' : '<span class="noimg">写真なし</span>');
+}
+function photoButton(name) {
+  return `<label class="sub-btn">${pestPhoto(name) ? '写真を撮り直す' : 'ボトルの写真を撮って登録'}<input type="file" accept="image/*" capture="environment" data-photo="${esc(name)}" hidden></label>`;
+}
+
+// 選んだロットの品目の、農薬計画の行（同じ区分・対象・薬剤・倍率は1つにまとめる）
+let tgList = [];
+function pestTargets(lots) {
+  const all = (state.pest && state.pest.plan) || [];
+  const map = {}, list = [], noPlan = [], labels = [];
+  lots.forEach(p => {
+    if (!p.planItem) { if (!noPlan.includes(p.regItem)) noPlan.push(p.regItem); return; }
+    all.filter(r => r.item === p.planItem && r.year === p.planYear).forEach(r => {
+      const label = r.year + '年 ' + r.item + (r.cond ? '（' + r.cond + '）' : '');
+      if (!labels.includes(label)) labels.push(label);
+      const key = [r.cat, r.target, r.product, r.dilution].join('｜');
+      let t = map[key];
+      if (!t) { t = map[key] = { cat: r.cat, target: r.target, product: r.product, dilution: r.dilution, notes: [], items: [] }; list.push(t); }
+      if (!t.items.includes(r.item)) t.items.push(r.item);
+      if (r.note && !t.notes.includes(r.note)) t.notes.push(r.note);
+    });
+  });
+  return { list, noPlan, labels, items: [...new Set(lots.map(p => p.planItem).filter(Boolean))] };
+}
+// 農薬計画でのその薬剤の倍率（選んだロットで1つに決まるときだけ）
+function planDilution(lots, name) {
+  const d = [...new Set(pestTargets(lots).list.filter(t => t.product === name).map(t => t.dilution).filter(Boolean))];
+  return d.length === 1 ? d[0] : '';
+}
+function targetsHtml(lots) {
+  tgList = [];
+  if (!lots.length || !state.pest.plan || !state.pest.plan.length) return '';
+  const t = pestTargets(lots);
+  const none = t.noPlan.length ? `<p class="muted">農薬計画にない品目：${esc(t.noPlan.join('、'))}（下の「薬剤を選ぶ」から選ぶ）</p>` : '';
+  if (!t.list.length) return none;
+  tgList = t.list;
+  const sel = sprayForm.products.map(p => p.name);
+  const many = t.items.length > 1;
+  let last = '', h = `<div class="muted">農薬計画の対象農薬：${esc(t.labels.join('、'))}。押すと薬剤に入る（もう一度押すと外れる）。</div>`;
+  t.list.forEach((x, i) => {
+    const g = x.cat + (x.target ? '：' + x.target : '');
+    if (g !== last) { h += (last ? '</div>' : '') + `<div class="tg-h">${esc(g)}</div><div class="tg">`; last = g; }
+    h += `<button type="button" class="tg-t${sel.includes(x.product) ? ' on' : ''}${pestProduct(x.product) ? '' : ' no'}" data-tg="${i}">
+      ${bottleImg(x.product)}<b>${esc(x.product)}</b><small>${esc(x.dilution)}${many ? '・' + esc(x.items.join('/')) : ''}</small>
+      ${x.notes.length ? `<small class="warn">${esc(x.notes.join(' '))}</small>` : ''}${pestProduct(x.product) ? '' : '<small class="warn">農薬シートにない</small>'}</button>`;
+  });
+  return h + '</div>' + none + '<div class="tg-end"></div>';
+}
+function pickTarget(t) {
+  if (!pestProduct(t.product)) { toast('「農薬」シートにない薬剤です。計画担当に、農薬シートへ足してもらってください', true); return; }
+  const k = sprayForm.products.findIndex(p => p.name === t.product);
+  if (k >= 0) {
+    sprayForm.products.splice(k, 1);
+    if (!sprayForm.products.length) sprayForm.products.push({ name: '', dilution: '' });
+  } else {
+    const e = sprayForm.products.findIndex(p => !p.name);
+    if (e >= 0) sprayForm.products[e] = { name: t.product, dilution: t.dilution };
+    else if (sprayForm.products.length < 3) sprayForm.products.push({ name: t.product, dilution: t.dilution });
+    else { toast('一度に混ぜられる薬剤は3つまでです', true); return; }
+  }
+  render();
+}
+
+// 写真を縮めて（長い辺 1000px・JPEG）、窓口に送る
+function shrinkImage(file, max) {
+  return new Promise((ok, ng) => {
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      ok(c.toDataURL('image/jpeg', 0.8));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); ng(new Error('写真を読めませんでした。撮り直してください')); };
+    img.src = url;
+  });
+}
+async function uploadPestPhoto(name, file) {
+  popup('wait', '写真を登録しています…', name);
+  try {
+    const data = await shrinkImage(file, 1000);
+    server = await postApi({ action: 'pestPhoto', name, data, person: getName() });
+    rebuild(); render();
+    popup('ok', '写真を登録しました', name);
+  } catch (e) {
+    popup('err', '写真を登録できませんでした', e.message);
+  }
+}
+function bindPhotoInputs() {
+  document.querySelectorAll('input[data-photo]').forEach(i => i.onchange = () => { if (i.files && i.files[0]) uploadPestPhoto(i.dataset.photo, i.files[0]); });
+}
+
 // ---------- 画面：農薬散布担当 ----------
 
 function renderSpray() {
@@ -78,13 +218,15 @@ function renderSpray() {
       </div>
       <div class="card sp">
         <h3>② 薬剤（混ぜた薬剤は3つまで）</h3>
+        ${targetsHtml(lots)}
         ${sprayForm.products.map((pr, k) => {
           const c = pr.name ? chk[ci++] : null;
           const regs = lots.map(p => pestReg(p.regItem, pr.name)).filter(Boolean);
           return `<div class="prow">
             <div class="pline"><select data-prod="${k}">${productOptions(pr.name)}</select>
               ${sprayForm.products.length > 1 ? `<button type="button" class="x" data-rmprod="${k}" aria-label="外す">×</button>` : ''}</div>
-            ${pr.name ? `<div class="pline"><input type="text" data-dil="${k}" value="${esc(pr.dilution)}" placeholder="倍率（例：2000倍）" autocomplete="off">
+            ${pr.name ? `<div class="bottle">${bottleImg(pr.name)}<div><div class="muted">手元のボトルと同じか、写真で確かめる</div>${photoButton(pr.name)}</div></div>
+              <div class="pline"><input type="text" data-dil="${k}" value="${esc(pr.dilution)}" placeholder="倍率（例：2000倍）" autocomplete="off">
               <span class="muted">${regs.length ? '登録：' + esc([...new Set(regs.map(r => r.dilution))].join('／')) : ''}</span></div>
               ${checkHtml(c, pr.name)}` : ''}
           </div>`;
@@ -129,9 +271,11 @@ function renderSpray() {
   }
   document.querySelectorAll('[data-prod]').forEach(s => s.onchange = () => {
     const k = Number(s.dataset.prod);
-    sprayForm.products[k] = { name: s.value, dilution: '' };
+    sprayForm.products[k] = { name: s.value, dilution: planDilution(lots, s.value) };   // 農薬計画に倍率があれば入れておく
     render();
   });
+  document.querySelectorAll('[data-tg]').forEach(b => b.onclick = () => { const t = tgList[Number(b.dataset.tg)]; if (t) pickTarget(t); });
+  bindPhotoInputs();
   document.querySelectorAll('[data-dil]').forEach(i => i.oninput = () => { sprayForm.products[Number(i.dataset.dil)].dilution = i.value; updateGo(); });
   document.querySelectorAll('[data-rmprod]').forEach(b => b.onclick = () => { sprayForm.products.splice(Number(b.dataset.rmprod), 1); render(); });
   const ap = document.getElementById('addprod'); if (ap) ap.onclick = () => { sprayForm.products.push({ name: '', dilution: '' }); render(); };
@@ -274,12 +418,63 @@ function pestHistoryHtml(plan) {
   return `<section class="major"><h2>農薬の使用履歴<span class="tag ng">${rows.length}件</span></h2>
     ${isSpray() ? `<button type="button" class="${inList ? 'others' : 'do'}" id="addlot" style="width:100%;margin-bottom:10px">${inList ? '✓ 散布の対象に入っています（外す）' : 'このロットを散布の対象に入れる'}</button>` : ''}
     ${chips ? `<div style="margin-bottom:8px">${chips}</div>` : ''}
-    ${rows.map(r => `<div class="log"><div class="body"><div><b>${esc(r.product)}</b>（${esc(r.dilution)}）　${esc(r.share)}L</div>
+    ${rows.length ? '<button type="button" class="sub-btn" id="pesthprint" style="margin:0 0 8px">この苗の散布履歴を印刷する（A4 横）</button>' : ''}
+    ${rows.map(r => `<div class="log">${bottleImg(r.product, 'th')}<div class="body"><div><b>${esc(r.product)}</b>（${esc(r.dilution)}）　${esc(r.share)}L</div>
       <div class="t">${esc(r.time)}　${esc(r.timing)}　${esc(r.place)}　${esc(r.equipment)}　${esc(r.person)}　本剤 ${esc(r.count)}　${esc(r.ingCount)}</div></div></div>`).join('')
       || '<div class="empty">まだ散布の記録はありません</div>'}
     ${isSpray() && sprayLots().length ? `<a class="open" href="${esc(APP_URL)}">散布の記録へ（${sprayLots().length}ロット選択中）</a>` : ''}</section>`;
 }
+// 和暦の日付（記入シートと同じ「令和 年 月 日」）
+function wareki(ymd) {
+  const m = String(ymd || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return '';
+  const y = Number(m[1]);
+  return (y >= 2019 ? '令和' + (y - 2018) : y) + '年' + Number(m[2]) + '月' + Number(m[3]) + '日';
+}
+
+// この苗（ロット）の散布履歴を、記入シートと同じ項目の一覧にして印刷する（A4 横）。混用した薬剤は、1回の散布としてまとめる
+function printPestHistory(plan) {
+  const rows = state.pest.sprays.filter(s => s.id === plan.id).slice().reverse();   // 古い順
+  const events = [];
+  rows.forEach(r => { let e = events.find(x => x.id === r.sprayId); if (!e) events.push(e = { id: r.sprayId, rows: [] }); e.rows.push(r); });
+  const c = state.pest.counts[plan.id] || { p: {}, i: {} };
+  const total = Object.keys(c.p).map(name => {
+    const reg = pestReg(plan.regItem, name);
+    return name + ' ' + c.p[name] + '回' + (reg && reg.max ? '（上限' + reg.max + '回）' : '');
+  }).join('、');
+  const td = (v, n) => `<td${n > 1 ? ' rowspan="' + n + '"' : ''}>${esc(v)}</td>`;
+  const body = events.map(e => e.rows.map((r, k) => {
+    const n = e.rows.length;
+    return '<tr>' + (k ? '' : td(wareki(r.date) || r.time, n) + td(r.person, n) + td(r.place, n) + td(r.area, n))
+      + td(r.product) + td(r.ings) + td(r.count) + td(r.ingCount) + td(r.check) + td(r.method + '・' + r.dilution) + td(r.timing)
+      + (k ? '' : td(r.share + 'L' + (String(r.share) !== String(r.amount) ? '（全体 ' + r.amount + 'L）' : ''), n) + td(r.equipment, n) + td(r.washed, n)) + '</tr>';
+  }).join('')).join('');
+  let el = document.getElementById('printarea');
+  if (!el) { el = document.createElement('div'); el.id = 'printarea'; document.body.appendChild(el); }
+  const now = new Date();
+  el.innerHTML = `<h1>農薬使用履歴（病害虫防除 使用農薬）</h1>
+    <table class="pi">
+      <tr><th>対象品目名・品種名</th><td>${esc(planName(plan))}</td><th>QRID</th><td>${esc(plan.id)}</td><th>出荷予定日</th><td>${esc(plan.w['出荷日'] || plan.v['出荷日'] || '')}</td></tr>
+      <tr><th>農薬適用作物名</th><td>${esc(plan.regItem || '')}</td><th>出荷先</th><td>${esc(plan.v['出荷先'] || '')}</td><th>印刷日</th><td>${esc(wareki(now.getFullYear() + '-' + ('0' + (now.getMonth() + 1)).slice(-2) + '-' + ('0' + now.getDate()).slice(-2)))}　${esc(getName())}</td></tr>
+      <tr><th>使用回数の合計</th><td colspan="5">${esc(total || 'なし')}</td></tr>
+    </table>
+    <table><thead><tr><th>農薬使用年月日</th><th>作業者名</th><th>使用場所</th><th>散布面積・割合</th><th>薬剤名</th><th>成分名</th>
+      <th>本剤 使用回数<br>累計/上限</th><th>成分別 使用回数<br>累計/上限</th><th>登録確認<br>（確認者）</th><th>使用方法・希釈倍数</th><th>使用時期</th>
+      <th>使用量</th><th>使用機材</th><th>洗浄確認<br>（確認者）</th></tr></thead>
+      <tbody>${body || '<tr><td colspan="14">散布の記録はありません</td></tr>'}</tbody></table>
+    <p>散布 ${events.length}回・薬剤のべ ${rows.length}件。使用量は、このロットの分（TR 数で分けた量）。同じ日時にまとめて書いてある薬剤は混用。</p>`;
+  const pg = document.createElement('style');
+  pg.textContent = '@page { size: A4 landscape; margin: 10mm; }';
+  document.head.appendChild(pg);
+  document.body.classList.add('pest-print');
+  const done = () => { document.body.classList.remove('pest-print'); pg.remove(); window.removeEventListener('afterprint', done); };
+  window.addEventListener('afterprint', done);
+  window.print();
+}
+
 function bindPest(plan) {
+  const hp = document.getElementById('pesthprint');
+  if (hp) hp.onclick = () => printPestHistory(plan);
   const b = document.getElementById('addlot');
   if (b) b.onclick = () => {
     const ids = sprayLots();
@@ -321,9 +516,14 @@ function plannerPestHtml() {
       ${table ? `<div style="overflow-x:auto"><table class="ut"><tr><th>商品名</th><th>農薬名</th><th>含有有効成分</th><th>使用方法</th><th>回数</th></tr>${table}</table></div>
       <button type="button" class="sub-btn" id="copyhist">表をコピー（Excel に貼れる形）</button>` : '<div class="empty">まだ散布の記録はありません</div>'}
       <p class="muted">回数は、同じ商品名のロットのうち一番多いロットの回数。</p></div>
-    <div class="card sp"><h3>散布の記録（全員・新しい順）</h3>${events.map(eventHtml).join('') || '<div class="empty">まだありません</div>'}</div>`;
+    <div class="card sp"><h3>散布の記録（全員・新しい順）</h3>${events.map(eventHtml).join('') || '<div class="empty">まだありません</div>'}</div>
+    <div class="card sp"><h3>ボトルの写真 <span class="muted">${state.pest.products.filter(p => p.photo).length} / ${state.pest.products.length} 登録済</span></h3>
+      <details><summary class="muted">薬剤ごとの写真を見る・登録する</summary><div class="tg" style="margin-top:8px">${state.pest.products.slice()
+        .sort((a, b) => a.name.localeCompare(b.name, 'ja')).map(p => `<div class="tg-t" style="cursor:default">${bottleImg(p.name)}<b>${esc(p.name)}</b>${photoButton(p.name)}</div>`).join('')}</div></details>
+      <p class="muted">散布の画面で、選んだ薬剤の横に出る。写真は「農薬」シートの「写真」の列（URL）。</p></div>`;
 }
 function bindPlannerPest() {
+  bindPhotoInputs();
   document.querySelectorAll('[data-ship]').forEach(b => b.onclick = () => { pestShipTo = b.dataset.ship; render(); });
   const c = document.getElementById('copyhist');
   if (c) c.onclick = () => {
