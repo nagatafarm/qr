@@ -95,8 +95,9 @@
   .job.msel { outline: 3px solid #2f6fb7; }
   /* 右の引き出し：まだ割り振られていない作業。開くと表の右に場所をあける */
   #drawer { position: fixed; right: 0; top: var(--top1, 52px); bottom: 0; z-index: 7; pointer-events: none; }
-  #drawer .dtab { pointer-events: auto; position: absolute; right: 0; top: 45%; background: var(--red); color: #fff; border: none; border-radius: 10px 0 0 10px; padding: 10px 10px; font-size: 14px; font-weight: bold; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.2); white-space: nowrap; font-family: inherit; }
-  #drawer .dtab b { display: inline-block; margin-left: 6px; background: #fff; color: var(--red); border-radius: 999px; padding: 0 7px; font-size: 12px; }
+  /* つまみは縦書き。画面の縦の真ん中に置く */
+  #drawer .dtab { pointer-events: auto; position: absolute; right: 0; top: 50%; transform: translateY(-50%); writing-mode: vertical-rl; letter-spacing: .12em; background: var(--red); color: #fff; border: none; border-radius: 10px 0 0 10px; padding: 12px 8px; font-size: 14px; font-weight: bold; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.2); white-space: nowrap; font-family: inherit; }
+  #drawer .dtab b { display: inline-block; margin-top: 8px; background: #fff; color: var(--red); border-radius: 999px; padding: 6px 2px; font-size: 12px; letter-spacing: 0; text-combine-upright: all; }
   #drawer .dbody { pointer-events: auto; position: absolute; right: 0; top: 0; bottom: 0; width: min(330px, 86vw); background: #fff; border-left: 2px solid var(--red); box-shadow: -4px 0 14px rgba(0,0,0,.1); overflow-y: auto; padding: 10px 10px 120px; }
   #drawer .dbody[hidden] { display: none; }
   body.drawer-on #drawer .dtab { right: min(330px, 86vw); }
@@ -380,7 +381,7 @@ function render() {
       <p class="muted">カードは、つかんで別のマスへ動かせます（押して選んでから、動かす先のマスを押してもよい）。Shift を押しながらカードを押すと何枚でも選べて、まとめて動かせます。動かしたカードは 📌（固定）になり、「自動で組み直す」で動きません。
         自動で組むのは ${esc(sch.today.slice(5).replace('-', '/'))} から ${esc(sch.horizonEnd.slice(5).replace('-', '/'))} まで。</p>
       <p class="muted">人の名前をつかんで上下へ動かすと、行の並び順を変えられます。名前を右クリックすると、非表示にできます（Shift を押しながら名前を押すと何人でも選べて、まとめて非表示にできる）。非表示の人は、日ごとの出勤・割り振りの合計にも入れません。並び順と非表示は、このブラウザに覚えます。</p>
-      <p class="muted">日付の下の赤い「人手不足」は、その日が予定日の作業（予定日を過ぎた作業は今日）のうち、まだだれにも割り振られていない時間です。割り振られていない作業は、右の「足りない作業」を開くと並んでいます。</p>
+      <p class="muted">日付の下の赤い「人手不足」は、その日が予定日の作業（予定日を過ぎた作業は今日）のうち、まだだれにも割り振られていない時間です。割り振られていない作業は、右の「割り振られていない作業」を開くと並んでいます。</p>
       <details><summary>時間を出せない作業・予定日がない作業・古い作業（${sch.unknownCount || sch.unknown.length}件${sch.oldCount ? '。うち古い作業 ' + sch.oldCount + '件' : ''}）</summary>
         ${sch.unknown.length ? `<table class="ut"><thead><tr><th>計画</th><th>工程</th><th>予定日</th><th>わけ</th></tr></thead><tbody>${sch.unknown.map(u =>
           `<tr><td><a href="${esc(planUrl(u.id))}">${esc(u.name)}</a> <span class="muted">${esc(u.id)}</span></td><td>${esc(u.task)}</td><td>${esc(u.due)}</td><td>${esc(u.why)}</td></tr>`).join('')}</tbody></table>`
@@ -396,7 +397,7 @@ function render() {
 // 右の引き出し：まだ割り振られていない作業（人手が足りない作業）。予定日の順。つかんでマスへ落とすと、その人のその日に足す
 function drawerHtml(list) {
   const items = list.slice().sort((a, b) => a.due < b.due ? -1 : a.due > b.due ? 1 : 0);
-  return `<button type="button" class="dtab" id="dtab" aria-expanded="${drawerOpen}">${drawerOpen ? '▶ しまう' : '◀ 足りない作業'}${list.length ? `<b>${list.length}</b>` : ''}</button>
+  return `<button type="button" class="dtab" id="dtab" aria-expanded="${drawerOpen}">${drawerOpen ? '▶ しまう' : '◀ 割り振られていない作業'}${list.length ? `<b>${list.length}</b>` : ''}</button>
     <div class="dbody"${drawerOpen ? '' : ' hidden'}>
       <div class="dhead">まだ割り振られていない作業<span class="muted">　${list.length}件</span></div>
       <p class="muted" style="margin:0 0 8px">${canEdit() ? 'つかんで表のマス（人 × 日）へ落とすと、その人のその日に足せます（固定 📌 になる）。押して選んでからマスを押してもよい。' : '見るだけです。足すのは計画担当だけ。'}</p>
