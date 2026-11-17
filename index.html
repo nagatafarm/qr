@@ -474,7 +474,23 @@ function stepperHtml(plan, small) {
     const st = majorState(plan, m, nx), pr = majorProgress(plan, m);
     return `<li class="${st}${!isPlanner() && !isPart() && mine.includes(m) ? ' mine' : ''}"><span class="dot">${st === 'done' ? '✓' : i + 1}</span><span class="lb">${esc(m)}</span>
       <span class="ct">${st === 'done' ? '完了' : pr.done + ' / ' + pr.total}</span></li>`;
-  }).join('') + '</ol>';
+  }).join('') + sprayStepHtml(plan, nx, majors().length + 1) + '</ol>';
+}
+// 4つ目のフェーズ「薬散」：鉢上げのあとも出荷まで何回も続くので「完了」にはしない。回数を出す。鉢上げまで終わったら「作業中」
+function sprayCount(plan) {
+  if (!pestOn()) return 0;
+  return new Set(state.pest.sprays.filter(r => r.id === plan.id).map(r => r.sprayId)).size;
+}
+function sprayStepHtml(plan, nx, no) {
+  if (!pestOn()) return '';
+  const n = sprayCount(plan);
+  return `<li class="${!nx ? 'now' : n ? 'part' : ''}"><span class="dot">${no}</span><span class="lb">薬散</span><span class="ct">${n}回</span></li>`;
+}
+// 計画の画面の「次の作業」。工程が全部終わったら、薬散へ進む（薬散がないときは「すべて完了」）
+function nextBoxHtml(plan, nx) {
+  if (nx) return `<div class="next">次の作業：${nextFlowHtml(plan, nx)}</div>`;
+  if (pestOn()) return `<div class="next">次の作業：<b>薬散</b><span class="flater">（これまで ${sprayCount(plan)}回）</span></div>`;
+  return '<div class="next all">✓ すべての工程が完了しました</div>';
 }
 function nextStep(plan) { return state.steps.find(s => !isDone(plan, s)); }
 function nextIn(plan, m) { return majorSteps(m).find(s => !isDone(plan, s)); }
@@ -1248,7 +1264,7 @@ function renderPlan(plan) {
         ${showPlan ? planAllHtml(plan) : ''}
       </div>
       ${stepperHtml(plan, false)}
-      ${isPlanner() ? `<div class="next ${nx ? '' : 'all'}">${nx ? '次の作業：' + nextFlowHtml(plan, nx) : '✓ すべての工程が完了しました'}</div>` : ''}
+      ${isPlanner() ? nextBoxHtml(plan, nx) : ''}
       ${sections}
       ${hasSpray() ? pestHistoryHtml(plan) : ''}
       ${isPlanner() || isPart() ? '' : `<button type="button" class="others" id="others">${showAll ? '自分の担当だけにする' : 'ほかの工程も見る'}</button>`}
@@ -1787,7 +1803,7 @@ function renderPlanView(plan) {
         ${showPlan ? planAllHtml(plan) : ''}
       </div>
       ${stepperHtml(plan, false)}
-      <div class="next ${nx ? '' : 'all'}">${nx ? '次の作業：' + nextFlowHtml(plan, nx) : '✓ すべての工程が完了しました'}</div>
+      ${nextBoxHtml(plan, nx)}
       ${sections}
       ${hasSpray() ? pestHistoryHtml(plan, true) : ''}
       <button type="button" class="backbtn" id="v-back">ほかの計画を調べる</button>
