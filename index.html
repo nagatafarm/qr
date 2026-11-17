@@ -163,6 +163,11 @@
   #scan[hidden] { display: none; }
   #scan video { width: 100%; flex: 1; min-height: 0; object-fit: cover; background: #000; }
   #scan .bar { flex: none; padding: 10px 14px 14px; background: #222; }
+  /* ズーム（カメラが対応しているときだけ出す）。小さなシールに寄らずに読むため */
+  #scan .zoom { flex: none; display: flex; align-items: center; gap: 10px; padding: 8px 14px; background: #222; font-size: 14px; }
+  #scan .zoom[hidden] { display: none; }
+  #scan .zoom input { flex: 1; accent-color: var(--orange); }
+  #scan .zoom b { min-width: 3.2em; text-align: right; }
   #scan .msg { font-size: 14px; }
   #scan .msg.err { color: #ffb4b4; font-weight: bold; }
   #scan .cnt { font-size: 18px; font-weight: bold; margin-top: 4px; }
@@ -350,6 +355,7 @@
   <div class="names" id="reg-names"></div><button type="button" class="no" id="reg-no">やり直す</button></div></div>
 <div id="scan" hidden>
   <video id="scan-video" playsinline muted></video>
+  <div class="zoom" id="scan-zoom" hidden><span>ズーム</span><input type="range" id="scan-zoomr" aria-label="ズーム"><b id="scan-zoomv"></b></div>
   <div class="bar">
     <div class="msg" id="scan-msg"></div>
     <div class="cnt" id="scan-cnt"></div>
@@ -1316,7 +1322,14 @@ async function startScan(mode) {
   }
   let stream;
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
+    // 画質を指定しないと、Android の Chrome は 640×480 で開く（荒く見える）。高い画質を求める（出せない機種は出せる範囲になる）
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
+    } catch (e) {
+      if (e.name !== 'OverconstrainedError') throw e;
+      // まれに、画質の指定で開けない機種がある。そのときは指定なしで開き直す
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
+    }
   } catch (e) {
     if (scan !== me) return;
     return scanDraw(e.name === 'NotAllowedError' || e.name === 'SecurityError' ? 'カメラが許可されていません。ブラウザの設定でこのページのカメラを許可してから、もう一度、読み取りのボタンを押してください。'
@@ -1328,6 +1341,7 @@ async function startScan(mode) {
   me.stream = stream;
   video.srcObject = stream;
   try { await video.play(); } catch (e) {}
+  scanTune(stream);
   // 読み取り：BarcodeDetector があればそれ、なければ jsQR
   let detector = null;
   try {
@@ -1361,6 +1375,27 @@ async function startScan(mode) {
     } catch (e) {}
     me.busy = false;
   }, 250);
+}
+// カメラが対応していれば：ピントを合わせ続ける（連続オートフォーカス）。ズームのつまみを出す（前に使った倍率を覚える）
+function scanTune(stream) {
+  const box = document.getElementById('scan-zoom');
+  box.hidden = true;
+  const tr = stream.getVideoTracks()[0];
+  if (!tr || !tr.getCapabilities) return;
+  let caps = {};
+  try { caps = tr.getCapabilities() || {}; } catch (e) { return; }
+  if ((caps.focusMode || []).includes('continuous')) tr.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(() => {});
+  const z = caps.zoom;
+  if (!z || !(z.max > z.min)) return;
+  const r = document.getElementById('scan-zoomr'), v = document.getElementById('scan-zoomv');
+  const max = Math.min(z.max, Math.max(z.min, 4));   // 4倍まで（それより先は画質が落ちるだけ）
+  r.min = z.min; r.max = max; r.step = z.step || 0.1;
+  let saved = Number(localStorage.getItem('qrdemo.scanZoom'));
+  if (!(saved >= z.min && saved <= max)) saved = z.min;
+  const set = x => { v.textContent = '×' + (Math.round(x * 10) / 10); tr.applyConstraints({ advanced: [{ zoom: x }] }).catch(() => {}); };
+  r.value = saved; set(saved);
+  r.oninput = () => { const x = Number(r.value); set(x); try { localStorage.setItem('qrdemo.scanZoom', String(x)); } catch (e) {} };
+  box.hidden = false;
 }
 function stopScan(keep) {
   const me = scan;

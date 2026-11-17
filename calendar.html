@@ -306,7 +306,7 @@ function ensure(from, to) {
 const tkey = p => p.k + '|' + p.f + '|' + p.i;
 const custOf = p => p.c || '（なし）';
 function shown(e) {
-  const p = plans[e.id] || { k: '販管', f: '未分類', i: '（品目なし）', c: '' };
+  const p = plans[e.id] || { k: '量販', f: '未分類', i: '（品目なし）', c: '' };
   return !off.s.has(e.s) && !off.t.has(tkey(p)) && !off.c.has(custOf(p));
 }
 function eventsOn(k) { return (byDay.get(k) || []).filter(shown); }
@@ -314,7 +314,7 @@ const offCount = () => off.s.size + off.t.size + off.c.size;
 
 // ---- 左の列 ----
 function tree() {
-  // 営利/販管 → 花/野菜 → 品目。数は読み込んだ分の作業の件数
+  // 営利/量販 → 花/野菜 → 品目。数は読み込んだ分の作業の件数
   const t = {}, cnt = {};
   const seen = new Set();
   byDay.forEach(list => list.forEach(e => { cnt[e.id] = (cnt[e.id] || 0) + 1; seen.add(e.id); }));
@@ -324,7 +324,7 @@ function tree() {
   });
   return t;
 }
-const ORDER_K = ['営利', '販管'], ORDER_F = ['野菜', '花', '未分類'];
+const ORDER_K = ['営利', '量販'], ORDER_F = ['野菜', '花', '未分類'];
 const sortBy = order => (a, b) => (order.indexOf(a) < 0 ? 99 : order.indexOf(a)) - (order.indexOf(b) < 0 ? 99 : order.indexOf(b)) || a.localeCompare(b, 'ja');
 function drawSide() {
   const t = tree();
