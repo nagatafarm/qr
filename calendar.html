@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>カレンダー｜QR一元管理</title>
+<script>
+// カレンダーは「index.html?go=calendar」の中にはめ込んで出す（スケジュールと同じ）。直接開いたら、そちらへ移す。
+// ?mock=1 は手元の試験用（cal_mock.json を読む）。はめ込まれたときは、リンクを画面全体で開く
+(function () {
+  const q = location.search, embed = /[?&]embed=1(&|$)/.test(q), mock = /[?&]mock=1(&|$)/.test(q);
+  if (!embed && !mock && window.top === window.self) { location.replace('index.html?go=calendar'); return; }
+  if (embed) {
+    document.documentElement.classList.add('embed');
+    const b = document.createElement('base'); b.target = '_top'; document.head.appendChild(b);
+  }
+})();
+</script>
+<script src="config.js"></script>
+<script src="common.js"></script>
+<style>
+  :root { --green: #4f9363; --green-d: #2f6b3a; --green-l: #f0f6f1; --orange: #d4834a; --orange-l: #fdf5ee; --line: #dfe5e0; --gray: #6b6b6b; --red: #c33; --bg: #f6f7f5; --side: 250px; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--bg); color: #222; font-family: "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif; font-size: 14px; line-height: 1.4; display: flex; flex-direction: column; }
+  button, select, input { font-family: inherit; }
+  header { background: var(--green); color: #fff; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex: none; }
+  header h1 { font-size: 17px; margin: 0; }
+  header a { color: #fff; font-size: 13px; border: 1px solid rgba(255,255,255,.6); border-radius: 8px; padding: 4px 10px; text-decoration: none; white-space: nowrap; }
+  html.embed header, html.embed .bar a.link { display: none; }
+  .muted { color: var(--gray); font-size: 12px; }
+
+  /* 上の帯：今日・前・次・見出し・月/週 */
+  .bar { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 8px 12px; background: #fff; border-bottom: 1px solid var(--line); }
+  .bar button, .bar select { background: #fff; border: 1px solid #bbb; border-radius: 999px; padding: 5px 14px; font-size: 14px; cursor: pointer; color: #222; }
+  .bar .nav { border-radius: 50%; width: 34px; height: 34px; padding: 0; font-size: 15px; }
+  .bar .ttl { font-size: 19px; font-weight: bold; min-width: 9em; }
+  .bar .seg { display: inline-flex; border: 1px solid #bbb; border-radius: 999px; overflow: hidden; }
+  .bar .seg button { border: none; border-radius: 0; padding: 5px 14px; }
+  .bar .seg button.on { background: var(--green-l); color: var(--green-d); font-weight: bold; }
+  .bar .sp { flex: 1; }
+  .bar .loading { font-size: 12px; color: var(--green-d); }
+  .bar .loading[hidden] { display: none; }
+  .bar a.link { font-size: 13px; color: var(--green-d); white-space: nowrap; }
+  #fbtn { display: none; }
+
+  .body { flex: 1; min-height: 0; display: flex; }
+  /* 左の列：レイヤ（チェックで出す・隠す） */
+  aside { width: var(--side); flex: none; overflow-y: auto; background: #fff; border-right: 1px solid var(--line); padding: 10px 12px 60px; }
+  aside h3 { font-size: 13px; margin: 14px 0 6px; color: #333; display: flex; align-items: center; justify-content: space-between; }
+  aside h3:first-child { margin-top: 2px; }
+  aside h3 button { font-size: 11px; background: none; border: none; color: var(--green-d); cursor: pointer; padding: 0; }
+  aside label { display: flex; align-items: center; gap: 7px; padding: 3px 2px; cursor: pointer; font-size: 13px; border-radius: 6px; }
+  aside label:hover { background: #f4f6f4; }
+  aside label .n { margin-left: auto; color: #999; font-size: 11px; }
+  aside input[type=checkbox] { width: 16px; height: 16px; margin: 0; accent-color: var(--c, var(--green)); flex: none; }
+  aside .dot { width: 10px; height: 10px; border-radius: 3px; background: var(--c); flex: none; }
+  aside details { margin-left: 4px; }
+  aside details > summary { list-style: none; cursor: pointer; }
+  aside details > summary::-webkit-details-marker { display: none; }
+  aside details > summary label { padding-left: 0; }
+  aside details > summary .tw { width: 14px; color: #999; font-size: 10px; flex: none; text-align: center; transition: transform .15s; }
+  aside details[open] > summary .tw { transform: rotate(90deg); }
+  aside .kids { margin-left: 20px; }
+  aside .preset { display: flex; gap: 6px; flex-wrap: wrap; }
+  aside .preset select { flex: 1 1 100%; padding: 6px; border: 1px solid #bbb; border-radius: 8px; font-size: 14px; background: #fff; }
+  aside .preset button, aside .allbtn { background: #fff; border: 1px solid #bbb; border-radius: 8px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
+  aside .allbtn { width: 100%; margin-top: 6px; padding: 6px; font-size: 13px; }
+  aside .opt { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--gray); }
+  aside .opt select { font-size: 13px; padding: 3px 6px; border: 1px solid #bbb; border-radius: 6px; }
+
+  main { flex: 1; min-width: 0; display: flex; flex-direction: column; background: #fff; }
+  .note { margin: 8px 12px 0; background: var(--orange-l); border: 1px solid #ecc3a3; color: #9a5320; border-radius: 10px; padding: 6px 10px; font-size: 13px; }
+  .dow { flex: none; display: grid; grid-template-columns: repeat(7, 1fr); border-bottom: 1px solid var(--line); }
+  .dow div { text-align: center; font-size: 11px; color: var(--gray); padding: 4px 0; }
+  .dow .sun { color: #c44; } .dow .sat { color: #2f6fb7; }
+  #scroller { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; position: relative; }
+
+  /* 月表示：週の行を縦に続ける */
+  .wk { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-bottom: 1px solid var(--line); min-height: 118px; }
+  .day { border-right: 1px solid var(--line); padding: 3px 4px 4px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .day:last-child { border-right: none; }
+  .day.odd { background: #fbfbf8; }
+  .day.past { background: #f7f7f7; }
+  .day .dn { text-align: center; font-size: 12px; color: #444; height: 22px; line-height: 22px; }
+  .day .dn b { display: inline-block; min-width: 22px; height: 22px; border-radius: 999px; }
+  .day.today .dn b { background: #1a73e8; color: #fff; }
+  .day.first .dn { font-weight: bold; }
+  .chip { display: flex; align-items: baseline; gap: 4px; width: 100%; text-align: left; border: none; border-radius: 5px; background: var(--c); color: #fff; font-size: 12px; padding: 2px 6px; cursor: pointer; white-space: nowrap; overflow: hidden; }
+  .chip b { font-weight: bold; }
+  .chip small { margin-left: auto; opacity: .9; font-size: 10px; }
+  .chip.done { opacity: .42; }
+  .chip.part { background: linear-gradient(90deg, var(--c) var(--p), color-mix(in srgb, var(--c) 55%, #fff) var(--p)); }
+  .load { margin-top: auto; font-size: 10px; color: #8a8a8a; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .load.over { color: #fff; background: var(--red); border-radius: 4px; padding: 0 4px; font-weight: bold; }
+  .wait { color: #bbb; font-size: 11px; text-align: center; }
+
+  /* 週表示：日の列を横に続ける */
+  #scroller.week { display: flex; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x proximity; }
+  .col { flex: none; width: max(150px, calc((100vw - var(--side) - 2px) / 7));border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; scroll-snap-align: start; }
+  .col.past { background: #f7f7f7; }
+  .col .ch { flex: none; text-align: center; padding: 6px 4px; border-bottom: 1px solid var(--line); background: #fff; }
+  .col.past .ch { background: #f7f7f7; }
+  .col .ch .w { font-size: 11px; color: var(--gray); }
+  .col .ch .w.sun { color: #c44; } .col .ch .w.sat { color: #2f6fb7; }
+  .col .ch .d { font-size: 20px; }
+  .col.today .ch .d b { background: #1a73e8; color: #fff; border-radius: 999px; padding: 0 8px; }
+  .col .ch .load { text-align: center; margin-top: 2px; }
+  .col .cb { flex: 1; overflow-y: auto; padding: 6px; }
+  .grp { margin-bottom: 8px; border-radius: 8px; border: 1px solid color-mix(in srgb, var(--c) 35%, #fff); overflow: hidden; }
+  .grp .gh { background: var(--c); color: #fff; padding: 4px 8px; font-size: 13px; display: flex; gap: 6px; cursor: pointer; }
+  .grp .gh small { margin-left: auto; }
+  .grp a.row { display: block; padding: 4px 8px; border-top: 1px solid #eee; color: #222; text-decoration: none; font-size: 12px; }
+  .grp a.row:hover { background: #f6f8f6; }
+  .grp a.row .nm { font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .grp a.row .sub { color: var(--gray); font-size: 11px; display: flex; gap: 6px; white-space: nowrap; }
+  .grp a.row .sub span { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .grp a.row .sub b { color: #222; margin-left: auto; }
+  .grp a.row.done { opacity: .5; }
+  .grp a.row.done .nm::before { content: '✓ '; color: var(--green-d); }
+  .empty { color: #bbb; font-size: 12px; text-align: center; margin-top: 12px; }
+
+  /* 内訳（チップを押したとき） */
+  #pop { position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,.25); display: flex; align-items: center; justify-content: center; padding: 16px; }
+  #pop[hidden] { display: none; }
+  #pop .box { background: #fff; border-radius: 14px; width: min(560px, 100%); max-height: 86vh; overflow-y: auto; box-shadow: 0 10px 40px rgba(0,0,0,.25); }
+  #pop .ph { padding: 12px 16px; color: #fff; background: var(--c); border-radius: 14px 14px 0 0; display: flex; align-items: flex-start; gap: 8px; position: sticky; top: 0; }
+  #pop .ph h2 { margin: 0; font-size: 17px; flex: 1; }
+  #pop .ph .x { background: rgba(255,255,255,.2); border: none; color: #fff; font-size: 18px; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; }
+  #pop .pb { padding: 10px 16px 16px; }
+  #pop table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 10px; }
+  #pop th, #pop td { border-bottom: 1px solid #eee; padding: 5px 4px; text-align: left; }
+  #pop td.r, #pop th.r { text-align: right; white-space: nowrap; }
+  #pop h4 { margin: 10px 0 4px; font-size: 13px; color: #444; }
+  #pop a { color: #1a5fb4; text-decoration: none; }
+  #pop tr.done td { color: #999; }
+  #pop .tag { display: inline-block; font-size: 10px; border: 1px solid #ccc; border-radius: 999px; padding: 0 5px; margin-left: 4px; color: #666; }
+
+  /* せまい画面：左の列は「絞り込み」ボタンで出す */
+  @media (max-width: 820px) {
+    #fbtn { display: inline-block; }
+    aside { position: fixed; z-index: 30; left: 0; top: 0; bottom: 0; width: min(300px, 86vw); box-shadow: 4px 0 18px rgba(0,0,0,.18); transform: translateX(-105%); transition: transform .2s; }
+    body.side-on aside { transform: none; }
+    body.side-on::after { content: ''; position: fixed; inset: 0; background: rgba(0,0,0,.2); z-index: 29; }
+    .bar .ttl { font-size: 16px; min-width: 0; }
+    .wk { min-height: 92px; }
+    .chip { font-size: 10px; padding: 1px 3px; gap: 2px; }
+    .chip small { display: none; }
+    .load { font-size: 9px; }
+    .wk .load .lx { display: none; }
+    .col { width: 78vw; }
+  }
+  #toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: #222; color: #fff; padding: 10px 16px; border-radius: 10px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 50; max-width: 90%; }
+  #toast.show { opacity: 1; }
+  #toast.err { background: var(--red); }
+</style>
+</head>
+<body>
+<header><h1>カレンダー</h1><a href="index.html">最初へ</a></header>
+<div class="bar">
+  <button type="button" id="fbtn">絞り込み</button>
+  <button type="button" id="today">今日</button>
+  <button type="button" class="nav" id="prev" aria-label="前へ">‹</button>
+  <button type="button" class="nav" id="next" aria-label="次へ">›</button>
+  <span class="ttl" id="ttl"></span>
+  <span class="loading" id="loading" hidden>読み込んでいます…</span>
+  <span class="sp"></span>
+  <span class="seg"><button type="button" data-view="month">月</button><button type="button" data-view="week">週</button></span>
+  <a class="link" href="index.html?go=schedule">人の割り振り表 →</a>
+</div>
+<div class="body">
+  <aside id="side"></aside>
+  <main>
+    <div id="notes"></div>
+    <div class="dow" id="dow"></div>
+    <div id="scroller"></div>
+  </main>
+</div>
+<div id="pop" hidden></div>
+<div id="toast"></div>
+
+<script>
+// ===== カレンダー：計画の作業（工程 × 計画）を、月・週で並べる。左のチェックで出す・隠す（Google カレンダーのレイヤと同じ） =====
+const MOCK = /[?&]mock=1(&|$)/.test(location.search);
+function load(k) { try { return localStorage.getItem('qrdemo.' + k) || ''; } catch (e) { return ''; } }
+function save(k, v) { try { localStorage.setItem('qrdemo.' + k, v); } catch (e) {} }
+function loadJson(k, d) { try { const v = JSON.parse(load(k) || 'null'); return v == null ? d : v; } catch (e) { return d; } }
+function toast(msg, isErr) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'show' + (isErr ? ' err' : '');
+  clearTimeout(toast.timer); toast.timer = setTimeout(() => { t.className = ''; }, 3000);
+}
+const num = h => String(Math.round(Number(h) * 10) / 10);
+
+// ---- 日付（yyyy-MM-dd の文字で持つ） ----
+const DAY = 86400000;
+const utc = k => Date.parse(k + 'T00:00:00Z');
+const addDays = (k, n) => new Date(utc(k) + n * DAY).toISOString().slice(0, 10);
+const dow = k => new Date(utc(k)).getUTCDay();
+const diff = (a, b) => Math.round((utc(b) - utc(a)) / DAY);
+function localToday() { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+const TODAY = localToday();
+const WD = '日月火水木金土';
+const md = k => Number(k.slice(5, 7)) + '/' + Number(k.slice(8));
+const label = k => md(k) + '(' + WD[dow(k)] + ')';
+
+// ---- 見え方の好み（このブラウザに覚える） ----
+let view = load('calView') === 'week' ? 'week' : 'month';
+let wdStart = /^[0-6]$/.test(load('calDow')) ? Number(load('calDow')) : 0;   // 週の始まりの曜日（0＝日）
+// 隠すもの（新しく出てきた工程・品目・取引先は、はじめは出す）。s ＝ 工程、t ＝ 「営利|野菜|トマト」、c ＝ 取引先
+let off = fromSaved(loadJson('calOff', {}));
+let presets = loadJson('calPresets', {});           // 自分の担当：名前 → { s, t, c }
+let presetName = load('calPreset');
+function fromSaved(o) { return { s: new Set(o.s || []), t: new Set(o.t || []), c: new Set(o.c || []) }; }
+function toSaved(o) { return { s: [...o.s], t: [...o.t], c: [...o.c] }; }
+function saveOff() { save('calOff', JSON.stringify(toSaved(off))); }
+
+// ---- 工程の色（決まった色。ほかの工程は順に） ----
+const STEP_COLORS = { '播種': '#8e44ad', '土入れ': '#a0662b', '土並べ': '#b08900', '鉢上げ': '#2e8b57', '接木': '#d0457a', '出荷': '#1a8fd8' };
+const MORE_COLORS = ['#e07b39', '#5c6bc0', '#00897b', '#6d4c41', '#c0392b', '#7f8c8d'];
+function colorOf(s) {
+  if (STEP_COLORS[s]) return STEP_COLORS[s];
+  const i = steps.filter(x => !STEP_COLORS[x]).indexOf(s);
+  return MORE_COLORS[(i < 0 ? 0 : i) % MORE_COLORS.length];
+}
+
+// ---- データ：28日ずつの塊で読む。塊は覚えておき、このブラウザにも取っておく（次に開いたとき、すぐ出す） ----
+const EPOCH = '2025-12-28', BLOCK = 28, FRESH_MS = 60000;
+const blocks = new Map();          // 塊の番号 → { events, days, at }
+const inflight = new Map();
+let plans = {}, steps = [];
+let byDay = new Map();             // 日 → [作業]
+let capOf = new Map();             // 日 → 出勤の時間の合計
+const blockOf = k => Math.floor(diff(EPOCH, k) / BLOCK);
+const blockStart = b => addDays(EPOCH, b * BLOCK);
+(function restore() {
+  const v = loadJson('calCache', null);
+  if (!v || !v.blocks) return;
+  plans = v.plans || {}; steps = v.steps || [];
+  Object.keys(v.blocks).forEach(b => blocks.set(Number(b), Object.assign(v.blocks[b], { at: 0 })));   // 古い扱い（すぐ読み直す）
+  reindex();
+})();
+function persist() {
+  // 今日に近い8塊だけ取っておく（localStorage の大きさを守る）
+  const t = blockOf(TODAY), keep = {};
+  [...blocks.keys()].sort((a, b) => Math.abs(a - t) - Math.abs(b - t)).slice(0, 8).forEach(b => { const x = blocks.get(b); keep[b] = { events: x.events, days: x.days }; });
+  const used = new Set(); Object.values(keep).forEach(x => x.events.forEach(e => used.add(e.id)));
+  const pl = {}; used.forEach(id => { if (plans[id]) pl[id] = plans[id]; });
+  try { localStorage.setItem('qrdemo.calCache', JSON.stringify({ blocks: keep, plans: pl, steps })); } catch (e) {}
+}
+function reindex() {
+  byDay = new Map(); capOf = new Map();
+  blocks.forEach(x => {
+    x.events.forEach(e => { if (!byDay.has(e.d)) byDay.set(e.d, []); byDay.get(e.d).push(e); });
+    x.days.forEach(d => capOf.set(d.d, d.cap));
+  });
+}
+async function fetchRange(from, to) {
+  if (!MOCK) return callApi('api=calendar&from=' + from + '&to=' + to);
+  const all = window.__mock || (window.__mock = await (await fetch('cal_mock.json', { cache: 'no-store' })).json());
+  await new Promise(r => setTimeout(r, 400));
+  return Object.assign({}, all, { from, to, events: all.events.filter(e => e.d >= from && e.d <= to), days: all.days.filter(d => d.d >= from && d.d <= to) });
+}
+function fetchBlock(b) {
+  if (inflight.has(b)) return inflight.get(b);
+  const from = blockStart(b), to = addDays(from, BLOCK - 1);
+  const p = fetchRange(from, to).then(r => {
+    Object.assign(plans, r.plans || {});
+    if (r.steps && r.steps.length) steps = r.steps;
+    blocks.set(b, { events: r.events || [], days: r.days || [], at: Date.now() });
+    if (r.noBook) noBook = true;
+    reindex(); persist(); return r;
+  }).finally(() => { inflight.delete(b); showLoading(); });
+  inflight.set(b, p); showLoading();
+  return p;
+}
+let noBook = false;
+function showLoading() { document.getElementById('loading').hidden = !inflight.size; }
+// 見ている範囲の塊を読む（ない・古いものだけ）。届いたら描き直す
+let lastErr = 0;
+function ensure(from, to) {
+  const need = [];
+  for (let b = blockOf(from); b <= blockOf(to); b++) {
+    const x = blocks.get(b);
+    if (!inflight.has(b) && (!x || Date.now() - x.at > FRESH_MS)) need.push(b);
+  }
+  need.forEach(b => fetchBlock(b).then(() => draw(true)).catch(e => {
+    if (Date.now() - lastErr > 5000) { lastErr = Date.now(); toast(e.message, true); }
+  }));
+}
+
+// ---- 絞り込み ----
+const tkey = p => p.k + '|' + p.f + '|' + p.i;
+const custOf = p => p.c || '（なし）';
+function shown(e) {
+  const p = plans[e.id] || { k: '販管', f: '未分類', i: '（品目なし）', c: '' };
+  return !off.s.has(e.s) && !off.t.has(tkey(p)) && !off.c.has(custOf(p));
+}
+function eventsOn(k) { return (byDay.get(k) || []).filter(shown); }
+const offCount = () => off.s.size + off.t.size + off.c.size;
+
+// ---- 左の列 ----
+function tree() {
+  // 営利/販管 → 花/野菜 → 品目。数は読み込んだ分の作業の件数
+  const t = {}, cnt = {};
+  const seen = new Set();
+  byDay.forEach(list => list.forEach(e => { cnt[e.id] = (cnt[e.id] || 0) + 1; seen.add(e.id); }));
+  seen.forEach(id => {
+    const p = plans[id]; if (!p) return;
+    ((t[p.k] = t[p.k] || {})[p.f] = t[p.k][p.f] || {})[p.i] = (t[p.k][p.f][p.i] || 0) + cnt[id];
+  });
+  return t;
+}
+const ORDER_K = ['営利', '販管'], ORDER_F = ['野菜', '花', '未分類'];
+const sortBy = order => (a, b) => (order.indexOf(a) < 0 ? 99 : order.indexOf(a)) - (order.indexOf(b) < 0 ? 99 : order.indexOf(b)) || a.localeCompare(b, 'ja');
+function drawSide() {
+  const t = tree();
+  const stepCnt = {}, custCnt = {};
+  byDay.forEach(list => list.forEach(e => { stepCnt[e.s] = (stepCnt[e.s] || 0) + 1; const p = plans[e.id]; if (p) custCnt[custOf(p)] = (custCnt[custOf(p)] || 0) + 1; }));
+  const keysUnder = (k, f) => Object.keys(t[k] || {}).filter(x => !f || x === f).flatMap(ff => Object.keys(t[k][ff]).map(i => k + '|' + ff + '|' + i));
+  const box = (keys, attrs) => {
+    const on = keys.filter(x => !off.t.has(x)).length;
+    return `<input type="checkbox" ${attrs} ${on === keys.length ? 'checked' : ''} data-mix="${on > 0 && on < keys.length ? 1 : ''}">`;
+  };
+  const openK = loadJson('calOpen', {});
+  const kHtml = Object.keys(t).sort(sortBy(ORDER_K)).map(k => {
+    const fs = Object.keys(t[k]).sort(sortBy(ORDER_F));
+    return `<details data-open="${esc(k)}"${openK[k] !== false ? ' open' : ''}><summary><label><span class="tw">▶</span>${box(keysUnder(k), `data-tk="${esc(k)}"`)}<b>${esc(k)}</b></label></summary>
+      <div class="kids">${fs.map(f => {
+        const items = Object.keys(t[k][f]).sort((a, b) => a.localeCompare(b, 'ja'));
+        const ok = k + '/' + f;
+        return `<details data-open="${esc(ok)}"${openK[ok] ? ' open' : ''}><summary><label><span class="tw">▶</span>${box(keysUnder(k, f), `data-tk="${esc(k)}" data-tf="${esc(f)}"`)}${esc(f)}<span class="n">${items.length}品目</span></label></summary>
+          <div class="kids">${items.map(i => { const key = k + '|' + f + '|' + i; return `<label><input type="checkbox" data-ti="${esc(key)}"${off.t.has(key) ? '' : ' checked'}>${esc(i)}<span class="n">${t[k][f][i]}</span></label>`; }).join('')}</div></details>`;
+      }).join('')}</div></details>`;
+  }).join('');
+  const custs = Object.keys(custCnt).sort((a, b) => custCnt[b] - custCnt[a] || a.localeCompare(b, 'ja'));
+  const names = Object.keys(presets);
+  const sideEl = document.getElementById('side'), sideTop = sideEl.scrollTop;
+  sideEl.innerHTML = `
+    <h3>自分の担当</h3>
+    <div class="preset"><select id="preset" aria-label="自分の担当"><option value="">全部を見る</option>${names.map(n => `<option${n === presetName ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select>
+      <button type="button" id="psave">今のチェックを保存</button>${presetName ? '<button type="button" id="pdel">この担当を消す</button>' : ''}</div>
+    <p class="muted" style="margin:4px 0 0">よく見る組み合わせ（例：播種＋ヒューケラ）にチェックして保存すると、次から選ぶだけで出せる。</p>
+    ${offCount() ? '<button type="button" class="allbtn" id="all">全部を見る（隠しているもの ' + offCount() + '）</button>' : ''}
+    <h3>工程 <button type="button" data-only="s">全部</button></h3>
+    ${steps.map(s => `<label style="--c:${colorOf(s)}"><input type="checkbox" data-s="${esc(s)}"${off.s.has(s) ? '' : ' checked'}><span class="dot"></span>${esc(s)}<span class="n">${stepCnt[s] || 0}</span></label>`).join('') || '<div class="muted">読み込んでいます…</div>'}
+    <h3>分類 <button type="button" data-only="t">全部</button></h3>
+    ${kHtml || '<div class="muted">まだありません</div>'}
+    <h3>取引先 <button type="button" data-only="c">全部</button></h3>
+    ${custs.map(c => `<label><input type="checkbox" data-c="${esc(c)}"${off.c.has(c) ? '' : ' checked'}>${esc(c)}<span class="n">${custCnt[c]}</span></label>`).join('') || '<div class="muted">まだありません</div>'}
+    <h3>表示</h3>
+    <div class="opt">週の始まり<select id="wds">${[0, 1, 5].map(d => `<option value="${d}"${d === wdStart ? ' selected' : ''}>${WD[d]}曜</option>`).join('')}</select></div>
+    <p class="muted">チップの数は TR 数（トレイ）。下の「作業 ◯h / 出勤 ◯h」は、その日の残りの作業の時間（絞り込みに関係なく全部）と、出勤する人の時間の合計。作業が出勤を超える日は赤。</p>`;
+  document.querySelectorAll('#side input[data-mix="1"]').forEach(x => { x.indeterminate = true; });
+  sideEl.scrollTop = sideTop;
+  bindSide();
+}
+function changed() { presetName = matchPreset(); save('calPreset', presetName); saveOff(); drawSide(); draw(true); }
+function matchPreset() {
+  const cur = JSON.stringify(normalize(toSaved(off)));
+  return Object.keys(presets).find(n => JSON.stringify(normalize(presets[n])) === cur) || '';
+}
+function normalize(o) { return { s: [...o.s].sort(), t: [...o.t].sort(), c: [...o.c].sort() }; }
+function bindSide() {
+  const side = document.getElementById('side');
+  side.querySelectorAll('input[data-s]').forEach(x => x.onchange = () => { x.checked ? off.s.delete(x.dataset.s) : off.s.add(x.dataset.s); changed(); });
+  side.querySelectorAll('input[data-c]').forEach(x => x.onchange = () => { x.checked ? off.c.delete(x.dataset.c) : off.c.add(x.dataset.c); changed(); });
+  side.querySelectorAll('input[data-ti]').forEach(x => x.onchange = () => { x.checked ? off.t.delete(x.dataset.ti) : off.t.add(x.dataset.ti); changed(); });
+  side.querySelectorAll('input[data-tk]').forEach(x => {
+    x.onclick = ev => ev.stopPropagation();
+    x.onchange = () => {
+      const t = tree(), k = x.dataset.tk, f = x.dataset.tf;
+      Object.keys(t[k] || {}).filter(ff => !f || ff === f).forEach(ff => Object.keys(t[k][ff]).forEach(i => { const key = k + '|' + ff + '|' + i; x.checked ? off.t.delete(key) : off.t.add(key); }));
+      changed();
+    };
+  });
+  // 開いた・閉じた分類を覚える
+  side.querySelectorAll('details[data-open]').forEach(d => d.ontoggle = () => { const o = loadJson('calOpen', {}); o[d.dataset.open] = d.open; save('calOpen', JSON.stringify(o)); });
+  side.querySelectorAll('summary label').forEach(l => l.onclick = ev => { if (ev.target.tagName !== 'INPUT') { ev.preventDefault(); } });
+  side.querySelectorAll('[data-only]').forEach(b => b.onclick = () => { off[b.dataset.only].clear(); changed(); });
+  const all = document.getElementById('all'); if (all) all.onclick = () => { off = fromSaved({}); changed(); };
+  document.getElementById('preset').onchange = ev => {
+    const n = ev.target.value;
+    off = fromSaved(n && presets[n] ? presets[n] : {}); presetName = n; save('calPreset', n); saveOff(); drawSide(); draw(true);
+  };
+  document.getElementById('psave').onclick = () => {
+    const n = (prompt('担当の名前（例：播種・ヒューケラ）', presetName || '') || '').trim();
+    if (!n) return;
+    presets[n] = toSaved(off); save('calPresets', JSON.stringify(presets)); presetName = n; save('calPreset', n); drawSide(); toast('「' + n + '」を保存しました');
+  };
+  const del = document.getElementById('pdel');
+  if (del) del.onclick = () => { if (!confirm('「' + presetName + '」を消しますか？')) return; delete presets[presetName]; save('calPresets', JSON.stringify(presets)); presetName = ''; save('calPreset', ''); drawSide(); };
+  document.getElementById('wds').onchange = ev => { wdStart = Number(ev.target.value); save('calDow', String(wdStart)); const keep = anchorDay(); reset(keep); };
+}
+
+// ---- 1日のチップと、作業の時間の行 ----
+function stepGroups(list) {
+  const g = new Map();
+  list.forEach(e => { if (!g.has(e.s)) g.set(e.s, []); g.get(e.s).push(e); });
+  return steps.filter(s => g.has(s)).concat([...g.keys()].filter(s => !steps.includes(s))).map(s => {
+    const es = g.get(s), q = es.reduce((n, e) => n + (Number(e.q) || 0), 0), dn = es.filter(e => e.done).length;
+    return { s, es, q, dn };
+  });
+}
+function qtyText(g) { return g.q > 0 ? num(g.q) + 'TR' : g.es.length + '件'; }
+function loadHtml(k) {
+  if (k < TODAY || !byDay.has(k) && !capOf.has(k)) return '';
+  const h = (byDay.get(k) || []).filter(e => !e.done && e.h != null).reduce((n, e) => n + e.h, 0), cap = capOf.get(k) || 0;
+  if (!h && !cap) return '';
+  return `<div class="load${h > cap + 1e-9 ? ' over' : ''}" title="残りの作業の時間（1人前で）${num(h)}h／出勤する人の時間の合計 ${num(cap)}h"><span class="lx">作業 </span>${num(h)}h<span class="lx"> / 出勤 ${num(cap)}h</span></div>`;
+}
+const loaded = k => blocks.has(blockOf(k));
+
+// ---- 月表示：週の行を縦に続ける。端に近づいたら、前後に4週ずつ足す ----
+let weeks = [];                    // 週の始まりの日
+const weekOf = k => addDays(k, -((dow(k) - wdStart + 7) % 7));
+function monthCells(w) {
+  return Array.from({ length: 7 }, (_, i) => {
+    const k = addDays(w, i), first = k.slice(8) === '01', m = Number(k.slice(5, 7));
+    const gs = stepGroups(eventsOn(k));
+    return `<div class="day${m % 2 ? ' odd' : ''}${k < TODAY ? ' past' : ''}${k === TODAY ? ' today' : ''}${first ? ' first' : ''}" data-d="${k}">
+      <div class="dn"><b>${first ? m + '月1日' : Number(k.slice(8))}</b></div>
+      ${!loaded(k) ? '<div class="wait">…</div>' : gs.map(g => {
+        const p = g.dn && g.dn < g.es.length ? Math.round(g.dn / g.es.length * 100) : 0;
+        return `<button type="button" class="chip${g.dn === g.es.length ? ' done' : ''}${p ? ' part' : ''}" style="--c:${colorOf(g.s)}${p ? ';--p:' + p + '%' : ''}" data-d="${k}" data-s="${esc(g.s)}" title="${esc(g.s)} ${esc(qtyText(g))}・${g.es.length}件${g.dn ? '（済 ' + g.dn + '件）' : ''}"><b>${esc(g.s)}</b>${esc(qtyText(g))}<small>${g.es.length}件</small></button>`;
+      }).join('')}
+      ${loadHtml(k)}</div>`;
+  }).join('');
+}
+function drawMonth() {
+  document.getElementById('dow').innerHTML = Array.from({ length: 7 }, (_, i) => { const d = (wdStart + i) % 7; return `<div class="${d === 0 ? 'sun' : d === 6 ? 'sat' : ''}">${WD[d]}</div>`; }).join('');
+  document.getElementById('scroller').innerHTML = weeks.map(w => `<div class="wk" data-w="${w}">${monthCells(w)}</div>`).join('');
+}
+
+// ---- 週表示：日の列を横に続ける。端に近づいたら、前後に7日ずつ足す ----
+let cols = [];
+function colHtml(k) {
+  const gs = stepGroups(eventsOn(k)), d = dow(k);
+  return `<div class="col${k < TODAY ? ' past' : ''}${k === TODAY ? ' today' : ''}" data-d="${k}">
+    <div class="ch"><div class="w ${d === 0 ? 'sun' : d === 6 ? 'sat' : ''}">${WD[d]}</div><div class="d"><b>${k.slice(8) === '01' ? Number(k.slice(5, 7)) + '/' : ''}${Number(k.slice(8))}</b></div>${loadHtml(k)}</div>
+    <div class="cb">${!loaded(k) ? '<div class="empty">読み込んでいます…</div>' : gs.length ? gs.map(g => `<div class="grp" style="--c:${colorOf(g.s)}">
+        <div class="gh" data-d="${k}" data-s="${esc(g.s)}"><b>${esc(g.s)}</b>${esc(qtyText(g))}<small>${g.es.length}件 ›</small></div>
+        ${g.es.slice().sort(byPlan).map(rowHtml).join('')}</div>`).join('') : '<div class="empty">ありません</div>'}</div></div>`;
+}
+const byPlan = (a, b) => (a.done - b.done) || (custOf(plans[a.id] || {}) > custOf(plans[b.id] || {}) ? 1 : -1);
+function rowHtml(e) {
+  const p = plans[e.id] || { n: e.id };
+  return `<a class="row${e.done ? ' done' : ''}" href="index.html?id=${encodeURIComponent(e.id)}&view=1"><div class="nm">${esc(p.n)}</div>
+    <div class="sub"><span>${esc(p.c || '')}</span><span>${esc(p.k || '')}・${esc(p.f || '')}</span><b>${e.q !== '' ? esc(num(e.q)) + esc(e.u) : ''}</b></div></a>`;
+}
+function drawWeek() {
+  document.getElementById('dow').innerHTML = '';
+  document.getElementById('scroller').innerHTML = cols.map(colHtml).join('');
+}
+
+// ---- 描く・動かす ----
+const sc = () => document.getElementById('scroller');
+// keepPos：描き直しても、見ていた所（いちばん上の週・いちばん左の日）を動かさない
+function draw(keepPos) {
+  const s = sc(), a = keepPos ? anchor() : null;
+  document.querySelectorAll('.seg button').forEach(b => b.classList.toggle('on', b.dataset.view === view));
+  s.className = view === 'week' ? 'week' : '';
+  if (view === 'month') drawMonth(); else drawWeek();
+  if (a) restoreAnchor(a);
+  notes();
+  title();
+}
+function anchor() {
+  const s = sc();
+  if (view === 'month') {
+    const r = [...s.querySelectorAll('.wk')].find(x => x.offsetTop + x.offsetHeight > s.scrollTop);
+    return r ? { k: r.dataset.w, off: r.offsetTop - s.scrollTop } : null;
+  }
+  const c = [...s.querySelectorAll('.col')].find(x => x.offsetLeft + x.offsetWidth > s.scrollLeft);
+  return c ? { k: c.dataset.d, off: c.offsetLeft - s.scrollLeft } : null;
+}
+function restoreAnchor(a) {
+  const s = sc();
+  const el = s.querySelector(view === 'month' ? `.wk[data-w="${a.k}"]` : `.col[data-d="${a.k}"]`);
+  if (!el) return;
+  if (view === 'month') s.scrollTop = el.offsetTop - a.off; else s.scrollLeft = el.offsetLeft - a.off;
+}
+// 見ている所の日（いちばん上の週の始まり・いちばん左の日）
+function anchorDay() { const a = anchor(); return a ? a.k : TODAY; }
+function scrollToDay(k, smooth) {
+  const s = sc();
+  if (view === 'month') {
+    const el = s.querySelector(`.wk[data-w="${weekOf(k)}"]`);
+    if (el) s.scrollTo({ top: el.offsetTop, behavior: smooth ? 'smooth' : 'auto' });
+  } else {
+    const el = s.querySelector(`.col[data-d="${k}"]`);
+    if (el) s.scrollTo({ left: el.offsetLeft, behavior: smooth ? 'smooth' : 'auto' });
+  }
+}
+// k の日のあたりを中心に、作り直す
+function reset(k) {
+  k = k || TODAY;
+  if (view === 'month') { const w = weekOf(k); weeks = Array.from({ length: 14 }, (_, i) => addDays(w, (i - 5) * 7)); }
+  else { const w = weekOf(k); cols = Array.from({ length: 35 }, (_, i) => addDays(w, i - 14)); }
+  draw(false);
+  scrollToDay(view === 'month' ? weekOf(k) : weekOf(k));
+  need();
+}
+function need() {
+  if (view === 'month') ensure(weeks[0], addDays(weeks[weeks.length - 1], 6)); else ensure(cols[0], cols[cols.length - 1]);
+}
+function title() {
+  const k = anchorDay();
+  // 月表示：いちばん上に見えている週の、木曜あたりの月。週表示：左の日から7日
+  const mk = view === 'month' ? addDays(k, 3) : k;
+  const t = document.getElementById('ttl');
+  t.textContent = view === 'month' ? mk.slice(0, 4) + '年' + Number(mk.slice(5, 7)) + '月' : mk.slice(0, 4) + '年 ' + md(k) + '〜' + md(addDays(k, 6));
+}
+function notes() {
+  const n = [];
+  if (noBook) n.push('スケジュール用のスプレッドシートがまだないため、出勤の時間は出ません。');
+  if (offCount()) n.push(`絞り込み中：${presetName ? '「' + presetName + '」' : ''}隠しているもの ${offCount()}（左の列で変えられます）`);
+  document.getElementById('notes').innerHTML = n.map(x => `<div class="note">${esc(x)}</div>`).join('');
+  document.getElementById('fbtn').textContent = offCount() ? '絞り込み（' + offCount() + '）' : '絞り込み';
+}
+let ticking = false;
+function onScroll() {
+  if (ticking) return; ticking = true;
+  requestAnimationFrame(() => {
+    ticking = false;
+    const s = sc();
+    title();
+    if (view === 'month') {
+      if (s.scrollTop < 300) { weeks = Array.from({ length: 4 }, (_, i) => addDays(weeks[0], (i - 4) * 7)).concat(weeks); draw(true); need(); }
+      else if (s.scrollTop + s.clientHeight > s.scrollHeight - 300) { const l = weeks[weeks.length - 1]; weeks = weeks.concat(Array.from({ length: 4 }, (_, i) => addDays(l, (i + 1) * 7))); draw(true); need(); }
+    } else {
+      if (s.scrollLeft < 300) { cols = Array.from({ length: 7 }, (_, i) => addDays(cols[0], i - 7)).concat(cols); draw(true); need(); }
+      else if (s.scrollLeft + s.clientWidth > s.scrollWidth - 300) { const l = cols[cols.length - 1]; cols = cols.concat(Array.from({ length: 7 }, (_, i) => addDays(l, i + 1))); draw(true); need(); }
+    }
+  });
+}
+sc().addEventListener('scroll', onScroll, { passive: true });
+// 縦のホイールで、週表示を横に送る
+sc().addEventListener('wheel', ev => {
+  if (view !== 'week' || Math.abs(ev.deltaX) > Math.abs(ev.deltaY)) return;
+  if (ev.target.closest('.cb') && ev.target.closest('.cb').scrollHeight > ev.target.closest('.cb').clientHeight) return;   // 列の中が長いときは、その列を縦に送る
+  sc().scrollLeft += ev.deltaY; ev.preventDefault();
+}, { passive: false });
+
+function step(n) {
+  const k = anchorDay();
+  if (view === 'month') {
+    const m = addDays(k, 3), y = Number(m.slice(0, 4)), mo = Number(m.slice(5, 7)) - 1 + n;
+    const first = new Date(Date.UTC(y, mo, 1)).toISOString().slice(0, 10);
+    if (!sc().querySelector(`.wk[data-w="${weekOf(first)}"]`)) return reset(first);
+    scrollToDay(first, true);
+  } else {
+    const t = addDays(k, 7 * n);
+    if (!sc().querySelector(`.col[data-d="${t}"]`)) return reset(t);
+    scrollToDay(t, true);
+  }
+}
+document.getElementById('prev').onclick = () => step(-1);
+document.getElementById('next').onclick = () => step(1);
+document.getElementById('today').onclick = () => { if (!sc().querySelector(view === 'month' ? `.wk[data-w="${weekOf(TODAY)}"]` : `.col[data-d="${TODAY}"]`)) reset(TODAY); else scrollToDay(view === 'month' ? weekOf(TODAY) : weekOf(TODAY), true); };
+document.querySelectorAll('.seg button').forEach(b => b.onclick = () => {
+  if (b.dataset.view === view) return;
+  const k = anchorDay(); view = b.dataset.view; save('calView', view); reset(view === 'week' ? (k <= TODAY && TODAY < addDays(k, 7 * 5) ? TODAY : k) : k);
+});
+document.getElementById('fbtn').onclick = () => document.body.classList.toggle('side-on');
+document.body.addEventListener('click', ev => { if (document.body.classList.contains('side-on') && !ev.target.closest('aside') && ev.target.id !== 'fbtn') document.body.classList.remove('side-on'); });
+
+// ---- 内訳（チップ・見出しを押したとき）：取引先ごとの量と、計画の一覧 ----
+sc().addEventListener('click', ev => {
+  const c = ev.target.closest('.chip, .gh');
+  if (c) openPop(c.dataset.d, c.dataset.s);
+});
+function openPop(k, s) {
+  const es = eventsOn(k).filter(e => e.s === s);
+  if (!es.length) return;
+  const by = new Map();
+  es.forEach(e => { const p = plans[e.id] || {}, c = custOf(p); if (!by.has(c)) by.set(c, { q: 0, n: 0, dn: 0 }); const x = by.get(c); x.q += Number(e.q) || 0; x.n++; if (e.done) x.dn++; });
+  const total = es.reduce((n, e) => n + (Number(e.q) || 0), 0), h = es.filter(e => !e.done && e.h != null).reduce((n, e) => n + e.h, 0);
+  const pop = document.getElementById('pop');
+  pop.innerHTML = `<div class="box" role="dialog" aria-label="${esc(s)}の内訳" style="--c:${colorOf(s)}">
+    <div class="ph"><h2>${esc(label(k))}　${esc(s)}<br><span style="font-size:14px;font-weight:normal">${total ? num(total) + 'TR・' : ''}${es.length}件${es.some(e => e.done) ? '（済 ' + es.filter(e => e.done).length + '件）' : ''}${h ? '・残り ' + num(h) + ' 時間' : ''}</span></h2><button type="button" class="x" aria-label="閉じる">×</button></div>
+    <div class="pb">
+      <h4>取引先ごと</h4>
+      <table><thead><tr><th>取引先</th><th class="r">量</th><th class="r">件数</th></tr></thead><tbody>
+        ${[...by.entries()].sort((a, b) => b[1].q - a[1].q || b[1].n - a[1].n).map(([c, x]) => `<tr><td>${esc(c)}</td><td class="r">${x.q ? num(x.q) + 'TR' : '—'}</td><td class="r">${x.n}件${x.dn ? '（済 ' + x.dn + '）' : ''}</td></tr>`).join('')}
+      </tbody></table>
+      <h4>計画</h4>
+      <table><thead><tr><th>計画</th><th>取引先</th><th class="r">量</th><th class="r">時間</th></tr></thead><tbody>
+        ${es.slice().sort(byPlan).map(e => { const p = plans[e.id] || { n: e.id }; return `<tr class="${e.done ? 'done' : ''}"><td>${e.done ? '✓ ' : ''}<a href="index.html?id=${encodeURIComponent(e.id)}&view=1">${esc(p.n)}</a><span class="tag">${esc(p.k || '')}・${esc(p.f || '')}</span><div class="muted">${esc(e.id)}${p.v ? '　' + esc(p.v) : ''}</div></td><td>${esc(p.c || '')}</td><td class="r">${e.q !== '' ? esc(num(e.q)) + esc(e.u) : '—'}</td><td class="r">${e.done ? '済' : e.h != null ? num(e.h) + 'h' : '—'}</td></tr>`; }).join('')}
+      </tbody></table>
+      <p class="muted">時間は、残りの作業の時間（1人前で。作業ペースのシートから）。計画の名前を押すと、その計画の画面を開きます。</p>
+    </div></div>`;
+  pop.hidden = false;
+  pop.querySelector('.x').onclick = () => { pop.hidden = true; };
+}
+document.getElementById('pop').addEventListener('click', ev => { if (ev.target.id === 'pop') ev.currentTarget.hidden = true; });
+document.addEventListener('keydown', ev => { if (ev.key === 'Escape') document.getElementById('pop').hidden = true; });
+
+// ---- はじめ ----
+presetName = matchPreset();
+drawSide();
+reset(TODAY);
+// 手元の試験用：?mock=1&pop=日|工程 で、読み込んだあと内訳を開く
+if (MOCK && /[?&]pop=/.test(location.search)) {
+  const [pk, ps] = decodeURIComponent(location.search.match(/[?&]pop=([^&]*)/)[1]).split('|');
+  const tryPop = () => (byDay.has(pk) ? openPop(pk, ps) : setTimeout(tryPop, 200));
+  tryPop();
+}
+// 1分ごとに、見ている範囲を読み直す（画面を開いたままでも新しくなる）
+setInterval(() => { if (!document.hidden) need(); }, FRESH_MS);
+// データが届いたら左の列も描き直す（品目・取引先が増える）
+const _draw = draw;
+draw = function (keepPos) { _draw(keepPos); if (keepPos) drawSide(); };
+</script>
+</body>
+</html>

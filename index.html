@@ -80,6 +80,7 @@
   header .gnav { order: 9; flex: 1 0 100%; display: flex; gap: 6px; }
   header .gnav a, header .gnav .hbtn { flex: 1; text-align: center; font-size: 14px; padding: 6px 4px; }
   header .gnav .on { background: #fff; color: var(--green-d); font-weight: bold; }
+  header .hbtn.on { background: rgba(255,255,255,.25); font-weight: bold; }
   #schedframe { display: block; width: 100%; border: 0; background: var(--bg); height: calc(100vh - var(--hh, 110px)); height: calc(100dvh - var(--hh, 110px)); }
 
   /* タブ */
@@ -359,7 +360,7 @@ let VIEW = new URLSearchParams(location.search).get('view') === '1';
 const WHO = (new URLSearchParams(location.search).get('who') || '').trim();
 const GO = new URLSearchParams(location.search).get('go') || '';
 // 今の画面：front（最初の画面）／reg（作業を登録する）／find（作業を調べる）。QR から開いたときは最初の画面を飛ばす
-let page = ID ? (VIEW ? 'find' : 'reg') : WHO ? 'reg' : GO === 'find' ? 'find' : GO === 'reg' ? 'reg' : GO === 'schedule' ? 'schedule' : 'front';
+let page = ID ? (VIEW ? 'find' : 'reg') : WHO ? 'reg' : GO === 'find' ? 'find' : GO === 'reg' ? 'reg' : GO === 'schedule' ? 'schedule' : GO === 'calendar' ? 'calendar' : 'front';
 const PLANNER = '__all__';         // 計画担当（すべてを見る）
 const PART = '__part__';           // パートさん用（共有のスマホ）。名札の QR を読んで、その人として記録する
 const PART_IDLE_MIN = 10;          // パートさん用：この分数さわらなければ、名札の読み取りへ戻す
@@ -798,7 +799,7 @@ function renderSetup() {
 // どの画面でも上の帯の下段に出す3つのボタン（最初の画面と同じ行き先）。今いる画面のボタンは白くする
 function navHtml() {
   const cur = inSetup ? '' : page;
-  return `<nav class="gnav"><button type="button" class="hbtn${cur === 'reg' ? ' on' : ''}" data-nav="reg">作業を登録する</button><button type="button" class="hbtn${cur === 'find' ? ' on' : ''}" data-nav="find">作業を調べる</button><button type="button" class="hbtn${cur === 'schedule' ? ' on' : ''}" data-nav="schedule">スケジュール</button></nav>`;
+  return `<nav class="gnav"><button type="button" class="hbtn${cur === 'reg' ? ' on' : ''}" data-nav="reg">作業を登録する</button><button type="button" class="hbtn${cur === 'find' ? ' on' : ''}" data-nav="find">作業を調べる</button><button type="button" class="hbtn${cur === 'schedule' || cur === 'calendar' ? ' on' : ''}" data-nav="calendar">スケジュール</button></nav>`;
 }
 document.addEventListener('click', ev => {
   const b = ev.target.closest && ev.target.closest('[data-nav]');
@@ -1380,21 +1381,24 @@ function renderFront() {
     <main style="max-width:520px">
       <button type="button" class="big reg" id="f-reg">作業を登録する<small>終わった作業を記録する（QR を読む・やることの一覧）</small></button>
       <button type="button" class="big find" id="f-find">作業を調べる<small>計画の中身と進み具合を見る（QR を読む・名前で探す）</small></button>
-      <button type="button" class="big sched" data-nav="schedule">スケジュール<small>いつ・だれが・どの作業をするかの週の表を見る</small></button>
+      <button type="button" class="big sched" data-nav="calendar">スケジュール<small>いつ・どの作業が・どれだけあるかを、月・週のカレンダーで見る（人の割り振り表もここから）</small></button>
       ${who ? `<p class="muted" style="text-align:center;margin-top:16px">${esc(who)}</p>` : ''}
     </main>`;
   document.getElementById('bulkbar').hidden = true;
   document.getElementById('f-reg').onclick = () => goPage('reg');
   document.getElementById('f-find').onclick = () => goPage('find');
 }
-// ---------- 画面：スケジュール（?go=schedule）。中身は schedule.html を、上の帯の下にはめ込んで出す ----------
-// 自動の更新で描き直しても、はめ込んだ表は作り直さない（作り直すと読み込みからやり直しになる）
+// ---------- 画面：スケジュール。?go=calendar はカレンダー（calendar.html）、?go=schedule は人の割り振り表（schedule.html）。
+// 中身は、上の帯の下にはめ込んで出す。自動の更新で描き直しても、はめ込んだ画面は作り直さない（作り直すと読み込みからやり直しになる）
 function renderSchedule() {
-  if (document.getElementById('schedframe')) return;
+  const src = page === 'calendar' ? 'calendar.html?embed=1' : 'schedule.html?embed=1';
+  const old = document.getElementById('schedframe');
+  if (old && old.getAttribute('src') === src) return;
+  const cal = page === 'calendar';
   document.getElementById('app').innerHTML = `
-    <header><div><h1>スケジュール</h1><div class="sub">いつまでに・どの作業を・だれが</div></div>
-      <div style="display:flex;gap:6px;flex:none"><button type="button" class="hbtn" id="home">最初へ</button></div>${navHtml()}</header>
-    <iframe id="schedframe" src="schedule.html?embed=1" title="スケジュール"></iframe>`;
+    <header><div><h1>スケジュール</h1><div class="sub">${cal ? 'いつ・どの作業が・どれだけあるか' : 'いつまでに・どの作業を・だれが'}</div></div>
+      <div style="display:flex;gap:6px;flex:none;flex-wrap:wrap"><button type="button" class="hbtn${cal ? ' on' : ''}" data-nav="calendar">カレンダー</button><button type="button" class="hbtn${cal ? '' : ' on'}" data-nav="schedule">人の割り振り表</button><button type="button" class="hbtn" id="home">最初へ</button></div>${navHtml()}</header>
+    <iframe id="schedframe" src="${src}" title="${cal ? 'カレンダー' : 'スケジュール'}"></iframe>`;
   document.getElementById('bulkbar').hidden = true;
   document.getElementById('home').onclick = () => goPage('front');
   fitFrame();
@@ -1425,7 +1429,7 @@ function openPlan(id, view) {
 window.addEventListener('popstate', () => {
   const q = new URLSearchParams(location.search);
   ID = q.get('id') || ''; VIEW = q.get('view') === '1';
-  page = ID ? (VIEW ? 'find' : 'reg') : q.get('go') === 'find' ? 'find' : q.get('go') === 'reg' ? 'reg' : q.get('go') === 'schedule' ? 'schedule' : 'front';
+  page = ID ? (VIEW ? 'find' : 'reg') : q.get('go') === 'find' ? 'find' : q.get('go') === 'reg' ? 'reg' : q.get('go') === 'schedule' ? 'schedule' : q.get('go') === 'calendar' ? 'calendar' : 'front';
   if (state) render();
 });
 
@@ -1729,7 +1733,7 @@ function planMissing() {
   bindHeader();
 }
 function render() {
-  if (page === 'schedule') return renderSchedule();   // 窓口の状態を待たずに出す（表は自分で読み込む）
+  if (page === 'schedule' || page === 'calendar') return renderSchedule();   // 窓口の状態を待たずに出す（表は自分で読み込む）
   if (!state) return;
   if (page === 'front' && !inSetup) return renderFront();
   if (page === 'find') {
@@ -1753,7 +1757,7 @@ function render() {
 function showMessage(msg) {
   document.getElementById('app').innerHTML = `<header><h1>QR一元管理</h1></header><main><div class="card">${esc(msg)}</div></main>`;
 }
-if (page === 'schedule') renderSchedule(); else showMessage('読み込んでいます…');
+if (page === 'schedule' || page === 'calendar') renderSchedule(); else showMessage('読み込んでいます…');
 fetchState()
   .then(s => {
     server = s; if (!server.logs) server.logs = []; rebuild();
