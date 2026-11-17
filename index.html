@@ -47,6 +47,8 @@
   .big small { display: block; font-size: 13px; font-weight: normal; opacity: .95; margin-top: 6px; }
   .big.reg { background: var(--orange); }
   .big.find { background: var(--green); }
+  a.big { text-decoration: none; }
+  .big.sched { background: #3d6fa8; }
   .role.part { border-style: dashed; }
   /* パートさん用：だれとして記録するかの確認 */
   #ask { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; z-index: 50; }
@@ -1294,6 +1296,7 @@ function renderFront() {
     <main style="max-width:520px">
       <button type="button" class="big reg" id="f-reg">作業を登録する<small>終わった作業を記録する（QR を読む・やることの一覧）</small></button>
       <button type="button" class="big find" id="f-find">作業を調べる<small>計画の中身と進み具合を見る（QR を読む・名前で探す）</small></button>
+      <a class="big sched" href="schedule.html">スケジュール<small>いつ・だれが・どの作業をするかの週の表を見る</small></a>
       ${who ? `<p class="muted" style="text-align:center;margin-top:16px">${esc(who)}</p>` : ''}
     </main>`;
   document.getElementById('bulkbar').hidden = true;
