@@ -422,32 +422,44 @@ function bindSprayDelete() {
 
 // ---------- 計画画面：このロットの農薬の使用履歴 ----------
 
-function pestHistoryHtml(plan) {
-  if (!state.pest) return '';
+// 鉢上げなどの工程と同じ見た目（✓の丸＋カードの縦の並び）で、散布の記録を古い順に出し、最後に「薬散を記録する」を置く。
+// viewOnly（作業を調べる）のときは、ボタンを押すと記録の画面へ移って入力を開く
+function pestHistoryHtml(plan, viewOnly) {
+  if (!state.pest) return "";
   const rows = state.pest.sprays.filter(s => s.id === plan.id);
   const c = state.pest.counts[plan.id] || { p: {}, i: {} };
   const chips = Object.keys(c.p).map(name => {
     const reg = pestReg(plan.regItem, name);
     const bad = reg && reg.max && c.p[name] >= reg.max;
-    return `<span class="tag ${bad ? 'now' : 'ok'}">${esc(name)} ${c.p[name]}${reg && reg.max ? '/' + reg.max : ''}</span>`;
-  }).join(' ');
-  // 「薬剤散布を記録する」を押すと、この計画の画面の中で入力する（担当に関係なく、誰でも記録できる）
-  const open = sprayOpenId === plan.id;
+    return `<span class="tag ${bad ? "now" : "ok"}">${esc(name)} ${c.p[name]}${reg && reg.max ? "/" + reg.max : ""}</span>`;
+  }).join(" ");
+  const open = !viewOnly && sprayOpenId === plan.id;
   inlineLots = [];
   if (open) {
     inlineLots = sprayLotList();
     if (!inlineLots.some(p => p.id === plan.id)) inlineLots = [plan].concat(inlineLots);   // このロットは必ず入れる
     if (inlineLots.length !== sprayLots().length) setSprayLots(inlineLots.map(p => p.id));
   }
-  return `<section class="major"><h2>薬剤散布<span class="tag ng">${rows.length}件</span></h2>
-    ${open ? sprayFormHtml(inlineLots, plan.id) + '<button type="button" class="others" id="sprayclose" style="width:100%;margin:8px 0 14px">記録せずに閉じる</button>'
-      : '<button type="button" class="primary" id="sprayopen" style="margin-bottom:10px">薬剤散布を記録する</button>'}
-    ${rows.length || open ? '<h3 style="font-size:14px;margin:6px 0">この苗の散布履歴</h3>' : ''}
-    ${chips ? `<div style="margin-bottom:8px">${chips}</div>` : ''}
-    ${rows.length ? '<button type="button" class="sub-btn" id="pesthprint" style="margin:0 0 8px">この苗の散布履歴を印刷する（A4 横）</button>' : ''}
-    ${rows.map(r => `<div class="log">${bottleImg(r.product, 'th')}<div class="body"><div><b>${esc(r.product)}</b>（${esc(r.dilution)}）　${esc(r.share)}L</div>
-      <div class="t">${esc(r.time)}　${esc(r.timing)}　${esc(r.place)}　${esc(r.equipment)}　${esc(r.person)}　本剤 ${esc(r.count)}　${esc(r.ingCount)}</div></div></div>`).join('')
-      || '<div class="empty">まだ散布の記録はありません</div>'}</section>`;
+  // 混用した薬剤は1回の散布にまとめる（古い順）
+  const events = [];
+  rows.slice().reverse().forEach(r => { let e = events.find(x => x.id === r.sprayId); if (!e) events.push(e = { id: r.sprayId, rows: [] }); e.rows.push(r); });
+  const items = events.map(e => {
+    const r0 = e.rows[0];
+    const prods = e.rows.map(r => `<div>${esc(r.product)}（${esc(r.dilution)}）　${esc(r.share)}L　本剤 ${esc(r.count)}${r.ingCount ? "　" + esc(r.ingCount) : ""}</div>`).join("");
+    return `<li class="done"><span class="mark">✓</span><div class="box">
+      <div class="t">${esc(e.rows.map(r => r.product).join(" ＋ "))}<span class="tag ok">完了</span></div>
+      <div class="info">${esc(r0.time)}　${esc(r0.person)}${r0.place ? "　" + esc(r0.place) : ""}${r0.equipment ? "　" + esc(r0.equipment) : ""}${r0.timing ? "　" + esc(r0.timing) : ""}${prods}</div></div></li>`;
+  }).join("");
+  const add = open
+    ? `<li class="cur"><span class="mark"></span><div class="box"><div class="t">薬散を記録する<span class="tag now">入力中</span></div>
+        ${sprayFormHtml(inlineLots, plan.id)}<button type="button" class="others" id="sprayclose" style="width:100%;margin:8px 0 0">記録せずに閉じる</button></div></li>`
+    : `<li class="todo"><span class="mark"></span><div class="box"><div class="t">次の薬散<span class="tag ng">未記録</span></div>
+        <div class="desc">農薬をまいたら、ここから記録する（担当に関係なく、誰でも記録できる）</div>
+        <div class="row"><button type="button" class="do" id="sprayopen">薬散を記録する</button></div></div></li>`;
+  return `<section class="major"><h2>薬剤散布${events.length ? '<span class="tag ok">' + events.length + '回</span>' : '<span class="tag ng">0回</span>'}</h2>
+    ${chips ? `<div class="fs muted" style="margin:-4px 0 8px"><b>使用回数</b> ${chips}</div>` : ""}
+    <ol class="tl">${items}${add}</ol>
+    ${rows.length ? '<button type="button" class="sub-btn" id="pesthprint" style="margin:0 0 8px">この苗の散布履歴を印刷する（A4 横）</button>' : ""}</section>`;
 }
 let sprayOpenId = '';     // 計画画面で「薬剤散布」の入力を開いているロット
 let inlineLots = [];      // その入力の対象のロット（このロット ＋ 一緒に散布したロット）
@@ -503,7 +515,9 @@ function bindPest(plan) {
   const hp = document.getElementById('pesthprint');
   if (hp) hp.onclick = () => printPestHistory(plan);
   const o = document.getElementById('sprayopen');
-  if (o) o.onclick = () => { sprayOpenId = plan.id; setSprayLots([plan.id]); pickerOpen = false; render(); };   // 対象は、このロットだけから始める
+  if (o) o.onclick = () => { sprayOpenId = plan.id; setSprayLots([plan.id]); pickerOpen = false;
+    if (VIEW) openPlan(plan.id, false); else render();   // 調べる画面からは、記録の画面へ移って入力を開く
+  };   // 対象は、このロットだけから始める
   const c = document.getElementById('sprayclose');
   if (c) c.onclick = () => { sprayOpenId = ''; setSprayLots([]); pickerOpen = false; render(); };
   if (sprayOpenId === plan.id && document.getElementById('spgo')) bindSprayForm(inlineLots);

@@ -1789,14 +1789,14 @@ function renderPlanView(plan) {
       ${stepperHtml(plan, false)}
       <div class="next ${nx ? '' : 'all'}">${nx ? '次の作業：' + nextFlowHtml(plan, nx) : '✓ すべての工程が完了しました'}</div>
       ${sections}
-      <button type="button" class="primary" id="v-reg">この作業を登録する</button>
+      ${hasSpray() ? pestHistoryHtml(plan, true) : ''}
       <button type="button" class="backbtn" id="v-back">ほかの計画を調べる</button>
     </main>`;
   document.getElementById('bulkbar').hidden = true;
   document.getElementById('home').onclick = () => goPage('front');
   document.getElementById('tofind').onclick = () => goPage('find');
   document.getElementById('v-back').onclick = () => goPage('find');
-  document.getElementById('v-reg').onclick = () => openPlan(plan.id, false);
+  if (hasSpray()) bindPest(plan);
   document.getElementById('seeplan').onclick = () => { showPlan = !showPlan; render(); };
 }
 
@@ -1850,6 +1850,6 @@ fetchState()
   })
   .catch(e => showMessage(e.message));
 </script>
-<script src="spray.js?v=3"></script>
+<script src="spray.js?v=4"></script>
 </body>
 </html>
