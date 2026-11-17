@@ -4,6 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>スケジュール｜QR一元管理</title>
+<script>
+// スケジュールは「index.html?go=schedule」の中にはめ込んで出す（URL を ?go= にそろえるため）。
+// この画面を直接開いたら（古いブックマークなど）、そちらへ移す。はめ込まれたときは、自分の上の帯を隠し、リンクは画面全体で開く
+(function () {
+  const embed = /[?&]embed=1(&|$)/.test(location.search);
+  if (!embed && window.top === window.self) { location.replace('index.html?go=schedule'); return; }
+  document.documentElement.classList.add('embed');
+  const b = document.createElement('base'); b.target = '_top'; document.head.appendChild(b);
+})();
+</script>
 <script src="config.js"></script>
 <script src="common.js"></script>
 <style>
@@ -94,6 +104,9 @@
   #drawer .task { margin-bottom: 6px; }
   #drawer .task[draggable=true] { cursor: grab; }
   @media (min-width: 1040px) { body.drawer-on main { margin-right: 330px; } }
+  /* index.html にはめ込まれたとき：上の帯は index.html の方に出すので、ここでは隠す */
+  html.embed header { display: none; }
+  .bar .upd { font-size: 11px; color: var(--gray); }
   /* 上の帯の下段：3つのボタン（index.html と同じ） */
   header { flex-wrap: wrap; }
   header .gnav { order: 9; flex: 1 0 100%; display: flex; gap: 6px; }
@@ -353,6 +366,7 @@ function render() {
         <select id="f-area" aria-label="エリア"><option value="">エリア：すべて</option>${areas.map(a => `<option${a === fArea ? ' selected' : ''}>${esc(a)}</option>`).join('')}</select>
         <select id="f-kubun" aria-label="区分"><option value="">区分：すべて</option>${kubuns.map(a => `<option${a === fKubun ? ' selected' : ''}>${esc(a)}</option>`).join('')}</select>
         ${hiddenCount() ? `<button type="button" id="f-hidden">${showHidden ? '非表示の人を隠す' : '非表示の人 ' + hiddenCount() + '人を出す'}</button>` : ''}
+        <span class="upd">最終更新 ${esc(sch.updated)}</span>
         <button type="button" class="auto" id="auto"${canEdit() ? '' : ' disabled'}>自動で組み直す</button>
       </div>
       ${stale ? `<div class="note">前に開いたときの表（${esc(sch.updated)} 時点）を出しています。最新を読み込んでいます…（読み終わるまで手直しはできません）</div>` : canEdit() ? '' : '<div class="note">見るだけの画面です。手直しと組み直しは、一覧の画面で担当を「計画担当」にすると使えます。</div>'}

@@ -80,6 +80,7 @@
   header .gnav { order: 9; flex: 1 0 100%; display: flex; gap: 6px; }
   header .gnav a, header .gnav .hbtn { flex: 1; text-align: center; font-size: 14px; padding: 6px 4px; }
   header .gnav .on { background: #fff; color: var(--green-d); font-weight: bold; }
+  #schedframe { display: block; width: 100%; border: 0; background: var(--bg); height: calc(100vh - var(--hh, 110px)); height: calc(100dvh - var(--hh, 110px)); }
 
   /* タブ */
   .tabs { display: flex; gap: 6px; margin-bottom: 12px; border-bottom: 2px solid var(--line); }
@@ -358,7 +359,7 @@ let VIEW = new URLSearchParams(location.search).get('view') === '1';
 const WHO = (new URLSearchParams(location.search).get('who') || '').trim();
 const GO = new URLSearchParams(location.search).get('go') || '';
 // 今の画面：front（最初の画面）／reg（作業を登録する）／find（作業を調べる）。QR から開いたときは最初の画面を飛ばす
-let page = ID ? (VIEW ? 'find' : 'reg') : WHO ? 'reg' : GO === 'find' ? 'find' : GO === 'reg' ? 'reg' : 'front';
+let page = ID ? (VIEW ? 'find' : 'reg') : WHO ? 'reg' : GO === 'find' ? 'find' : GO === 'reg' ? 'reg' : GO === 'schedule' ? 'schedule' : 'front';
 const PLANNER = '__all__';         // 計画担当（すべてを見る）
 const PART = '__part__';           // パートさん用（共有のスマホ）。名札の QR を読んで、その人として記録する
 const PART_IDLE_MIN = 10;          // パートさん用：この分数さわらなければ、名札の読み取りへ戻す
@@ -797,7 +798,7 @@ function renderSetup() {
 // どの画面でも上の帯の下段に出す3つのボタン（最初の画面と同じ行き先）。今いる画面のボタンは白くする
 function navHtml() {
   const cur = inSetup ? '' : page;
-  return `<nav class="gnav"><button type="button" class="hbtn${cur === 'reg' ? ' on' : ''}" data-nav="reg">作業を登録する</button><button type="button" class="hbtn${cur === 'find' ? ' on' : ''}" data-nav="find">作業を調べる</button><a href="schedule.html">スケジュール</a></nav>`;
+  return `<nav class="gnav"><button type="button" class="hbtn${cur === 'reg' ? ' on' : ''}" data-nav="reg">作業を登録する</button><button type="button" class="hbtn${cur === 'find' ? ' on' : ''}" data-nav="find">作業を調べる</button><button type="button" class="hbtn${cur === 'schedule' ? ' on' : ''}" data-nav="schedule">スケジュール</button></nav>`;
 }
 document.addEventListener('click', ev => {
   const b = ev.target.closest && ev.target.closest('[data-nav]');
@@ -969,11 +970,12 @@ function bindDelete() {
 }
 
 // ---------- 画面：計画担当のホーム（一覧・履歴） ----------
-function renderPlanner() {
-  if (!tab) tab = 'list';
-  let body;
-  if (tab === 'list') {
-    body = `<div class="grid">${state.plans.map(p => {
+// 計画担当の一覧のカード（上の欄の文字でしぼる。名前・QRID・注文NO・品番・商品名・出荷先）
+let planText = '';
+function plannerCardsHtml() {
+  const q = nk(planText);
+  const list = state.plans.filter(p => !q || nk([planName(p), p.id, p.v['注文NO'], p.v['品番'], p.v['商品名'], p.v['出荷先']].join(' ')).includes(q));
+  return list.map(p => {
       const nx = nextStep(p);
       const steps = state.steps.map(s => {
         const st = p.status[s.key] || {};
@@ -988,7 +990,16 @@ function renderPlanner() {
             <div class="meta">播種 ${esc(p.v['播種予定日'])} → ポット ${esc(p.v['ポット使用日'])} → 鉢上げ ${esc(p.v['鉢上予定日'])}</div></div></div>
         ${stepperHtml(p, true)}<ul class="steps">${steps}</ul>
         <a class="open" href="${esc(planUrl(p.id))}">この計画を開く</a></div>`;
-    }).join('') || '<div class="card">計画がありません。「計画」シートを確認してください。</div>'}</div>`;
+    }).join('') || (q ? '<div class="empty">当てはまる計画がありません</div>' : '<div class="card">計画がありません。「計画」シートを確認してください。</div>');
+}
+function renderPlanner() {
+  if (!tab) tab = 'list';
+  let body;
+  if (tab === 'list') {
+    // 上に「QR を読む」と、探す欄（作業を調べる画面と同じ）
+    body = `<button type="button" class="scanbtn" id="planscan">QR を読む</button>
+      <label class="field" style="margin:10px 0 12px">名前・QRID・注文NO で探す<input id="planq" type="search" value="${esc(planText)}" placeholder="例：ミニトマト、26-00012"></label>
+      <div class="grid" id="plangrid">${plannerCardsHtml()}</div>`;
   } else if (tab === 'short') {
     body = shortTabHtml();
   } else if (tab === 'pest' && pestOn()) {
@@ -1007,7 +1018,7 @@ function renderPlanner() {
           <button type="button" data-tab="log" class="${tab === 'log' ? 'on' : ''}">履歴<span class="n">${state.logs.length}</span></button>
           <button type="button" data-tab="short" class="${tab === 'short' ? 'on' : ''}">マイナス${shortOpen() ? '<span class="n">' + shortOpen() + '</span>' : ''}</button>
           ${pestOn() ? `<button type="button" data-tab="pest" class="${tab === 'pest' ? 'on' : ''}">農薬</button>` : ''}</div>
-        <div style="display:flex;flex-wrap:wrap;gap:6px"><a class="btn-link" href="schedule.html">スケジュール</a><a class="btn-link" href="badges.html">名札を印刷する</a><a class="btn-link" href="labels.html">ラベルを印刷する</a></div></div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px"><a class="btn-link" href="?go=schedule" data-nav="schedule">スケジュール</a><a class="btn-link" href="badges.html">名札を印刷する</a><a class="btn-link" href="labels.html">ラベルを印刷する</a></div></div>
       ${body}
       <p class="muted">最終更新 ${esc(state.updated)}（自動で更新）。工程は「工程」シートに行を足すと増やせます。</p>
     </main>`;
@@ -1018,6 +1029,11 @@ function renderPlanner() {
   bindDelete();
   if (tab === 'pest' && pestOn()) bindPlannerPest();
   if (tab === 'short') bindShortTab();
+  if (tab === 'list') {
+    document.getElementById('planscan').onclick = () => startScan('one');   // 読んだ計画の画面を開く
+    // 探す文字を打っている間は、カードの所だけ描き直す（入力欄を作り直さない）
+    document.getElementById('planq').oninput = e => { planText = e.target.value; document.getElementById('plangrid').innerHTML = plannerCardsHtml(); };
+  }
 }
 
 // ---------- マイナスの一覧（鉢上げマイナス報告用紙の代わり）：① 報告　→　② プラグ担当者の対処　→　③ ハウス担当者の解消 ----------
@@ -1364,13 +1380,31 @@ function renderFront() {
     <main style="max-width:520px">
       <button type="button" class="big reg" id="f-reg">作業を登録する<small>終わった作業を記録する（QR を読む・やることの一覧）</small></button>
       <button type="button" class="big find" id="f-find">作業を調べる<small>計画の中身と進み具合を見る（QR を読む・名前で探す）</small></button>
-      <a class="big sched" href="schedule.html">スケジュール<small>いつ・だれが・どの作業をするかの週の表を見る</small></a>
+      <button type="button" class="big sched" data-nav="schedule">スケジュール<small>いつ・だれが・どの作業をするかの週の表を見る</small></button>
       ${who ? `<p class="muted" style="text-align:center;margin-top:16px">${esc(who)}</p>` : ''}
     </main>`;
   document.getElementById('bulkbar').hidden = true;
   document.getElementById('f-reg').onclick = () => goPage('reg');
   document.getElementById('f-find').onclick = () => goPage('find');
 }
+// ---------- 画面：スケジュール（?go=schedule）。中身は schedule.html を、上の帯の下にはめ込んで出す ----------
+// 自動の更新で描き直しても、はめ込んだ表は作り直さない（作り直すと読み込みからやり直しになる）
+function renderSchedule() {
+  if (document.getElementById('schedframe')) return;
+  document.getElementById('app').innerHTML = `
+    <header><div><h1>スケジュール</h1><div class="sub">いつまでに・どの作業を・だれが</div></div>
+      <div style="display:flex;gap:6px;flex:none"><button type="button" class="hbtn" id="home">最初へ</button></div>${navHtml()}</header>
+    <iframe id="schedframe" src="schedule.html?embed=1" title="スケジュール"></iframe>`;
+  document.getElementById('bulkbar').hidden = true;
+  document.getElementById('home').onclick = () => goPage('front');
+  fitFrame();
+}
+// はめ込んだ表の高さを、画面の残り（上の帯の下）いっぱいにする。帯の高さだけ測り、残りは CSS（100dvh）に任せる
+function fitFrame() {
+  const h = document.querySelector('#app header');
+  if (h && document.getElementById('schedframe')) document.documentElement.style.setProperty('--hh', h.offsetHeight + 'px');
+}
+window.addEventListener('resize', fitFrame);
 // 画面を替える（読み込み直さない）。URL も合わせる（もどるボタン・読み込み直しで同じ画面になる）
 function setUrl(q) { try { history.pushState(null, '', location.pathname + q); } catch (e) {} }
 function goPage(name) {
@@ -1391,7 +1425,7 @@ function openPlan(id, view) {
 window.addEventListener('popstate', () => {
   const q = new URLSearchParams(location.search);
   ID = q.get('id') || ''; VIEW = q.get('view') === '1';
-  page = ID ? (VIEW ? 'find' : 'reg') : q.get('go') === 'find' ? 'find' : q.get('go') === 'reg' ? 'reg' : 'front';
+  page = ID ? (VIEW ? 'find' : 'reg') : q.get('go') === 'find' ? 'find' : q.get('go') === 'reg' ? 'reg' : q.get('go') === 'schedule' ? 'schedule' : 'front';
   if (state) render();
 });
 
@@ -1695,6 +1729,7 @@ function planMissing() {
   bindHeader();
 }
 function render() {
+  if (page === 'schedule') return renderSchedule();   // 窓口の状態を待たずに出す（表は自分で読み込む）
   if (!state) return;
   if (page === 'front' && !inSetup) return renderFront();
   if (page === 'find') {
@@ -1718,7 +1753,7 @@ function render() {
 function showMessage(msg) {
   document.getElementById('app').innerHTML = `<header><h1>QR一元管理</h1></header><main><div class="card">${esc(msg)}</div></main>`;
 }
-showMessage('読み込んでいます…');
+if (page === 'schedule') renderSchedule(); else showMessage('読み込んでいます…');
 fetchState()
   .then(s => {
     server = s; if (!server.logs) server.logs = []; rebuild();
