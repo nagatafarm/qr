@@ -135,6 +135,10 @@
   #drawer .dtab b { display: inline-block; margin-top: 8px; background: #fff; color: var(--red); border-radius: 999px; padding: 6px 2px; font-size: 12px; letter-spacing: 0; text-combine-upright: all; }
   #drawer .dbody { pointer-events: auto; position: absolute; right: 0; top: 0; bottom: 0; width: min(330px, 86vw); background: #fff; border-left: 2px solid var(--red); box-shadow: -4px 0 14px rgba(0,0,0,.1); overflow-y: auto; padding: 10px 10px 120px; }
   #drawer .dbody[hidden] { display: none; }
+  /* 引き出しの作業をつかんでいる間は、引き出しを右へ逃がす（表にかぶさって、落とす先が見えなくなるため） */
+  #drawer .dbody, #drawer .dtab { transition: transform .15s, opacity .15s; }
+  body.task-drag #drawer .dbody { transform: translateX(105%); pointer-events: none; }
+  body.task-drag #drawer .dtab { opacity: .25; pointer-events: none; }
   body.drawer-on #drawer .dtab { right: min(330px, 86vw); }
   #drawer .dhead { font-weight: bold; margin-bottom: 4px; }
   .task { background: #fff; border: 1px solid #e3b4b4; border-left: 5px solid var(--c, var(--red)); border-radius: 8px; padding: 6px 8px; font-size: 13px; cursor: pointer; margin-bottom: 6px; }
@@ -196,6 +200,9 @@ let dragTask = null;               // 引き出しからつかんでいる足り
 let lateSch = null;                // つかんでいる最中に届いた窓口の返事（放したあとに描く）
 let tmpNo = 0;                     // 画面に先に出すカードの仮の番号（窓口の返事が届くまで）
 let groupOf = new Map();           // 作業と日 → 入っている人数（カードに「👥3」と出す）
+let drawerAuto = false;            // せまい画面で、作業を選んだので引き出しを一時的にしまっている（足すか、やめたら、また開く）
+const drawerCovers = () => window.innerWidth < 1040;   // 引き出しが表にかぶさる幅（広い画面では、表の右に並ぶ）
+function drawerBack() { if (drawerAuto) { drawerAuto = false; drawerOpen = true; } }
 let drawerOpen = load('schedDrawer') === '1';   // 右の引き出し（足りない作業）を開いているか。このブラウザに覚える
 const multi = new Set();           // Shift を押しながら選んだカード（割り振りID）。まとめて動かす
 const pending = [];                // 窓口へ送る順番待ち（押したらすぐ画面に反映し、裏で送る）
@@ -576,7 +583,7 @@ function addTask(t, td) {
   const cap = sch.cap[td.dataset.name][td.dataset.date] || 0;
   const free = cap - jobsOf(td.dataset.name, td.dataset.date).filter(a => !a.done).reduce((n, a) => n + a.hours, 0);
   const name = td.dataset.name, date = td.dataset.date;
-  sel = null;
+  sel = null; drawerBack();
   const hours = Math.round((free >= 0.25 ? Math.min(t.short, free) : t.short) / 0.25) * 0.25;   // 足したあと、掛ける数で足りなければ「あと ◯ 時間」が残る
   if (!(hours > 0)) return toast('足す時間がありません', true);
   // すぐ画面に出して、窓口へは裏で送る。返事が届くまでは仮のカード（うすい色。動かせない）
@@ -677,19 +684,22 @@ function bind() {
     };
     el.ondragend = () => { dragAid = ''; document.querySelectorAll('.dragover').forEach(x => x.classList.remove('dragover')); applyLate(); };
   });
-  document.getElementById('dtab').onclick = () => { drawerOpen = !drawerOpen; save('schedDrawer', drawerOpen ? '1' : ''); render(); };
+  document.getElementById('dtab').onclick = () => { drawerAuto = false; drawerOpen = !drawerOpen; save('schedDrawer', drawerOpen ? '1' : ''); render(); };
   document.querySelectorAll('.task').forEach(el => {
     el.onclick = () => {
       if (!canEdit()) return;
       sel = sel && sel.id === el.dataset.tid && sel.key === el.dataset.tkey ? null : { id: el.dataset.tid, key: el.dataset.tkey };
+      // せまい画面：選んだら引き出しをしまって、表を見せる（足す先のマスを押せるように）。足すか、やめたら、また開く
+      if (sel && drawerCovers()) { drawerOpen = false; drawerAuto = true; }
       render();
     };
     if (!canEdit()) return;
     el.ondragstart = ev => {
       dragTask = { id: el.dataset.tid, key: el.dataset.tkey };
       try { ev.dataTransfer.setData('text/plain', 'task:' + el.dataset.tid); ev.dataTransfer.effectAllowed = 'copy'; } catch (e) {}
+      if (drawerCovers()) setTimeout(() => document.body.classList.add('task-drag'), 0);   // つかんだあとで逃がす（同時にやると、つかめない）
     };
-    el.ondragend = () => { dragTask = null; document.querySelectorAll('.dragover').forEach(x => x.classList.remove('dragover')); applyLate(); };
+    el.ondragend = () => { document.body.classList.remove('task-drag'); dragTask = null; document.querySelectorAll('.dragover').forEach(x => x.classList.remove('dragover')); applyLate(); };
   });
   if (!canEdit()) return;
   const mc = document.getElementById('m-clear'); if (mc) mc.onclick = () => { multi.clear(); render(); };
@@ -832,7 +842,7 @@ function renderPanel() {
   if (!a && t0 && canEdit()) {
     el.innerHTML = `<span class="ttl">${esc(t0.name)}：${esc(t0.task)}</span><span class="muted">を選んでいます。足す先のマス（人 × 日）を押してください</span><button type="button" id="p-x">やめる</button>`;
     show(true);
-    document.getElementById('p-x').onclick = () => { sel = null; render(); };
+    document.getElementById('p-x').onclick = () => { sel = null; drawerBack(); render(); };
     return;
   }
   if (!a) { show(false); return; }
