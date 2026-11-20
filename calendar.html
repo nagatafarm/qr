@@ -331,8 +331,9 @@ const ORDER_K = ['営利', '量販'], ORDER_F = ['野菜', '花', '未分類'];
 const sortBy = order => (a, b) => (order.indexOf(a) < 0 ? 99 : order.indexOf(a)) - (order.indexOf(b) < 0 ? 99 : order.indexOf(b)) || a.localeCompare(b, 'ja');
 function drawSide() {
   const t = tree();
-  const stepCnt = {}, custCnt = {};
-  byDay.forEach(list => list.forEach(e => { stepCnt[e.s] = (stepCnt[e.s] || 0) + 1; const p = plans[e.id]; if (p) custCnt[custOf(p)] = (custCnt[custOf(p)] || 0) + 1; }));
+  // 取引先は、営利／量販ごとに分けて数える（絞り込みの鍵は取引先の名前のまま。両方にある取引先は、両方に出て一緒に切り替わる）
+  const stepCnt = {}, custK = {};
+  byDay.forEach(list => list.forEach(e => { stepCnt[e.s] = (stepCnt[e.s] || 0) + 1; const p = plans[e.id]; if (p) { const g = custK[p.k] = custK[p.k] || {}; g[custOf(p)] = (g[custOf(p)] || 0) + 1; } }));
   const keysUnder = (k, f) => Object.keys(t[k] || {}).filter(x => !f || x === f).flatMap(ff => Object.keys(t[k][ff]).map(i => k + '|' + ff + '|' + i));
   const box = (keys, attrs) => {
     const on = keys.filter(x => !off.t.has(x)).length;
@@ -349,7 +350,12 @@ function drawSide() {
           <div class="kids">${items.map(i => { const key = k + '|' + f + '|' + i; return `<label><input type="checkbox" data-ti="${esc(key)}"${off.t.has(key) ? '' : ' checked'}>${esc(i)}<span class="n">${t[k][f][i]}</span></label>`; }).join('')}</div></details>`;
       }).join('')}</div></details>`;
   }).join('');
-  const custs = Object.keys(custCnt).sort((a, b) => custCnt[b] - custCnt[a] || a.localeCompare(b, 'ja'));
+  const cHtml = Object.keys(custK).sort(sortBy(ORDER_K)).map(k => {
+    const g = custK[k], cs = Object.keys(g).sort((a, b) => g[b] - g[a] || a.localeCompare(b, 'ja'));
+    const on = cs.filter(c => !off.c.has(c)).length, ok = 'c/' + k;
+    return `<details data-open="${esc(ok)}"${openK[ok] !== false ? ' open' : ''}><summary><label><span class="tw">▶</span><input type="checkbox" data-ck="${esc(k)}" ${on === cs.length ? 'checked' : ''} data-mix="${on > 0 && on < cs.length ? 1 : ''}"><b>${esc(k)}</b><span class="n">${cs.length}社</span></label></summary>
+      <div class="kids">${cs.map(c => `<label><input type="checkbox" data-c="${esc(c)}"${off.c.has(c) ? '' : ' checked'}>${esc(c)}<span class="n">${g[c]}</span></label>`).join('')}</div></details>`;
+  }).join('');
   const names = Object.keys(presets);
   const sideEl = document.getElementById('side'), sideTop = sideEl.scrollTop;
   sideEl.innerHTML = `
@@ -363,7 +369,7 @@ function drawSide() {
     <h3>分類 <button type="button" data-only="t">全部</button></h3>
     ${kHtml || '<div class="muted">まだありません</div>'}
     <h3>取引先 <button type="button" data-only="c">全部</button></h3>
-    ${custs.map(c => `<label><input type="checkbox" data-c="${esc(c)}"${off.c.has(c) ? '' : ' checked'}>${esc(c)}<span class="n">${custCnt[c]}</span></label>`).join('') || '<div class="muted">まだありません</div>'}
+    ${cHtml || '<div class="muted">まだありません</div>'}
     <h3>表示</h3>
     <div class="opt">週の始まり<select id="wds">${[0, 1, 2, 3, 4, 5, 6].map(d => `<option value="${d}"${d === wdStart ? ' selected' : ''}>${WD[d]}曜</option>`).join('')}</select></div>
     <p class="muted">マウスのホイールで縦に、Shift を押しながら回すと横に動く（週表示）。チップの数は TR 数（トレイ）。下の「作業 ◯h / 出勤 ◯h」（作業のある日だけ）は、その日の残りの作業の時間（絞り込みに関係なく全部）と、出勤する人の時間の合計。作業が出勤を超える日は赤。</p>`;
@@ -382,6 +388,16 @@ function bindSide() {
   side.querySelectorAll('input[data-s]').forEach(x => x.onchange = () => { x.checked ? off.s.delete(x.dataset.s) : off.s.add(x.dataset.s); changed(); });
   side.querySelectorAll('input[data-c]').forEach(x => x.onchange = () => { x.checked ? off.c.delete(x.dataset.c) : off.c.add(x.dataset.c); changed(); });
   side.querySelectorAll('input[data-ti]').forEach(x => x.onchange = () => { x.checked ? off.t.delete(x.dataset.ti) : off.t.add(x.dataset.ti); changed(); });
+  // 営利／量販の見出しのチェック：その下の取引先をまとめて切り替える
+  side.querySelectorAll('input[data-ck]').forEach(x => {
+    x.onclick = ev => ev.stopPropagation();
+    x.onchange = () => {
+      const names = new Set();
+      byDay.forEach(list => list.forEach(e => { const p = plans[e.id]; if (p && p.k === x.dataset.ck) names.add(custOf(p)); }));
+      names.forEach(c => { x.checked ? off.c.delete(c) : off.c.add(c); });
+      changed();
+    };
+  });
   side.querySelectorAll('input[data-tk]').forEach(x => {
     x.onclick = ev => ev.stopPropagation();
     x.onchange = () => {
