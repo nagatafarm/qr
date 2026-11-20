@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>出勤希望｜QR一元管理</title>
+<script src="config.js"></script>
+<script src="common.js"></script>
+<style>
+  :root { --green: #4f9363; --green-d: #2f6b3a; --green-l: #f0f6f1; --orange: #d4834a; --orange-d: #9a5320; --orange-l: #fdf5ee; --line: #dfe5e0; --gray: #6b6b6b; --red: #c33; --blue: #2a6fb8; --bg: #f6f7f5; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: #222; font-family: "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif; font-size: 15px; line-height: 1.5; }
+  button, select, input, textarea { font-family: inherit; font-size: inherit; }
+  header { background: var(--green); color: #fff; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  header h1 { font-size: 17px; margin: 0; }
+  header .sub { font-size: 12px; opacity: .9; }
+  header a { color: #fff; font-size: 13px; white-space: nowrap; border: 1px solid rgba(255,255,255,.6); border-radius: 8px; padding: 6px 12px; text-decoration: none; }
+  main { max-width: 560px; margin: 0 auto; padding: 12px 12px 120px; }
+  main.wide { max-width: 980px; }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; }
+  .muted { color: var(--gray); font-size: 13px; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+  .tabs button { flex: 1; background: #fff; border: 2px solid var(--line); border-radius: 12px; padding: 10px 6px; cursor: pointer; font-weight: bold; font-size: 17px; line-height: 1.2; }
+  .tabs button small { display: block; font-weight: normal; font-size: 12px; color: var(--gray); margin-top: 2px; }
+  .tabs button.on { border-color: var(--green); background: var(--green-l); }
+  .tabs button .st-done { color: var(--green-d); } .tabs button .st-none { color: var(--red); }
+  h2 { font-size: 20px; margin: 0 0 4px; }
+  .note { border-radius: 10px; padding: 8px 12px; margin: 8px 0; font-size: 14px; }
+  .note.ok { background: var(--green-l); color: var(--green-d); }
+  .note.warn { background: #fdecec; color: var(--red); }
+  .note.info { background: var(--orange-l); color: var(--orange-d); }
+  .modes { display: flex; gap: 8px; margin: 10px 0 8px; }
+  .modes button { flex: 1; border: 2px solid var(--line); background: #fff; border-radius: 999px; padding: 9px 6px; cursor: pointer; font-weight: bold; }
+  .modes button.on.work { border-color: var(--green); background: var(--green-l); color: var(--green-d); }
+  .modes button.on.paid { border-color: var(--orange); background: var(--orange-l); color: var(--orange-d); }
+  .cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; user-select: none; -webkit-user-select: none; }
+  .cal .wd { text-align: center; font-size: 13px; font-weight: bold; padding: 6px 0; border: 1px solid var(--line); border-radius: 8px; background: #fafafa; cursor: pointer; }
+  .cal .sun { color: var(--red); } .cal .sat { color: var(--blue); }
+  .cal .day { position: relative; min-height: 58px; border: 1px solid var(--line); border-radius: 10px; background: #fff; cursor: pointer; padding: 3px 0 0; text-align: center; font-size: 14px; font-weight: bold; -webkit-tap-highlight-color: transparent; }
+  .cal .day .mk { display: block; height: 30px; line-height: 30px; font-size: 24px; font-weight: normal; }
+  .cal .day.work { background: var(--green-l); border-color: var(--green); } .cal .day.work .mk { color: var(--green-d); }
+  .cal .day.paid { background: var(--orange-l); border-color: var(--orange); } .cal .day.paid .mk { color: var(--orange-d); font-size: 14px; font-weight: bold; }
+  .cal .none { min-height: 58px; }
+  .cal.ro .day, .cal.ro .wd { cursor: default; }
+  .sum { display: flex; gap: 14px; flex-wrap: wrap; margin: 10px 0 0; font-size: 16px; }
+  .sum b { font-size: 20px; }
+  textarea { width: 100%; min-height: 56px; border: 1px solid #ccc; border-radius: 8px; padding: 8px; }
+  .send { position: fixed; left: 0; right: 0; bottom: 0; background: #fff; border-top: 1px solid var(--line); padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); z-index: 20; }
+  .send .in { max-width: 560px; margin: 0 auto; display: flex; gap: 8px; }
+  .send button { flex: 1; border: none; border-radius: 12px; padding: 14px 8px; font-size: 18px; font-weight: bold; cursor: pointer; background: var(--green); color: #fff; }
+  .send button.sub { flex: none; background: #fff; color: #333; border: 1px solid #bbb; font-size: 14px; font-weight: normal; padding: 14px 12px; }
+  .send button:disabled { background: #b9c9bd; cursor: default; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { border-bottom: 1px solid var(--line); padding: 7px 6px; text-align: left; vertical-align: top; }
+  th { font-size: 12px; color: var(--gray); white-space: nowrap; }
+  td.r, th.r { text-align: right; white-space: nowrap; }
+  td .st { display: inline-block; border-radius: 999px; padding: 1px 9px; font-size: 12px; white-space: nowrap; }
+  .st.none { background: #fdecec; color: var(--red); } .st.sent { background: var(--orange-l); color: var(--orange-d); } .st.app { background: var(--green-l); color: var(--green-d); }
+  .lnk { background: none; border: none; color: var(--green-d); text-decoration: underline; cursor: pointer; padding: 0; font-weight: bold; text-align: left; }
+  .btn { border: 1px solid #bbb; background: #fff; border-radius: 999px; padding: 7px 14px; cursor: pointer; }
+  .btn.go { background: var(--green); color: #fff; border-color: var(--green); font-weight: bold; }
+  .btn:disabled { opacity: .45; cursor: default; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .cols { display: grid; gap: 12px; }
+  @media (min-width: 900px) { .cols.two { grid-template-columns: minmax(0, 1fr) 420px; align-items: start; } .cols.two .send { position: static; border: none; padding: 10px 0 0; } }
+  #toast { position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%); background: #222; color: #fff; padding: 10px 16px; border-radius: 10px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 50; max-width: 90%; }
+  #toast.show { opacity: 1; } #toast.err { background: var(--red); }
+  @media print { header a, .send, .tabs, .modes, .noprint { display: none !important; } body { background: #fff; } }
+</style>
+</head>
+<body>
+<div id="app"><header><div><h1>出勤希望</h1><div class="sub">読み込んでいます…</div></div></header></div>
+<div id="toast"></div>
+<script>
+// 出勤希望：パートさんが、次の月・次の次の月の出勤する日に 〇 を付けて出す（紙の「出勤予定表」の代わり）。
+// 名前は、QR一元管理（index.html）で決めた名前（名札の QR か、担当・名前の画面）を使う。
+// 計画担当は、全員ぶんの一覧を見て、代わりに入れる・出勤の表に入れる、ができる。窓口は 出勤希望.gs
+function load(k) { try { return localStorage.getItem('qrdemo.' + k) || ''; } catch (e) { return ''; } }
+function save(k, v) { try { localStorage.setItem('qrdemo.' + k, v); } catch (e) {} }
+const ME = load('person');
+const PART_PHONE = load('mode') === 'part';                       // 共有の「パートさん用」のスマホ
+const PLANNER = !PART_PHONE && load('role') === '__all__';        // 計画担当
+const WD = '日月火水木金土';
+let W = null;            // 窓口の返事
+let ym = '';             // 見ている月
+let who = PLANNER ? '' : ME;   // 入れている相手（計画担当は、一覧から選ぶ）
+let ed = null;           // 入れている途中：{ work:Set, paid:Set, memo, dirty }
+let mode = 'work';       // 押したときに付ける印：work ＝ 〇、paid ＝ 有休
+let busy = false;
+const checked = new Set();   // 計画担当：出勤の表に入れる人
+
+function toast(msg, isErr) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'show' + (isErr ? ' err' : '');
+  clearTimeout(toast.timer); toast.timer = setTimeout(() => { t.className = ''; }, 3500);
+}
+const md = k => Number(k.slice(5, 7)) + '/' + Number(k.slice(8));
+const dowOf = k => new Date(Date.UTC(+k.slice(0, 4), +k.slice(5, 7) - 1, +k.slice(8))).getUTCDay();
+const mdw = k => md(k) + '（' + WD[dowOf(k)] + '）';
+const monthLabel = m => Number(m.slice(5)) + '月';
+const rowOf = (name, m) => (W.rows || []).find(r => r.name === name && r.ym === m);
+const monthOf = m => W.months.find(x => x.ym === m);
+const two = n => ('0' + n).slice(-2);
+
+function startEdit() {
+  const r = who ? rowOf(who, ym) : null;
+  ed = { work: new Set(r ? r.work : []), paid: new Set(r ? r.paid : []), memo: r ? r.memo.replace(/（[^（）]* が代わりに入力）$/, '') : '', dirty: false };
+}
+function locked() { const r = rowOf(who, ym); return !PLANNER && !!(r && r.applied); }
+
+async function boot() {
+  if (!PLANNER && !ME) return renderNoName();
+  try {
+    W = await callApi('api=wish&name=' + encodeURIComponent(ME) + (PLANNER ? '&planner=1' : ''));
+  } catch (e) { return renderError(e.message); }
+  ym = W.months[0].ym;
+  // 最初に出す月：まだ出していない月を先に
+  if (!PLANNER) { const m = W.months.find(x => !rowOf(ME, x.ym)); if (m) ym = m.ym; }
+  startEdit(); render();
+}
+function head(sub) {
+  return `<header><div><h1>出勤希望</h1><div class="sub">${esc(sub)}</div></div><a href="index.html${PART_PHONE ? '?go=reg' : ''}" id="back">もどる</a></header>`;
+}
+function renderNoName() {
+  document.getElementById('app').innerHTML = head('名前が決まっていません') + `<main><div class="card">
+    <p>だれの出勤希望かが、まだ決まっていません。</p>
+    <p class="muted">「もどる」を押して、名札の QR を読むか、担当と名前を選んでから、もう一度開いてください。</p>
+    <p><a class="btn go" style="text-decoration:none;display:inline-block" href="index.html?go=reg">名前を決める</a></p></div></main>`;
+}
+function renderError(msg) {
+  document.getElementById('app').innerHTML = head('読み込めませんでした') + `<main><div class="card"><p>${esc(msg)}</p><p><button type="button" class="btn go" onclick="location.reload()">もう一度読み込む</button></p></div></main>`;
+}
+
+function tabsHtml() {
+  return `<div class="tabs">${W.months.map(m => {
+    let st = '';
+    if (!PLANNER) { const r = rowOf(ME, m.ym); st = r ? `<small class="st-done">${r.applied ? '決まりました' : '出しました'}</small>` : '<small class="st-none">まだ出していません</small>'; }
+    else { const n = (W.rows || []).filter(r => r.ym === m.ym).length; st = `<small>${n}人が提出</small>`; }
+    return `<button type="button" data-ym="${m.ym}" class="${m.ym === ym ? 'on' : ''}">${Number(m.ym.slice(0, 4))}年 ${monthLabel(m.ym)}${st}</button>`;
+  }).join('')}</div>`;
+}
+function calHtml(ro) {
+  const m = monthOf(ym);
+  let cells = WD.split('').map((w, i) => `<div class="wd${i === 0 ? ' sun' : i === 6 ? ' sat' : ''}" data-wd="${i}">${w}</div>`).join('');
+  for (let i = 0; i < m.dow; i++) cells += '<div class="none"></div>';
+  for (let d = 1; d <= m.days; d++) {
+    const k = ym + '-' + two(d), w = (m.dow + d - 1) % 7;
+    const s = ed.paid.has(k) ? 'paid' : ed.work.has(k) ? 'work' : '';
+    cells += `<div class="day ${s}${w === 0 ? ' sun' : w === 6 ? ' sat' : ''}" data-day="${k}" role="button" aria-label="${d}日 ${s === 'work' ? '出勤' : s === 'paid' ? '有休' : '休み'}">${d}<span class="mk">${s === 'work' ? '〇' : s === 'paid' ? '有休' : ''}</span></div>`;
+  }
+  return `<div class="cal${ro ? ' ro' : ''}">${cells}</div>`;
+}
+function editorHtml() {
+  const m = monthOf(ym), r = rowOf(who, ym), ro = locked(), late = W.today > m.deadline;
+  let note = '';
+  if (r && r.applied) note = `<div class="note ok">この内容で、出勤の表に入りました（${esc(r.applied)}）。${PLANNER ? '入れ直したら、もう一度「出勤の表に入れる」を押してください。' : '変えたいときは、「出勤日変更願い」を朝礼のときに社員へ手渡してください。'}</div>`;
+  else if (r) note = `<div class="note ok">${esc(r.at)} に出しました。${PLANNER ? '' : '社員が確かめるまでは、直して出し直せます。'}</div>`;
+  else if (late) note = `<div class="note warn">締め切り（${mdw(m.deadline)}）を過ぎています。出したら、社員にも声をかけてください。</div>`;
+  else note = `<div class="note info"><b>${mdw(m.deadline)}</b> までに出してください。</div>`;
+  return `<div class="card">
+      <h2>${Number(ym.slice(0, 4))} 年 ${monthLabel(ym)}　予定表</h2>
+      <div><b>${esc(who)}</b> さん${PLANNER && who !== ME ? '（代わりに入力）' : ''}</div>
+      ${note}
+      ${ro ? '' : `<p style="margin:8px 0 0">出勤する日を押して <b>〇</b> を付けてください。もう一度押すと消えます。</p>
+      <div class="modes"><button type="button" data-mode="work" class="work${mode === 'work' ? ' on' : ''}">〇 出勤する日</button><button type="button" data-mode="paid" class="paid${mode === 'paid' ? ' on' : ''}">有休を取りたい日</button></div>`}
+      ${calHtml(ro)}
+      <div class="sum"><span>出勤 <b>${ed.work.size}</b> 日</span><span>${monthLabel(ym)}の有休 <b>${ed.paid.size}</b> 日</span></div>
+      ${ro ? (r && r.memo ? `<p class="muted">連絡：${esc(r.memo)}</p>` : '') : `<p class="muted noprint" style="margin:8px 0 4px">曜日の見出し（月・火…）を押すと、その曜日をまとめて付けられます。</p>
+      <label class="muted" for="memo">連絡したいこと（なければ空のまま）</label>
+      <textarea id="memo" maxlength="200" placeholder="例：15日は午前だけ出られます">${esc(ed.memo)}</textarea>`}
+      <p class="muted" style="margin-bottom:0">※出勤日数は、各自の年間スケジュールをもとに決めてください。仕事量によっては、日数の増減をご相談させていただくことがあります。</p>
+    </div>
+    ${ro ? '' : `<div class="send"><div class="in">${PLANNER ? '<button type="button" class="sub" id="close">とじる</button>' : ''}<button type="button" id="send"${busy ? ' disabled' : ''}>${busy ? '送っています…' : r ? '直して出し直す' : 'この内容で出す'}</button></div></div>`}`;
+}
+function listHtml() {
+  const m = monthOf(ym);
+  const names = W.people.filter(p => p.part || rowOf(p.name, ym)).map(p => p.name);
+  (W.rows || []).filter(r => r.ym === ym && !names.includes(r.name)).forEach(r => names.push(r.name));
+  const sent = names.filter(n => rowOf(n, ym)), wait = sent.filter(n => !rowOf(n, ym).applied);
+  [...checked].forEach(n => { if (!wait.includes(n)) checked.delete(n); });
+  const rows = names.map(n => {
+    const r = rowOf(n, ym);
+    const st = !r ? '<span class="st none">まだ</span>' : r.applied ? '<span class="st app">表に入れた</span>' : '<span class="st sent">出した</span>';
+    return `<tr><td>${r && !r.applied ? `<input type="checkbox" data-chk="${esc(n)}"${checked.has(n) ? ' checked' : ''} aria-label="選ぶ">` : ''}</td>
+      <td><button type="button" class="lnk" data-who="${esc(n)}">${esc(n)}</button>${r && r.memo ? `<div class="muted">${esc(r.memo)}</div>` : ''}</td>
+      <td>${st}</td><td class="r">${r ? r.work.length + '日' : ''}</td><td class="r">${r && r.paid.length ? r.paid.length + '日' : ''}</td><td class="muted">${r ? esc(r.at.slice(5)) : ''}</td></tr>`;
+  }).join('');
+  return `<div class="card">
+      <div class="row" style="justify-content:space-between"><b>${monthLabel(ym)}の出勤希望（締め切り ${mdw(m.deadline)}）</b><span class="muted">${sent.length} / ${names.length} 人が提出</span></div>
+      <table><thead><tr><th></th><th>名前</th><th>状態</th><th class="r">出勤</th><th class="r">有休</th><th>出した日時</th></tr></thead><tbody>${rows || '<tr><td colspan="6" class="muted">パートさんが、人の一覧（「人と仕事」の区分）にいません。</td></tr>'}</tbody></table>
+      <div class="row" style="margin-top:10px"><button type="button" class="btn" id="chkall"${wait.length ? '' : ' disabled'}>出した人を全部選ぶ</button>
+        <button type="button" class="btn go" id="apply"${checked.size && !busy ? '' : ' disabled'}>選んだ ${checked.size} 人を、出勤の表に入れる</button></div>
+      <p class="muted" style="margin-bottom:0">名前を押すと、中身を見られます（紙で受け取った分を、代わりに入れることもできます）。「出勤の表に入れる」を押すと、その人のその月の出勤が、希望の日 ＝ 〇・有休の日 ＝ 有休 に書き換わり、人の割り振り表に反映されます。一覧に出るのは、「人と仕事」の区分が社員でない人です。</p>
+    </div>`;
+}
+function render() {
+  const sub = PLANNER ? '計画担当：みんなの出勤希望' : ME + ' さん';
+  const body = PLANNER
+    ? `<main class="wide">${tabsHtml()}<div class="cols${who ? ' two' : ''}"><div>${listHtml()}</div>${who ? `<div>${editorHtml()}</div>` : ''}</div></main>`
+    : `<main>${W.known ? '' : `<div class="note warn">「${esc(ME)}」は、人の一覧にいません。社員に伝えてください。</div>`}${tabsHtml()}${editorHtml()}
+        ${PART_PHONE ? '<p class="muted noprint">出し終わったら、「もどる」を押して「次の人に替わる」を押してください。</p>' : ''}</main>`;
+  document.getElementById('app').innerHTML = head(sub) + body;
+  bind();
+}
+function leaveOk() { return !ed || !ed.dirty || confirm('まだ出していない変更があります。捨ててよいですか？'); }
+function bind() {
+  document.querySelectorAll('[data-ym]').forEach(b => b.onclick = () => { if (b.dataset.ym === ym || !leaveOk()) return; ym = b.dataset.ym; startEdit(); render(); });
+  document.getElementById('back').onclick = ev => { if (!leaveOk()) ev.preventDefault(); else if (ed) ed.dirty = false; };
+  const ro = !who || locked();
+  if (who && !ro) {
+    const keepMemo = () => { const t = document.getElementById('memo'); if (t) ed.memo = t.value; };
+    document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { keepMemo(); mode = b.dataset.mode; render(); });
+    const flip = (k, on) => {
+      const mine = mode === 'paid' ? ed.paid : ed.work, other = mode === 'paid' ? ed.work : ed.paid;
+      if (on === undefined) on = !mine.has(k);
+      if (on) { mine.add(k); other.delete(k); } else mine.delete(k);
+      ed.dirty = true;
+    };
+    document.querySelectorAll('[data-day]').forEach(c => c.onclick = () => { keepMemo(); flip(c.dataset.day); render(); });
+    // 曜日の見出し：その曜日をまとめて付ける（全部付いていたら、まとめて消す）
+    document.querySelectorAll('[data-wd]').forEach(h => h.onclick = () => {
+      keepMemo();
+      const m = monthOf(ym), keys = [];
+      for (let d = 1; d <= m.days; d++) if ((m.dow + d - 1) % 7 === Number(h.dataset.wd)) keys.push(ym + '-' + two(d));
+      const mine = mode === 'paid' ? ed.paid : ed.work, all = keys.every(k => mine.has(k));
+      keys.forEach(k => flip(k, !all));
+      render();
+    });
+    const memo = document.getElementById('memo'); if (memo) memo.oninput = () => { ed.memo = memo.value; ed.dirty = true; };
+    document.getElementById('send').onclick = send;
+  }
+  const close = document.getElementById('close'); if (close) close.onclick = () => { if (!leaveOk()) return; who = ''; startEdit(); render(); };
+  if (PLANNER) {
+    document.querySelectorAll('[data-who]').forEach(b => b.onclick = () => { if (!leaveOk()) return; who = b.dataset.who; startEdit(); render(); if (innerWidth < 900) document.querySelector('.cols > div:last-child').scrollIntoView({ behavior: 'smooth' }); });
+    document.querySelectorAll('[data-chk]').forEach(c => c.onchange = () => { c.checked ? checked.add(c.dataset.chk) : checked.delete(c.dataset.chk); render(); });
+    document.getElementById('chkall').onclick = () => { (W.rows || []).filter(r => r.ym === ym && !r.applied).forEach(r => checked.add(r.name)); render(); };
+    document.getElementById('apply').onclick = apply;
+  }
+}
+async function post(body, done) {
+  if (busy) return;
+  busy = true; render();
+  try {
+    W = await postApi(Object.assign({ action: 'wish', planner: PLANNER, person: ME, viewer: ME }, body));
+    busy = false; done();
+  } catch (e) { busy = false; render(); toast(e.message, true); }
+}
+function send() {
+  const t = document.getElementById('memo'); if (t) ed.memo = t.value;
+  if (!ed.work.size && !ed.paid.size) return toast('出勤する日に 〇 を付けてください', true);
+  const msg = (PLANNER && who !== ME ? who + ' さんの' : '') + monthLabel(ym) + 'の出勤希望を出します。\n出勤 ' + ed.work.size + ' 日' + (ed.paid.size ? '・有休 ' + ed.paid.size + ' 日' : '') + '\nよろしいですか？';
+  if (!confirm(msg)) return;
+  post({ op: 'save', name: who, ym: ym, work: [...ed.work].sort(), paid: [...ed.paid].sort(), memo: ed.memo }, () => {
+    startEdit(); render(); toast(monthLabel(ym) + 'の出勤希望を出しました');
+    // もう1つの月がまだなら、知らせる
+    if (!PLANNER) { const m = W.months.find(x => !rowOf(ME, x.ym)); if (m) setTimeout(() => toast('続けて、' + monthLabel(m.ym) + 'も出せます（上で月を切り替え）'), 3600); }
+  });
+}
+function apply() {
+  const names = [...checked];
+  if (!names.length || !confirm(monthLabel(ym) + '：' + names.length + ' 人の希望を、出勤の表に入れます。\nその人の' + monthLabel(ym) + 'の出勤は、希望の内容に書き換わります。よろしいですか？')) return;
+  post({ op: 'apply', ym: ym, names: names }, () => { checked.clear(); if (who) startEdit(); render(); toast(names.length + ' 人ぶんを、出勤の表に入れました'); });
+}
+window.addEventListener('beforeunload', ev => { if (ed && ed.dirty) { ev.preventDefault(); ev.returnValue = ''; } });
+boot();
+</script>
+</body>
+</html>
