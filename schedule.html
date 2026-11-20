@@ -737,7 +737,11 @@ function moveRows(who, target, after) {
   rest.splice(at, 0, ...moving);
   rowOrder = rest; saveRows(); render();
 }
-function closeWhoMenu() { const m = document.getElementById('whomenu'); m.hidden = true; menuOpen = false; }
+let jobMenu = false;   // カードの右クリックのメニューを出している（その間、下の帯は出さない）
+function closeWhoMenu() {
+  const m = document.getElementById('whomenu'); m.hidden = true; menuOpen = false;
+  if (jobMenu) { jobMenu = false; if (sel && sel.aid && !sel.join) { sel = null; render(); } }   // 何も選ばずに閉じたら、カードの選択も外す
+}
 function openWhoMenu(x, y) {
   const names = sch.people.map(p => p.name).filter(n => pickedWho.has(n));
   const toHide = names.filter(n => !hiddenWho.has(n)), toShow = names.filter(n => hiddenWho.has(n));
@@ -785,6 +789,7 @@ function moveTo(aid, td) {
 // まとめて選んでいるとき・引き出しの作業を選んでいるときの案内もここに出す（表の上に出すと、表がずれるため）
 function renderPanel() {
   const el = document.getElementById('panel');
+  if (jobMenu) { el.hidden = true; document.body.classList.remove('panel-on'); return; }
   const a = sel && sel.aid ? sch.assigns.find(x => x.aid === sel.aid) : null;
   const t0 = sel && !sel.aid ? sch.tasks.find(x => x.id === sel.id && x.key === sel.key) : null;
   const show = on => { el.hidden = !on; document.body.classList.toggle('panel-on', on); };
@@ -841,7 +846,8 @@ function actDel(a) {
 function openJobMenu(aid, x, y) {
   const a = sch.assigns.find(v => v.aid === aid);
   if (!a || a.tmp) return;
-  multi.clear(); sel = { aid: aid }; render();
+  if (menuOpen) closeWhoMenu();
+  multi.clear(); sel = { aid: aid }; jobMenu = true; render();
   const m = document.getElementById('whomenu');
   m.innerHTML = `<div class="ttl">${esc(a.plan)}：${esc(a.task)}<br>${esc(a.name)}　${esc(a.date.slice(5).replace('-', '/'))}</div>
     ${canEdit() ? `<div class="hrow"><input id="jm-h" type="number" inputmode="decimal" step="0.25" min="0.25" value="${esc(num(a.hours))}" aria-label="時間">時間<button type="button" data-op="set">変える</button></div>
@@ -851,8 +857,12 @@ function openJobMenu(aid, x, y) {
     <button type="button" data-op="plan">この計画の進み具合</button>`;
   m.hidden = false; menuOpen = true; menuAt = Date.now();
   const w = m.offsetWidth, h = m.offsetHeight;
-  m.style.left = Math.max(4, Math.min(x, innerWidth - w - 4)) + 'px';
-  m.style.top = Math.max(4, Math.min(y, innerHeight - h - 4)) + 'px';
+  // カードのすぐ右に出す（右に入らなければ左）。上はカードの上端にそろえる
+  const card = [...document.querySelectorAll('.job')].find(c => c.dataset.aid === aid);
+  const r = card ? card.getBoundingClientRect() : { left: x, right: x, top: y };
+  const left = r.right + 6 + w <= innerWidth - 4 ? r.right + 6 : r.left - 6 - w;
+  m.style.left = Math.max(4, Math.min(left, innerWidth - w - 4)) + 'px';
+  m.style.top = Math.max(4, Math.min(r.top, innerHeight - h - 4)) + 'px';
   const run = op => {
     if (op === 'plan') { location.href = planUrl(a.id); return; }
     if (op === 'set' && !actSet(a, document.getElementById('jm-h').value)) return;
