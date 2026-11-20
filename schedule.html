@@ -250,24 +250,54 @@ const inflight = new Map();        // 鍵 → 読み込み中の Promise（同�
 let gen = 0;                       // 捨てるたびに増やす。捨てる前に頼んだ読み込みの返事は覚えない
 let want = null;                   // 今見たい週の鍵（読み込み中に別の週へ移ったら、古い返事で描かない）
 const FRESH_MS = 60000, AROUND_MS = 5 * 60000;
-function remember(key, s) { const v = { s, at: Date.now() }; weekCache.set(key, v); weekCache.set(s.start, v); }
+// 窓口には、見たい日の PAD 日前から SPAN 日ぶんをまとめて頼む（窓口は1回に約10秒かかり、その大半は期間の長さに関係ない。
+// まとめて受け取れば、日をずらしても読み直さずに済む）。受け取ったら、始まりの日ごとの7日間に切り分けて覚える
+const PAD = 14, SPAN = 35;
+function sliceView(b, start) {
+  const i = b.days.findIndex(d => d.key === start);
+  if (i < 0 || i + 7 > b.days.length) return null;
+  const days = b.days.slice(i, i + 7), end = days[6].key, last = end > b.horizonEnd ? end : b.horizonEnd;
+  const cap = {};
+  b.people.forEach(p => { const c = b.cap[p.name] || {}; cap[p.name] = {}; days.forEach(d => { cap[p.name][d.key] = c[d.key] || 0; }); });
+  // 作業は、予定日がその7日間の終わり（か、自動で組む期間の終わり）までのものと、割り振りがあるもの（窓口が7日間だけ返すときと同じ決まり）
+  return Object.assign({}, b, { start: start, end: end, days: days, cap: cap,
+    assigns: b.assigns.filter(a => a.date >= start && a.date <= end), tasks: b.tasks.filter(t => t.due <= last || t.assigned > 0) });
+}
+// 窓口の返事 b を切り分けて覚え、見たい日（b.view）からの7日間を返す。key は頼んだときの鍵（'' は標準の週）
+function remember(key, b) {
+  const at = Date.now();
+  let main = null;
+  if (b.view) {
+    for (let i = 0; i + 7 <= b.days.length; i++) {
+      const v = sliceView(b, b.days[i].key);
+      weekCache.set(v.start, { s: v, at: at });
+      if (v.start === b.view) main = v;
+    }
+  }
+  if (!main) { main = b; weekCache.set(b.start, { s: b, at: at }); }
+  weekCache.set(key, { s: main, at: at });
+  return main;
+}
 function forget() { gen++; weekCache.clear(); inflight.clear(); }
-function keep(s) { forget(); remember(s.start, s); if (!from) saveLast(prefStart(), s); }   // 手直しの返事：それだけを覚え直す
+function keep(b) { forget(); const s = remember(b.view || b.start, b); if (!from) saveLast(prefStart(), s); return s; }   // 手直しの返事：それだけを覚え直す。返すのは、見ている7日間
 function fetchWeek(key) {
   if (inflight.has(key)) return inflight.get(key);
   const g = gen;
-  const p = callApi('api=schedule' + (key ? '&from=' + encodeURIComponent(key) + '&exact=1' : ''))
-    .then(s => { if (g === gen) remember(key, s); return s; })
+  const p = callApi('api=schedule' + (key ? '&from=' + encodeURIComponent(key) + '&exact=1' : '') + '&pad=' + PAD + '&span=' + SPAN)
+    .then(b => { if (g === gen) return remember(key, b); return (b.view && sliceView(b, b.view)) || b; })
     .finally(() => { if (inflight.get(key) === p) inflight.delete(key); });
   inflight.set(key, p);
   return p;
 }
-// 前後の週を裏で読んでおく（まだ無いか、5分より古いときだけ。覚えている週をつないで出せるなら読まない）
+// 前後を裏で読んでおく：見ている日の2週間先（前）が、まだ無いか、5分より古いときだけ。1回で、その前後2週間ぶんが届く
+const preBusy = {};
 function prefetchAround() {
   if (!sch) return;
-  [7, -7].forEach(n => {
+  [PAD, -PAD].forEach(n => {
     const k = addDays(sch.start, n), h = weekCache.get(k);
-    if (h ? Date.now() - h.at >= AROUND_MS : !compose(k)) fetchWeek(k).catch(() => {});
+    if (preBusy[n] || (h && Date.now() - h.at < AROUND_MS)) return;
+    preBusy[n] = true;
+    fetchWeek(k).catch(() => {}).finally(() => { preBusy[n] = false; });
   });
 }
 // 覚えている週をつないで、start の日からの7日間を作る（1日ずつ送るとき、窓口を待たずにすぐ出すため）。足りない日があれば null
@@ -342,8 +372,8 @@ async function reload(force) {
 async function edit(body) {
   busy(true);
   try {
-    sch = await postApi(Object.assign({ action: 'schedule', planner: canEdit(), from: sch.start, exact: true }, body));
-    keep(sch); prefetchAround();
+    sch = keep(await postApi(Object.assign({ action: 'schedule', planner: canEdit(), from: sch.start, exact: true, pad: PAD, span: SPAN }, body)));
+    prefetchAround();
     sel = null;
   } catch (e) { toast(e.message, true); }
   busy(false);
@@ -368,10 +398,10 @@ async function pump() {
     const ops = pending.splice(0), week = sch.start;
     const body = ops.length === 1 ? ops[0] : { op: 'batch', ops: ops };
     try {
-      const s = await postApi(Object.assign({ action: 'schedule', planner: canEdit(), from: week, exact: true }, body));
-      keep(s);
-      // 続けて送るものが無く、見ている週が同じなら、窓口の返事で描き直す
-      if (!pending.length && sch.start === week) {
+      const got = keep(await postApi(Object.assign({ action: 'schedule', planner: canEdit(), from: week, exact: true, pad: PAD, span: SPAN }, body)));
+      // 続けて送るものが無ければ、窓口の返事で描き直す（送っている間に日をずらしていたら、その日からの7日間で）
+      const s = sch.start === week ? got : (weekCache.get(sch.start) || {}).s;
+      if (!pending.length && s) {
         if (dragAid || dragTask) lateSch = s;      // つかんでいる最中は描き直さない（放したあとに描く）
         else { lateSch = null; sch = s; dropGone(); render(); }
       }
