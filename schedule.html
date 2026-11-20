@@ -103,6 +103,8 @@
   .job .fx { font-size: 10px; opacity: .9; }
   .job.fixed { box-shadow: inset 4px 0 0 rgba(255,255,255,.75); padding-left: 9px; }
   .job.done { opacity: .42; }
+  .job.tmp { opacity: .7; cursor: progress; }
+  .job .grp { font-size: 10px; background: rgba(255,255,255,.28); border-radius: 999px; padding: 0 5px; margin-left: 2px; }
   .job.sel { outline: 3px solid var(--orange); outline-offset: 1px; }
   .job.msel { outline: 3px solid #1a73e8; outline-offset: 1px; }
   /* 人の行：名前をつかんで並び替え／右クリックで非表示 */
@@ -186,6 +188,9 @@ let fArea = '', fKubun = '';       // しぼりこみ（エリア・区分）
 let sel = null;                    // 選んでいるもの：{ aid }（割り振りのカード）か { id, key }（足りない作業）
 let dragAid = '';
 let dragTask = null;               // 引き出しからつかんでいる足りない作業 { id, key }
+let lateSch = null;                // つかんでいる最中に届いた窓口の返事（放したあとに描く）
+let tmpNo = 0;                     // 画面に先に出すカードの仮の番号（窓口の返事が届くまで）
+let groupOf = new Map();           // 作業と日 → 入っている人数（カードに「👥3」と出す）
 let drawerOpen = load('schedDrawer') === '1';   // 右の引き出し（足りない作業）を開いているか。このブラウザに覚える
 const multi = new Set();           // Shift を押しながら選んだカード（割り振りID）。まとめて動かす
 const pending = [];                // 窓口へ送る順番待ち（押したらすぐ画面に反映し、裏で送る）
@@ -359,7 +364,10 @@ async function pump() {
       const s = await postApi(Object.assign({ action: 'schedule', planner: canEdit(), from: week, exact: true }, body));
       keep(s);
       // 続けて送るものが無く、見ている週が同じなら、窓口の返事で描き直す
-      if (!pending.length && sch.start === week && !dragAid) { sch = s; dropGone(); render(); }
+      if (!pending.length && sch.start === week) {
+        if (dragAid || dragTask) lateSch = s;      // つかんでいる最中は描き直さない（放したあとに描く）
+        else { lateSch = null; sch = s; dropGone(); render(); }
+      }
     } catch (e) {
       pending.length = 0;
       toast('保存できませんでした：' + e.message + '（画面を読み込み直します）', true);
@@ -370,6 +378,11 @@ async function pump() {
   }
   sending = false; saveBadge();
   prefetchAround();
+}
+// つかんでいる最中に届いた返事を、放したあとに描く（続けて送るものがあれば、その返事を待つ）
+function applyLate() {
+  const s = lateSch; lateSch = null;
+  if (s && !sending && !pending.length && s.start === sch.start) { sch = s; dropGone(); render(); }
 }
 // 選んでいたカードが、もう無ければ選択から外す
 function dropGone() {
@@ -409,14 +422,17 @@ const dowOf = k => new Date(Date.parse(k + 'T00:00:00Z')).getUTCDay();
 
 function jobHtml(a) {
   const isSel = sel && sel.aid === a.aid;
-  return `<div class="job${a.fixed ? ' fixed' : ''}${a.done ? ' done' : ''}${isSel ? ' sel' : ''}${multi.has(a.aid) ? ' msel' : ''}" style="--c:${colorOf(a.major)}" data-aid="${esc(a.aid)}"${canEdit() ? ' draggable="true"' : ''}
-    title="${esc(a.plan)}（${esc(a.id)}）／${esc(a.task)}／実際に入る ${esc(num(a.hours))} 時間${a.f && a.f !== 1 ? '・1人前に直すと ' + esc(num(a.std)) + ' 時間（掛ける数 ' + esc(num(a.f)) + '）' : ''}${a.fixed ? '／固定（自動の組み直しで動かない）' : ''}">
-    <div class="tk"><span><b>${esc(a.task)}</b>${a.done ? '（済）' : ''}${a.fixed ? ' 📌' : ''}${a.f && a.f !== 1 ? ` <small class="fx">×${esc(num(a.f))}</small>` : ''}</span><b>${esc(num(a.hours))}h</b></div>
+  const grp = groupOf.get(a.id + '|' + a.key + '|' + a.date) || 1;
+  return `<div class="job${a.fixed ? ' fixed' : ''}${a.done ? ' done' : ''}${a.tmp ? ' tmp' : ''}${isSel ? ' sel' : ''}${multi.has(a.aid) ? ' msel' : ''}" style="--c:${colorOf(a.major)}" data-aid="${esc(a.aid)}"${canEdit() && !a.tmp ? ' draggable="true"' : ''}
+    title="${esc(a.plan)}（${esc(a.id)}）／${esc(a.task)}／実際に入る ${esc(num(a.hours))} 時間${a.f && a.f !== 1 ? '・1人前に直すと ' + esc(num(a.std)) + ' 時間（掛ける数 ' + esc(num(a.f)) + '）' : ''}${grp > 1 ? '／この日 ' + grp + ' 人でやる' : ''}${a.fixed ? '／固定（自動の組み直しで動かない）' : ''}${a.tmp ? '／保存中' : ''}">
+    <div class="tk"><span><b>${esc(a.task)}</b>${a.done ? '（済）' : ''}${a.fixed ? ' 📌' : ''}${grp > 1 ? `<small class="grp">👥${grp}</small>` : ''}${a.f && a.f !== 1 ? ` <small class="fx">×${esc(num(a.f))}</small>` : ''}</span><b>${esc(num(a.hours))}h</b></div>
     <div class="nm">${esc(a.plan)}</div></div>`;
 }
 
 function render() {
   const people = visiblePeople(), names = people.map(p => p.name);
+  groupOf = new Map();
+  sch.assigns.forEach(a => { const k = a.id + '|' + a.key + '|' + a.date; groupOf.set(k, (groupOf.get(k) || 0) + 1); });
   // エリアは「全体」を先に、あとは名前の中の数の順（第1・第2・第3）
   const areaRank = a => /全体/.test(a) ? -1 : (Number(String(a).normalize('NFKC').replace(/\D/g, '')) || 999);
   const areas = [...new Set(sch.people.map(p => p.area).filter(String))].sort((a, b) => areaRank(a) - areaRank(b) || a.localeCompare(b, 'ja')), kubuns = [...new Set(sch.people.map(p => p.kubun).filter(String))];
@@ -480,7 +496,7 @@ function render() {
         <h3>見方</h3>
         <p class="muted">カードの色は工程（カレンダーと同じ）。時間は、その人が実際に入る時間。「×0.8」は掛ける数で、その人の1時間が1人前の 0.8 時間ぶん（「人と仕事」シートの A・B・C と「設定」シートで決まる）。</p>
         <p class="muted">日付の下は「割り振り ／ 出勤」の時間。その下は1人前に直した時間。赤い「人手不足」は、その日が予定日の作業（過ぎた作業は今日）のうち、まだだれにも割り振られていない時間（1人前で）。割り振られていない作業は、右の「割り振られていない作業」を開くと並んでいる。</p>
-        <p class="muted">Shift を押しながらホイールを回すと、1日ずつ前後へ送れる（タッチパッドは横になぞる）。カードは、つかんで別のマスへ動かせる（押して選んでから、動かす先のマスを押してもよい）。Shift を押しながらカードを押すと何枚でも選べて、まとめて動かせる。動かしたカードは 📌（固定）になり、「自動で組み直す」で動かない。自動で組むのは ${esc(sch.today.slice(5).replace('-', '/'))} から ${esc(sch.horizonEnd.slice(5).replace('-', '/'))} まで。</p>
+        <p class="muted">Shift を押しながらホイールを回すと、1日ずつ前後へ送れる（タッチパッドは横になぞる）。カードは、つかんで別のマスへ動かせる（押して選んでから、動かす先のマスを押してもよい）。Shift を押しながらカードを押すと何枚でも選べて、まとめて動かせる。1つの作業に何人でも入れられる：カードを押して「人を足す」を押し、足す人のマスを押す（Ctrl を押しながらカードを別のマスへ落としてもよい）。まだ足りない時間があれば、足した人の空きの分だけ入る。足りていれば、同じ日の人数で等分になる。同じ日に何人かでやる作業は、カードに 👥 と人数が出る。動かしたカードは 📌（固定）になり、「自動で組み直す」で動かない。自動で組むのは ${esc(sch.today.slice(5).replace('-', '/'))} から ${esc(sch.horizonEnd.slice(5).replace('-', '/'))} まで。</p>
         ${canEdit() && sch.bookUrl ? `<p><a href="${esc(sch.bookUrl)}" target="_blank" rel="noopener">スケジュール用のスプレッドシートを開く</a></p>` : ''}
         <details><summary>時間を出せない作業・古い作業（${sch.unknownCount || sch.unknown.length}件）</summary>
           ${sch.unknown.length ? sch.unknown.map(u => `<div class="uk"><a href="${esc(planUrl(u.id))}">${esc(u.name)}</a>　${esc(u.task)}${u.due ? '　' + esc(u.due) : ''}<div class="muted">${esc(u.why)}</div></div>`).join('') : '<div class="muted">ありません。</div>'}
@@ -510,7 +526,7 @@ function drawerHtml(list) {
   return `<button type="button" class="dtab" id="dtab" aria-expanded="${drawerOpen}">${drawerOpen ? '▶ しまう' : '◀ 割り振られていない作業'}${list.length ? `<b>${list.length}</b>` : ''}</button>
     <div class="dbody"${drawerOpen ? '' : ' hidden'}>
       <div class="dhead">まだ割り振られていない作業<span class="muted">　${list.length}件</span></div>
-      <p class="muted" style="margin:0 0 8px">${canEdit() ? 'つかんで表のマス（人 × 日）へ落とすと、その人のその日に足せます（固定 📌 になる）。押して選んでからマスを押してもよい。' : '見るだけです。足すのは計画担当だけ。'}</p>
+      <p class="muted" style="margin:0 0 8px">${canEdit() ? 'つかんで表のマス（人 × 日）へ落とすと、その人のその日に足せます（固定 📌 になる）。押して選んでからマスを押してもよい。2人目からは、表のカードを押して「人を足す」。' : '見るだけです。足すのは計画担当だけ。'}</p>
       ${items.length ? items.map(t => `<div class="task${sel && sel.id === t.id && sel.key === t.key ? ' sel' : ''}" style="--c:${colorOf(t.major)}" data-tid="${esc(t.id)}" data-tkey="${esc(t.key)}"${canEdit() ? ' draggable="true"' : ''}>
           <div class="nm">${esc(t.name)} <span class="muted">${esc(t.id)}</span></div>
           <div>${esc(t.task)}　予定日 ${esc(t.dueLabel)}${t.late ? '<span class="lk">（過ぎています）</span>' : ''}</div>
@@ -522,7 +538,61 @@ function drawerHtml(list) {
 function addTask(t, td) {
   const cap = sch.cap[td.dataset.name][td.dataset.date] || 0;
   const free = cap - jobsOf(td.dataset.name, td.dataset.date).filter(a => !a.done).reduce((n, a) => n + a.hours, 0);
-  edit({ op: 'add', date: td.dataset.date, name: td.dataset.name, id: t.id, key: t.key, hours: free >= 0.25 ? Math.min(t.short, free) : t.short });   // 足したあと、掛ける数で足りなければ「あと ◯ 時間」が残る
+  const name = td.dataset.name, date = td.dataset.date;
+  sel = null;
+  const hours = Math.round((free >= 0.25 ? Math.min(t.short, free) : t.short) / 0.25) * 0.25;   // 足したあと、掛ける数で足りなければ「あと ◯ 時間」が残る
+  if (!(hours > 0)) return toast('足す時間がありません', true);
+  // すぐ画面に出して、窓口へは裏で送る。返事が届くまでは仮のカード（うすい色。動かせない）
+  sendLater({ op: 'add', date: date, name: name, id: t.id, key: t.key, hours: hours }, () => {
+    const f = guessF(name, t.key);
+    sch.assigns.push(tmpCard(t.id, t.key, name, date, hours, f, t.name, t.task, t.major));
+    t.assigned = (t.assigned || 0) + hours * f;
+    t.short = Math.max(0, Math.round((t.hours - t.assigned) * 100) / 100);
+  });
+  toast(name + ' さんに足しました');
+}
+// 掛ける数の見当（窓口の返事で正しい値になる）：その人の同じ工程のカードがあればその値、なければその人のならし
+function guessF(name, key) {
+  const a = sch.assigns.find(x => x.name === name && x.key === key && x.f);
+  if (a) return a.f;
+  const p = sch.people.find(x => x.name === name);
+  return (p && p.eff) || 1;
+}
+function tmpCard(id, key, name, date, hours, f, plan, task, major) {
+  return { aid: 'tmp' + (++tmpNo), tmp: true, date: date, name: name, id: id, key: key, hours: hours, f: f, std: Math.round(hours * f * 100) / 100,
+    fixed: true, memo: '', plan: plan, task: task, major: major, done: false };
+}
+// 人を足す：カード aid と同じ作業に、そのマス（人 × 日）の人をもう1人入れる。
+// まだ足りない時間があり、その人のその日に空きがあれば、足りない分を空きまで受け持つ（ほかの人の時間は変えない）。
+// それ以外（足りている・空きがない）は、その日に同じ作業をしている人（いなければ元のカード）の時間を、人数で等分する（スケジュール.gs の join と同じ）
+function joinTo(aid, td) {
+  const name = td.dataset.name, date = td.dataset.date;
+  const src = sch.assigns.find(x => x.aid === aid);
+  if (!src || src.tmp) return;
+  if (src.done) return toast('この作業は、もう終わっています', true);
+  const same = x => x.id === src.id && x.key === src.key;
+  if (sch.assigns.some(x => same(x) && x.date === date && x.name === name)) return toast(name + ' さんは、その日のこの作業にもう入っています', true);
+  const t = taskOf(src), f = guessF(name, src.key), up = h => Math.ceil(h / 0.25 - 1e-9) * 0.25;
+  const free = ((sch.cap[name] || {})[date] || 0) - jobsOf(name, date).reduce((n, a) => n + a.hours, 0);
+  const fill = !!t && t.short >= 0.25 && free >= 0.25;
+  sendLater({ op: 'join', aid: aid, date: date, name: name }, () => {
+    let mine;
+    if (fill) {
+      mine = Math.min(up(t.short / f), Math.floor(free / 0.25 + 1e-9) * 0.25);
+      t.assigned = (t.assigned || 0) + mine * f;
+      t.short = Math.max(0, Math.round((t.hours - t.assigned) * 100) / 100);
+    } else {
+      let group = sch.assigns.filter(x => same(x) && x.date === date);
+      if (!group.length) group = [src];
+      const stdOf = x => x.hours * (x.f || 1);
+      const each = group.reduce((n, x) => n + stdOf(x), 0) / (group.length + 1);
+      const part = k => Math.max(0.25, up(each / (k || 1)));
+      group.forEach(x => { x.hours = part(x.f); x.std = Math.round(stdOf(x) * 100) / 100; x.fixed = true; });
+      mine = part(f);
+    }
+    sch.assigns.push(tmpCard(src.id, src.key, name, date, mine, f, src.plan, src.task, src.major));
+  });
+  toast(name + ' さんを足しました' + (fill ? '（足りない分を、空きまで）' : '（時間は人数で分けた）'));
 }
 
 function bind() {
@@ -549,6 +619,7 @@ function bind() {
     el.onclick = ev => {
       ev.stopPropagation();
       const aid = el.dataset.aid;
+      if (aid.indexOf('tmp') === 0) return toast('保存中です。少し待ってください');
       if (ev.shiftKey && canEdit()) {            // Shift を押しながら：何枚でも選ぶ（もう一度押すと外す）
         if (sel && sel.aid) multi.add(sel.aid);  // 先に1枚選んであれば、それも仲間に入れる
         sel = null;
@@ -563,9 +634,9 @@ function bind() {
     el.ondragstart = ev => {
       dragAid = el.dataset.aid;
       if (multi.size && !multi.has(dragAid)) multi.clear();   // 選んでいないカードをつかんだら、その1枚だけ動かす
-      try { ev.dataTransfer.setData('text/plain', dragAid); ev.dataTransfer.effectAllowed = 'move'; } catch (e) {}
+      try { ev.dataTransfer.setData('text/plain', dragAid); ev.dataTransfer.effectAllowed = 'copyMove'; } catch (e) {}
     };
-    el.ondragend = () => { dragAid = ''; document.querySelectorAll('.dragover').forEach(x => x.classList.remove('dragover')); };
+    el.ondragend = () => { dragAid = ''; document.querySelectorAll('.dragover').forEach(x => x.classList.remove('dragover')); applyLate(); };
   });
   document.getElementById('dtab').onclick = () => { drawerOpen = !drawerOpen; save('schedDrawer', drawerOpen ? '1' : ''); render(); };
   document.querySelectorAll('.task').forEach(el => {
@@ -579,7 +650,7 @@ function bind() {
       dragTask = { id: el.dataset.tid, key: el.dataset.tkey };
       try { ev.dataTransfer.setData('text/plain', 'task:' + el.dataset.tid); ev.dataTransfer.effectAllowed = 'copy'; } catch (e) {}
     };
-    el.ondragend = () => { dragTask = null; document.querySelectorAll('.dragover').forEach(x => x.classList.remove('dragover')); };
+    el.ondragend = () => { dragTask = null; document.querySelectorAll('.dragover').forEach(x => x.classList.remove('dragover')); applyLate(); };
   });
   if (!canEdit()) return;
   const mc = document.getElementById('m-clear'); if (mc) mc.onclick = () => { multi.clear(); render(); };
@@ -595,11 +666,14 @@ function bind() {
         return;
       }
       const aid = dragAid || ev.dataTransfer.getData('text/plain'); dragAid = '';
-      if (aid && aid.indexOf('task:') !== 0) moveTo(aid, td);
+      if (!aid || aid.indexOf('task:') === 0) return;
+      if (ev.ctrlKey) { multi.clear(); return joinTo(aid, td); }   // Ctrl を押しながら落とす：動かさずに、その人をもう1人足す
+      moveTo(aid, td);
     };
     td.onclick = () => {
       if (multi.size) return moveTo([...multi][0], td);   // まとめて選んでいるとき：全部をこのマスへ
       if (!sel) return;
+      if (sel.aid && sel.join) return joinTo(sel.aid, td);   // 「人を足す」の最中：押したマスの人を足す（続けて何人でも）
       if (sel.aid) return moveTo(sel.aid, td);
       const t = sch.tasks.find(x => x.id === sel.id && x.key === sel.key);   // 足りない作業を、この人のこの日に足す
       if (t) addTask(t, td);
@@ -716,10 +790,17 @@ function renderPanel() {
     return;
   }
   if (!a) { show(false); return; }
+  if (sel.join && canEdit()) {
+    el.innerHTML = `<span class="ttl">${esc(a.plan)}：${esc(a.task)}</span><span class="muted">に人を足します。足す人のマス（人 × 日）を押してください。続けて何人でも足せます（まだ足りない時間があれば、その人の空きの分だけ入る。足りていれば、同じ日の人数で等分）</span><button type="button" id="p-x">おわる</button>`;
+    show(true);
+    document.getElementById('p-x').onclick = () => { sel = null; render(); };
+    return;
+  }
   const t = taskOf(a);
   el.innerHTML = `<span class="ttl">${esc(a.plan)}：${esc(a.task)}</span><span class="muted">${esc(a.name)}　${esc(a.date.slice(5).replace('-', '/'))}${t ? '　必要 ' + esc(num(t.hours)) + ' 時間（1人前で。予定日 ' + esc(t.dueLabel) + '）' : ''}${a.f && a.f !== 1 ? '　この人は ×' + esc(num(a.f)) + '（1人前に直すと ' + esc(num(a.std)) + ' 時間）' : ''}</span>
     ${canEdit() ? `<input id="p-h" type="number" inputmode="decimal" step="0.25" min="0.25" value="${esc(num(a.hours))}" aria-label="時間">時間
       <button type="button" id="p-set">時間を変える</button>
+      ${a.done ? '' : '<button type="button" id="p-join" title="同じ作業に、もう1人入れる。まだ足りない時間があれば、その人の空きの分だけ入る。足りていれば、同じ日の人数で等分する。カードを Ctrl を押しながら別のマスへ落としてもよい">人を足す 👥</button>'}
       <button type="button" id="p-fix">${a.fixed ? '固定を外す' : '固定する 📌'}</button>
       <button type="button" class="danger" id="p-del">消す</button>` : ''}
     <a href="${esc(planUrl(a.id))}">この計画の進み具合</a>
@@ -732,6 +813,7 @@ function renderPanel() {
     if (!(h > 0)) return toast('時間を入れてください', true);
     sendLater({ op: 'set', aid: a.aid, hours: h }, () => { if (a.std !== undefined && a.hours) a.std = Math.round(a.std / a.hours * h * 100) / 100; a.hours = h; a.fixed = true; sel = null; });
   };
+  const pj = document.getElementById('p-join'); if (pj) pj.onclick = () => { sel = { aid: a.aid, join: true }; render(); };
   document.getElementById('p-fix').onclick = () => sendLater({ op: 'fix', aid: a.aid, fixed: !a.fixed }, () => { a.fixed = !a.fixed; sel = null; });
   document.getElementById('p-del').onclick = () => {
     if (!confirm('この割り振りを消しますか？')) return;
