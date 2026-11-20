@@ -748,7 +748,7 @@ function openWhoMenu(x, y) {
     ${toShow.length ? `<button type="button" data-op="show">表示にもどす${names.length > 1 ? '（' + toShow.length + '人）' : ''}</button>` : ''}
     ${rowOrder.length ? '<button type="button" data-op="reset">並び順を元にもどす（全員）</button>' : ''}
     ${pickedWho.size ? '<button type="button" data-op="clear">選ぶのをやめる</button>' : ''}`;
-  m.hidden = false; menuOpen = true;
+  m.hidden = false; menuOpen = true; menuAt = Date.now();
   const w = m.offsetWidth, h = m.offsetHeight;
   m.style.left = Math.max(4, Math.min(x, innerWidth - w - 4)) + 'px';
   m.style.top = Math.max(4, Math.min(y, innerHeight - h - 4)) + 'px';
@@ -764,7 +764,9 @@ function openWhoMenu(x, y) {
 document.addEventListener('click', ev => { if (document.body.classList.contains('side-on') && !ev.target.closest('#side') && ev.target.id !== 'fbtn') document.body.classList.remove('side-on'); });
 document.addEventListener('mousedown', ev => { if (menuOpen && !ev.target.closest('#whomenu')) closeWhoMenu(); });
 document.addEventListener('keydown', ev => { if (ev.key === 'Escape' && menuOpen) closeWhoMenu(); });
-window.addEventListener('scroll', () => { if (menuOpen) closeWhoMenu(); }, true);
+// メニューを出す直前の描き直しで、表のスクロール位置を戻すときにも scroll が起きる。出した直後の分は数えない（数えると、出たとたんに閉じる）
+let menuAt = 0;
+window.addEventListener('scroll', () => { if (menuOpen && Date.now() - menuAt > 400) closeWhoMenu(); }, true);
 
 // カードを、そのマス（人 × 日）へ動かす。まとめて選んでいて、その中の1枚なら、選んだ全部を動かす。
 // すぐ画面に反映し、窓口へは裏で送る
@@ -847,7 +849,7 @@ function openJobMenu(aid, x, y) {
       <button type="button" data-op="fix">${a.fixed ? '固定を外す' : '固定する 📌'}</button>
       <button type="button" class="danger" data-op="del">消す</button><hr>` : ''}
     <button type="button" data-op="plan">この計画の進み具合</button>`;
-  m.hidden = false; menuOpen = true;
+  m.hidden = false; menuOpen = true; menuAt = Date.now();
   const w = m.offsetWidth, h = m.offsetHeight;
   m.style.left = Math.max(4, Math.min(x, innerWidth - w - 4)) + 'px';
   m.style.top = Math.max(4, Math.min(y, innerHeight - h - 4)) + 'px';
