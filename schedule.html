@@ -149,6 +149,11 @@
   #whomenu .ttl { font-size: 11px; color: var(--gray); padding: 4px 10px 2px; }
   #whomenu button { display: block; width: 100%; text-align: left; background: none; border: none; border-radius: 6px; padding: 7px 10px; font-size: 14px; cursor: pointer; color: #222; }
   #whomenu button:hover { background: var(--green-l); }
+  #whomenu .hrow { display: flex; align-items: center; gap: 6px; padding: 4px 10px; font-size: 14px; }
+  #whomenu .hrow input { width: 66px; font-size: 15px; padding: 4px 6px; border: 1px solid #ccc; border-radius: 6px; text-align: right; }
+  #whomenu .hrow button { width: auto; border: 1px solid #bbb; border-radius: 999px; padding: 4px 12px; }
+  #whomenu button.danger { color: var(--red); }
+  #whomenu hr { border: none; border-top: 1px solid #e5e5e5; margin: 4px 0; }
   #toast { position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%); background: #222; color: #fff; padding: 10px 16px; border-radius: 10px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 40; max-width: 90%; }
   #toast.show { opacity: 1; }
   #toast.err { background: var(--red); }
@@ -359,7 +364,9 @@ async function pump() {
   if (sending) return;
   sending = true; saveBadge();
   while (pending.length) {
-    const body = pending.shift(), week = sch.start;
+    await new Promise(r => setTimeout(r, 400));   // 続けて押した分を待って、まとめて1回で送る（窓口は1回に何秒もかかるため）
+    const ops = pending.splice(0), week = sch.start;
+    const body = ops.length === 1 ? ops[0] : { op: 'batch', ops: ops };
     try {
       const s = await postApi(Object.assign({ action: 'schedule', planner: canEdit(), from: week, exact: true }, body));
       keep(s);
@@ -496,7 +503,7 @@ function render() {
         <h3>見方</h3>
         <p class="muted">カードの色は工程（カレンダーと同じ）。時間は、その人が実際に入る時間。「×0.8」は掛ける数で、その人の1時間が1人前の 0.8 時間ぶん（「人と仕事」シートの A・B・C と「設定」シートで決まる）。</p>
         <p class="muted">日付の下は「割り振り ／ 出勤」の時間。その下は1人前に直した時間。赤い「人手不足」は、その日が予定日の作業（過ぎた作業は今日）のうち、まだだれにも割り振られていない時間（1人前で）。割り振られていない作業は、右の「割り振られていない作業」を開くと並んでいる。</p>
-        <p class="muted">Shift を押しながらホイールを回すと、1日ずつ前後へ送れる（タッチパッドは横になぞる）。カードは、つかんで別のマスへ動かせる（押して選んでから、動かす先のマスを押してもよい）。Shift を押しながらカードを押すと何枚でも選べて、まとめて動かせる。1つの作業に何人でも入れられる：カードを押して「人を足す」を押し、足す人のマスを押す（Ctrl を押しながらカードを別のマスへ落としてもよい）。まだ足りない時間があれば、足した人の空きの分だけ入る。足りていれば、同じ日の人数で等分になる。同じ日に何人かでやる作業は、カードに 👥 と人数が出る。動かしたカードは 📌（固定）になり、「自動で組み直す」で動かない。自動で組むのは ${esc(sch.today.slice(5).replace('-', '/'))} から ${esc(sch.horizonEnd.slice(5).replace('-', '/'))} まで。</p>
+        <p class="muted">Shift を押しながらホイールを回すと、1日ずつ前後へ送れる（タッチパッドは横になぞる）。カードは、つかんで別のマスへ動かせる（押して選んでから、動かす先のマスを押してもよい）。Shift を押しながらカードを押すと何枚でも選べて、まとめて動かせる。カードを右クリックすると、その場にメニュー（時間・人を足す・固定・消す）が出る。1つの作業に何人でも入れられる：カードを押して「人を足す」を押し、足す人のマスを押す（Ctrl を押しながらカードを別のマスへ落としてもよい）。まだ足りない時間があれば、足した人の空きの分だけ入る。足りていれば、同じ日の人数で等分になる。同じ日に何人かでやる作業は、カードに 👥 と人数が出る。動かしたカードは 📌（固定）になり、「自動で組み直す」で動かない。自動で組むのは ${esc(sch.today.slice(5).replace('-', '/'))} から ${esc(sch.horizonEnd.slice(5).replace('-', '/'))} まで。</p>
         ${canEdit() && sch.bookUrl ? `<p><a href="${esc(sch.bookUrl)}" target="_blank" rel="noopener">スケジュール用のスプレッドシートを開く</a></p>` : ''}
         <details><summary>時間を出せない作業・古い作業（${sch.unknownCount || sch.unknown.length}件）</summary>
           ${sch.unknown.length ? sch.unknown.map(u => `<div class="uk"><a href="${esc(planUrl(u.id))}">${esc(u.name)}</a>　${esc(u.task)}${u.due ? '　' + esc(u.due) : ''}<div class="muted">${esc(u.why)}</div></div>`).join('') : '<div class="muted">ありません。</div>'}
@@ -620,6 +627,7 @@ function bind() {
       ev.stopPropagation();
       const aid = el.dataset.aid;
       if (aid.indexOf('tmp') === 0) return toast('保存中です。少し待ってください');
+      if (menuOpen) closeWhoMenu();
       if (ev.shiftKey && canEdit()) {            // Shift を押しながら：何枚でも選ぶ（もう一度押すと外す）
         if (sel && sel.aid) multi.add(sel.aid);  // 先に1枚選んであれば、それも仲間に入れる
         sel = null;
@@ -630,6 +638,7 @@ function bind() {
       sel = sel && sel.aid === aid ? null : { aid: aid };
       render();
     };
+    el.oncontextmenu = ev => { ev.preventDefault(); ev.stopPropagation(); openJobMenu(el.dataset.aid, ev.clientX, ev.clientY); };
     if (!canEdit()) return;
     el.ondragstart = ev => {
       dragAid = el.dataset.aid;
@@ -808,17 +817,51 @@ function renderPanel() {
   show(true);
   document.getElementById('p-x').onclick = () => { sel = null; render(); };
   if (!canEdit()) return;
-  document.getElementById('p-set').onclick = () => {
-    const h = Math.round(Number(document.getElementById('p-h').value) / 0.25) * 0.25;
-    if (!(h > 0)) return toast('時間を入れてください', true);
-    sendLater({ op: 'set', aid: a.aid, hours: h }, () => { if (a.std !== undefined && a.hours) a.std = Math.round(a.std / a.hours * h * 100) / 100; a.hours = h; a.fixed = true; sel = null; });
+  document.getElementById('p-set').onclick = () => actSet(a, document.getElementById('p-h').value);
+  const pj = document.getElementById('p-join'); if (pj) pj.onclick = () => actJoin(a);
+  document.getElementById('p-fix').onclick = () => actFix(a);
+  document.getElementById('p-del').onclick = () => actDel(a);
+}
+// カードの手直し（下の帯と、右クリックのメニューで同じものを使う）
+function actSet(a, v) {
+  const h = Math.round(Number(v) / 0.25) * 0.25;
+  if (!(h > 0)) { toast('時間を入れてください', true); return false; }
+  sendLater({ op: 'set', aid: a.aid, hours: h }, () => { if (a.std !== undefined && a.hours) a.std = Math.round(a.std / a.hours * h * 100) / 100; a.hours = h; a.fixed = true; sel = null; });
+  return true;
+}
+function actJoin(a) { sel = { aid: a.aid, join: true }; render(); }
+function actFix(a) { sendLater({ op: 'fix', aid: a.aid, fixed: !a.fixed }, () => { a.fixed = !a.fixed; sel = null; }); }
+function actDel(a) {
+  if (!confirm('この割り振りを消しますか？')) return;
+  sendLater({ op: 'del', aid: a.aid }, () => { sch.assigns.splice(sch.assigns.indexOf(a), 1); sel = null; });
+}
+// カードを右クリック：下の帯と同じ手直しを、その場のメニューで出す（見るだけの人には、計画へのリンクだけ）
+function openJobMenu(aid, x, y) {
+  const a = sch.assigns.find(v => v.aid === aid);
+  if (!a || a.tmp) return;
+  multi.clear(); sel = { aid: aid }; render();
+  const m = document.getElementById('whomenu');
+  m.innerHTML = `<div class="ttl">${esc(a.plan)}：${esc(a.task)}<br>${esc(a.name)}　${esc(a.date.slice(5).replace('-', '/'))}</div>
+    ${canEdit() ? `<div class="hrow"><input id="jm-h" type="number" inputmode="decimal" step="0.25" min="0.25" value="${esc(num(a.hours))}" aria-label="時間">時間<button type="button" data-op="set">変える</button></div>
+      ${a.done ? '' : '<button type="button" data-op="join">人を足す 👥</button>'}
+      <button type="button" data-op="fix">${a.fixed ? '固定を外す' : '固定する 📌'}</button>
+      <button type="button" class="danger" data-op="del">消す</button><hr>` : ''}
+    <button type="button" data-op="plan">この計画の進み具合</button>`;
+  m.hidden = false; menuOpen = true;
+  const w = m.offsetWidth, h = m.offsetHeight;
+  m.style.left = Math.max(4, Math.min(x, innerWidth - w - 4)) + 'px';
+  m.style.top = Math.max(4, Math.min(y, innerHeight - h - 4)) + 'px';
+  const run = op => {
+    if (op === 'plan') { location.href = planUrl(a.id); return; }
+    if (op === 'set' && !actSet(a, document.getElementById('jm-h').value)) return;
+    closeWhoMenu();
+    if (op === 'join') actJoin(a);
+    if (op === 'fix') actFix(a);
+    if (op === 'del') actDel(a);
   };
-  const pj = document.getElementById('p-join'); if (pj) pj.onclick = () => { sel = { aid: a.aid, join: true }; render(); };
-  document.getElementById('p-fix').onclick = () => sendLater({ op: 'fix', aid: a.aid, fixed: !a.fixed }, () => { a.fixed = !a.fixed; sel = null; });
-  document.getElementById('p-del').onclick = () => {
-    if (!confirm('この割り振りを消しますか？')) return;
-    sendLater({ op: 'del', aid: a.aid }, () => { sch.assigns.splice(sch.assigns.indexOf(a), 1); sel = null; });
-  };
+  m.querySelectorAll('button').forEach(b => b.onclick = () => run(b.dataset.op));
+  const inp = document.getElementById('jm-h');
+  if (inp) inp.onkeydown = ev => { if (ev.key === 'Enter') run('set'); };
 }
 
 function showMessage(msg) {
