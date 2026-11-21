@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>QR一元管理</title>
+<title>なえログ</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="config.js"></script>
 <script src="common.js"></script>
@@ -59,10 +59,18 @@
   .fronthead { flex-wrap: wrap; }
   .fronthead .fme { display: flex; align-items: center; gap: 8px; flex: none; margin-left: auto; }
   .fronthead .fname { font-size: 14px; white-space: nowrap; }
-  .wx { color: #fff; font-size: 12px; cursor: default; background: rgba(255,255,255,.16); border-radius: 999px; padding: 4px 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; min-width: 0; }
+  .wx { display: inline-grid; justify-items: start; color: #fff; font-size: 12px; cursor: default; background: rgba(255,255,255,.16); border-radius: 999px; padding: 4px 12px; white-space: nowrap; overflow: hidden; max-width: 100%; min-width: 0; transition: background .4s, color .4s; }
+  /* 文は全部、同じマスに重ねる（枠の幅がいちばん長い文に合う）。出番でない文は下に待たせ、出番が来たら下から上へ送る */
+  .wx .wxs { grid-area: 1 / 1; transform: translateY(140%); opacity: 0; }
+  .wx .wxs.cur { transform: none; opacity: 1; transition: transform .5s cubic-bezier(.2,.8,.2,1), opacity .35s; }
+  .wx .wxs.out { transform: translateY(-140%); opacity: 0; transition: transform .5s cubic-bezier(.2,.8,.2,1), opacity .35s; }
+  .wx.warn { background: #ffd24d; color: #4a3500; }
+  .wx.danger { background: #e5484d; color: #fff; }
+  @media (prefers-reduced-motion: reduce) { .wx .wxs.cur, .wx .wxs.out { transition: none; } }
   .wx[hidden] { display: none; }
-  @media (max-width: 700px) { .wx { order: 9; flex: 1 0 100%; text-align: center; } }
+  @media (max-width: 700px) { .wx { order: 9; flex: 1 0 100%; justify-items: center; } }
   .loginlogo { text-align: center; margin: 2px 0 10px; }
+  .loginlogo .appname { font-size: 22px; font-weight: bold; color: var(--green-d); letter-spacing: .08em; margin-top: 2px; }
   .loginmain { padding-top: 28px; }   /* ログインの画面は、上の緑の帯を出さない */
   .loginlogo img { width: 120px; height: auto; mix-blend-mode: multiply; }   /* ロゴの白い地を、画面の地の色になじませる */
   .tologin { background: none; border: none; color: var(--green-d); text-decoration: underline; cursor: pointer; font-size: 13px; padding: 4px; }
@@ -852,7 +860,7 @@ function renderSetup() {
   inSetup = true;
   const lg = state.login, canBack = loggedIn();
   if (!lg) {
-    document.getElementById('app').innerHTML = `<header><div><h1>QR一元管理</h1><div class="sub">ログイン</div></div>
+    document.getElementById('app').innerHTML = `<header><div><h1>なえログ</h1><div class="sub">ログイン</div></div>
       <div style="display:flex;gap:6px;flex:none"><button type="button" class="hbtn" id="home">最初へ</button></div>${navHtml()}</header>
       <main style="max-width:520px"><div class="card">スケジュール用のスプレッドシートがまだないので、ログインの一覧を作れません。</div>
         <button type="button" class="role part" id="partbtn" style="width:100%;margin-top:12px">パートさん用<small>共有のスマホ用。名札の QR を読んで、その人として記録する</small></button></main>`;
@@ -861,7 +869,7 @@ function renderSetup() {
     const sel = lg.staff.find(p => p.name === loginPick);
     document.getElementById('app').innerHTML = `
     <main style="max-width:560px" class="loginmain">
-      <div class="loginlogo"><img src="logo.png" alt="永田農園" width="120"></div>
+      <div class="loginlogo"><img src="logo.png" alt="永田農園" width="120"><div class="appname">なえログ</div></div>
       ${canBack ? `<div class="card" style="margin-bottom:12px"><div>いまは <b>${esc(getName())}</b> さん（${esc(roleLabel())}）でログインしています。</div>
         <div style="display:flex;gap:8px;margin-top:8px"><button type="button" class="backbtn" id="back" style="margin:0">このまま、もどる</button><button type="button" class="backbtn" id="logout" style="margin:0">ログアウト</button></div></div>` : ''}
       <label class="field" style="margin-top:0">${canBack ? 'ほかの人でログインする：' : ''}自分の名前を選んでください</label>
@@ -914,7 +922,7 @@ document.addEventListener('click', ev => {
 });
 // 上の帯：題名の下に今の担当と名前。右に「最初へ」「一覧へ」と、「担当・名前」（パートさん用のスマホでは「次の人」）
 function headerHtml(sub, back) {
-  return `<header><div style="min-width:0"><h1>QR一元管理${sub ? '<span style="font-size:12px;font-weight:normal">　' + esc(sub) + '</span>' : ''}</h1>
+  return `<header><div style="min-width:0"><h1>なえログ${sub ? '<span style="font-size:12px;font-weight:normal">　' + esc(sub) + '</span>' : ''}</h1>
       <div class="sub">${esc(roleLabel())}・${esc(getName())}</div></div>
     <span id="sync" hidden></span>
     <div style="display:flex;gap:6px;flex:none"><button type="button" class="hbtn" id="home">最初へ</button>${back ? '<button type="button" class="hbtn" id="tolist">一覧へ</button>' : ''}${
@@ -1529,11 +1537,16 @@ function wishFor() {
   return !!(p && p.kubun && p.kubun.indexOf('パート') >= 0);
 }
 // ---------- 最初の画面の天気：藤沢市の「いま」「今日」「明日」を、数秒ごとに切り替えて出す ----------
-// 予報は Open-Meteo（鍵のいらない公開の予報。送るのは藤沢市の緯度・経度だけ）。30分はこのブラウザに覚えて、読み直さない
-const WX_URL = 'https://api.open-meteo.com/v1/forecast?latitude=35.339&longitude=139.490&timezone=Asia%2FTokyo&forecast_days=2&wind_speed_unit=ms'
-  + '&current=temperature_2m,weather_code,wind_speed_10m,wind_direction_10m'
-  + '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max,wind_direction_10m_dominant';
-const WX_KEEP_MS = 30 * 60000, WX_TURN_MS = 4000;
+// 予報は Open-Meteo（鍵のいらない公開の予報。送るのは藤沢市の緯度・経度だけ）。15分はこのブラウザに覚えて、読み直さない
+// 切り替えは、駅の行き先表示のように下から上へ送る。枠の幅は、いちばん長い文に合わせて変えない。
+// 雷・強い雨・突風のおそれがあるときは、「注意」の文を足し、その文とその日の文で枠の色を変える（黄＝注意、赤＝強い注意）
+const WX_URL = 'https://api.open-meteo.com/v1/forecast?latitude=35.339&longitude=139.490&timezone=Asia%2FTokyo&forecast_days=2&forecast_hours=6&wind_speed_unit=ms'
+  + '&current=temperature_2m,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation'
+  + '&hourly=weather_code,precipitation,wind_gusts_10m'
+  + '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max,wind_direction_10m_dominant,wind_gusts_10m_max';
+const WX_KEEP_MS = 15 * 60000, WX_TURN_MS = 4500;
+// 色を変える目安：突風（最大瞬間風速）15m/s から注意・20m/s から強い注意。雨 1時間に 10mm から注意・30mm から強い注意。雷はいつも強い注意
+const WX_GUST = [15, 20], WX_RAIN = [10, 30];
 let wx = null, wxAt = 0, wxNo = 0, wxTimer = 0, wxBusy = false;
 // 天気の番号（WMO）→ 絵と言葉
 function wxWord(c) {
@@ -1553,28 +1566,69 @@ function wxWord(c) {
 }
 const wxDir = d => ['北', '北東', '東', '南東', '南', '南西', '西', '北西'][Math.round(Number(d) / 45) % 8] || '';
 const wxNum = v => String(Math.round(Number(v)));
+// 荒れ具合：0 ＝ ふつう、1 ＝ 注意、2 ＝ 強い注意（code ＝ 天気の番号、gust ＝ 最大瞬間風速 m/s、rain ＝ 1時間の雨 mm）
+function wxLevel(code, gust, rain) {
+  let lv = 0;
+  if (code >= 95) lv = 2;
+  else if (code === 65 || code === 82) lv = 1;
+  if (gust >= WX_GUST[1]) lv = 2; else if (gust >= WX_GUST[0]) lv = Math.max(lv, 1);
+  if (rain >= WX_RAIN[1]) lv = 2; else if (rain >= WX_RAIN[0]) lv = Math.max(lv, 1);
+  return lv;
+}
+// これから6時間のうちに、雷・強い雨・突風がありそうなら、その知らせ（なければ null）
+function wxAlert() {
+  const h = wx && wx.hourly;
+  if (!h || !h.time) return null;
+  const at = i => Number(String(h.time[i]).slice(11, 13)) + '時ごろ', parts = [];
+  let lv = 0;
+  const th = h.weather_code.findIndex(c => c >= 95);
+  if (th >= 0) { parts.push('⛈ 雷雨のおそれ（' + at(th) + '）'); lv = 2; }
+  let ri = -1; (h.precipitation || []).forEach((v, i) => { if (v >= WX_RAIN[0] && (ri < 0 || v > h.precipitation[ri])) ri = i; });
+  if (ri >= 0) { parts.push('🌧 ' + (h.precipitation[ri] >= WX_RAIN[1] ? '激しい雨' : '強い雨') + ' ' + wxNum(h.precipitation[ri]) + 'mm/時（' + at(ri) + '）'); lv = Math.max(lv, h.precipitation[ri] >= WX_RAIN[1] ? 2 : 1); }
+  let gi = -1; (h.wind_gusts_10m || []).forEach((v, i) => { if (v >= WX_GUST[0] && (gi < 0 || v > h.wind_gusts_10m[gi])) gi = i; });
+  if (gi >= 0) { parts.push('🌬 突風 ' + wxNum(h.wind_gusts_10m[gi]) + 'm/s（' + at(gi) + '）'); lv = Math.max(lv, h.wind_gusts_10m[gi] >= WX_GUST[1] ? 2 : 1); }
+  return parts.length ? { html: '<b>⚠ 藤沢 注意</b> ' + parts.join('　'), lv: lv } : null;
+}
+// 出す文の並び：{ html, lv }
 function wxSlides() {
   if (!wx || !wx.current || !wx.daily) return [];
   const c = wx.current, d = wx.daily, out = [];
+  const al = wxAlert();
+  if (al) out.push(al);
   const w0 = wxWord(c.weather_code);
-  out.push(`<b>藤沢 いま</b> ${w0[0]} ${w0[1]}　${wxNum(c.temperature_2m)}℃　風 ${wxDir(c.wind_direction_10m)} ${wxNum(c.wind_speed_10m)}m/s`);
+  out.push({ html: `<b>藤沢 いま</b> ${w0[0]} ${w0[1]}　${wxNum(c.temperature_2m)}℃　風 ${wxDir(c.wind_direction_10m)} ${wxNum(c.wind_speed_10m)}m/s`,
+    lv: wxLevel(c.weather_code, c.wind_gusts_10m || 0, c.precipitation || 0) });
   ['今日', '明日'].forEach((lb, i) => {
     if (d.weather_code[i] == null) return;
     const w = wxWord(d.weather_code[i]), rain = d.precipitation_probability_max && d.precipitation_probability_max[i];
-    out.push(`<b>藤沢 ${lb}</b> ${w[0]} ${w[1]}　${wxNum(d.temperature_2m_max[i])}℃ / ${wxNum(d.temperature_2m_min[i])}℃${rain == null ? '' : '　雨 ' + wxNum(rain) + '%'}　風 ${wxDir(d.wind_direction_10m_dominant[i])} ${wxNum(d.wind_speed_10m_max[i])}m/s`);
+    const gust = (d.wind_gusts_10m_max && d.wind_gusts_10m_max[i]) || 0, lv = wxLevel(d.weather_code[i], gust, 0);
+    out.push({ html: `<b>藤沢 ${lb}</b> ${w[0]} ${w[1]}　${wxNum(d.temperature_2m_max[i])}℃ / ${wxNum(d.temperature_2m_min[i])}℃${rain == null ? '' : '　雨 ' + wxNum(rain) + '%'}　風 ${wxDir(d.wind_direction_10m_dominant[i])} ${wxNum(d.wind_speed_10m_max[i])}m/s`
+      + (gust >= WX_GUST[0] ? '（突風 ' + wxNum(gust) + 'm/s）' : ''), lv: lv });
   });
   return out;
 }
-function wxDraw() {
+// 枠の中に、文を全部重ねて置く（枠の幅は、いちばん長い文に合う）。出すのは cur の1つ。step ＝ true なら次の文へ送る
+function wxDraw(step) {
   const el = document.getElementById('wx'), s = wxSlides();
   if (!el) { clearInterval(wxTimer); wxTimer = 0; return; }      // 最初の画面を離れたら、切り替えを止める
   if (!s.length) { el.hidden = true; return; }
-  el.hidden = false; el.innerHTML = s[wxNo % s.length];
+  const sig = s.map(x => x.html).join('|');
+  const prev = wxNo % s.length;
+  if (step) wxNo++;
+  const cur = wxNo % s.length;
+  if (el.dataset.sig !== sig) {       // 初めて描く・中身が変わった・画面が描き直された：作り直す（このときは送らない）
+    el.innerHTML = s.map((x, i) => `<span class="wxs${i === cur ? ' cur' : ''}">${x.html}</span>`).join('');
+    el.dataset.sig = sig;
+  } else if (step && cur !== prev) {
+    [...el.children].forEach((c, i) => { c.classList.toggle('out', i === prev); c.classList.toggle('cur', i === cur); });
+  }
+  el.classList.toggle('warn', s[cur].lv === 1); el.classList.toggle('danger', s[cur].lv === 2);
+  el.hidden = false;
 }
 function wxStart() {
   if (!wx) { try { const v = JSON.parse(localStorage.getItem('qrdemo.wx') || 'null'); if (v && v.d) { wx = v.d; wxAt = v.at; } } catch (e) {} }
   wxDraw();
-  if (!wxTimer) wxTimer = setInterval(() => { wxNo++; wxDraw(); }, WX_TURN_MS);
+  if (!wxTimer) wxTimer = setInterval(() => wxDraw(true), WX_TURN_MS);
   if (wxBusy || Date.now() - wxAt < WX_KEEP_MS) return;
   wxBusy = true;
   fetch(WX_URL, { credentials: 'omit' }).then(r => r.ok ? r.json() : Promise.reject()).then(d => {
@@ -1586,7 +1640,7 @@ function wxStart() {
 function renderFront() {
   const who = isPart() ? 'このスマホは「パートさん用」です' : loggedIn() ? 'ログイン中：' + getName() + '（' + roleLabel() + '）' : '';
   document.getElementById('app').innerHTML = `
-    <header class="fronthead"><div><h1>QR一元管理</h1><div class="sub">作業の記録と、進み具合の確認</div></div>
+    <header class="fronthead"><div><h1>なえログ</h1><div class="sub">作業の記録と、進み具合の確認</div></div>
       <span class="wx" id="wx" title="藤沢市の天気（Open-Meteo の予報）" hidden></span>
       <div class="fme">${isPart() ? '<span class="fname">パートさん用</span>' : `<span class="fname"><b>${esc(getName())}</b> さん</span><button type="button" class="hbtn" id="f-out">ログアウト</button>`}</div></header>
     <main style="max-width:520px">
@@ -1759,7 +1813,7 @@ function renderGate() {
   const parts = all.filter(p => p.kubun && p.kubun.indexOf('社員') < 0);
   const names = parts.length ? parts : all;
   document.getElementById('app').innerHTML = `
-    <header><div><h1>QR一元管理</h1><div class="sub">パートさん用</div></div>
+    <header><div><h1>なえログ</h1><div class="sub">パートさん用</div></div>
       <div style="display:flex;gap:6px;flex:none"><button type="button" class="hbtn" id="home">最初へ</button></div>${navHtml()}</header>
     <main style="max-width:520px">
       <div class="card" style="text-align:center">
@@ -1979,7 +2033,7 @@ function render() {
   isPlanner() ? renderPlanner() : sprayMode() ? renderSpray() : renderWorker();
 }
 function showMessage(msg) {
-  document.getElementById('app').innerHTML = `<header><h1>QR一元管理</h1></header><main><div class="card">${esc(msg)}</div></main>`;
+  document.getElementById('app').innerHTML = `<header><h1>なえログ</h1></header><main><div class="card">${esc(msg)}</div></main>`;
 }
 if ((page === 'schedule' || page === 'calendar') && !needLogin()) renderSchedule(); else showMessage('読み込んでいます…');
 fetchState()

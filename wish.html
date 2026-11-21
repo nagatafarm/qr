@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>出勤希望｜QR一元管理</title>
+<title>出勤希望｜なえログ</title>
 <script src="config.js"></script>
 <script src="common.js"></script>
 <style>
@@ -73,7 +73,7 @@
 <div id="toast"></div>
 <script>
 // 出勤希望：パートさんが、次の月・次の次の月の出勤する日に 〇 を付けて出す（紙の「出勤予定表」の代わり）。
-// 名前は、QR一元管理（index.html）で決めた名前（名札の QR か、担当・名前の画面）を使う。
+// 名前は、なえログ（index.html）で決めた名前（名札の QR か、担当・名前の画面）を使う。
 // 総務（出勤希望の管理ができる部署の人）は、全員ぶんの一覧を見て、代わりに入れる・出勤の表に入れる、ができる。窓口は 出勤希望.gs
 function load(k) { try { return localStorage.getItem('qrdemo.' + k) || ''; } catch (e) { return ''; } }
 function save(k, v) { try { localStorage.setItem('qrdemo.' + k, v); } catch (e) {} }
