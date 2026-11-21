@@ -59,7 +59,7 @@
   .fronthead { flex-wrap: wrap; }
   .fronthead .fme { display: flex; align-items: center; gap: 8px; flex: none; margin-left: auto; }
   .fronthead .fname { font-size: 14px; white-space: nowrap; }
-  .wx { color: #fff; text-decoration: none; font-size: 12px; background: rgba(255,255,255,.16); border-radius: 999px; padding: 4px 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; min-width: 0; }
+  .wx { color: #fff; font-size: 12px; cursor: default; background: rgba(255,255,255,.16); border-radius: 999px; padding: 4px 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; min-width: 0; }
   .wx[hidden] { display: none; }
   @media (max-width: 700px) { .wx { order: 9; flex: 1 0 100%; text-align: center; } }
   .loginlogo { text-align: center; margin: 2px 0 10px; }
@@ -1587,7 +1587,7 @@ function renderFront() {
   const who = isPart() ? 'このスマホは「パートさん用」です' : loggedIn() ? 'ログイン中：' + getName() + '（' + roleLabel() + '）' : '';
   document.getElementById('app').innerHTML = `
     <header class="fronthead"><div><h1>QR一元管理</h1><div class="sub">作業の記録と、進み具合の確認</div></div>
-      <a class="wx" id="wx" href="https://open-meteo.com/" target="_blank" rel="noopener" title="藤沢市の天気（Open-Meteo の予報）" hidden></a>
+      <span class="wx" id="wx" title="藤沢市の天気（Open-Meteo の予報）" hidden></span>
       <div class="fme">${isPart() ? '<span class="fname">パートさん用</span>' : `<span class="fname"><b>${esc(getName())}</b> さん</span><button type="button" class="hbtn" id="f-out">ログアウト</button>`}</div></header>
     <main style="max-width:520px">
       <button type="button" class="big reg" id="f-reg">作業を登録する<small>終わった作業を記録する（QR を読む・やることの一覧）</small></button>
@@ -1595,6 +1595,7 @@ function renderFront() {
       <button type="button" class="big sched" data-nav="calendar">スケジュール<small>いつ・どの作業が・どれだけあるかを、月・週のカレンダーで見る（人の割り振り表もここから）</small></button>
       ${wishFor() ? `<a class="big wish" href="wish.html">出勤希望<small>${canWish() ? 'パートさんの来月・再来月の出勤希望を見る。出勤の表に入れる' : '来月・再来月の出勤する日に 〇 を付けて出す'}</small></a>` : ''}
       ${who ? `<p class="muted" style="text-align:center;margin-top:16px">${esc(who)}${isPart() ? '<br><button type="button" class="tologin" id="f-login">社員としてログインする</button>' : ''}</p>` : ''}
+      <p class="muted" style="text-align:center;font-size:11px;margin-top:6px">天気の予報：Open-Meteo</p>
     </main>`;
   document.getElementById('bulkbar').hidden = true;
   const fl = document.getElementById('f-login'); if (fl) fl.onclick = () => { save('mode', ''); logout(); render(); };
