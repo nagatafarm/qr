@@ -30,11 +30,10 @@
     .wx .wk { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
     .wx .wkd { display: grid; grid-template-columns: auto auto; justify-content: center; column-gap: 2px; padding: 0 1px; border-radius: 8px; white-space: nowrap; }
     .wx .wkd .t { grid-column: 1 / 3; } }
-  header .wx { margin-right: auto; }
   @media (max-width: 900px) { header { flex-wrap: wrap; } }
-  /* 3つのボタン（作業を登録する・作業を調べる・スケジュール）がある上の帯：名前の札の段と3つのボタンの段のあいだに、1段使って右寄せで出す */
-  header:has(.gnav) .wx { order: 8; flex: 1 0 100%; justify-items: end; text-align: right; margin-right: 0; padding: 0; }
-  @media (min-width: 901px) { header:has(.gnav) .wx .wxs.week { justify-self: end; } }
+  /* どの画面でも同じ位置：題名と名前の札の段のすぐ下に、1段使って右寄せで出す（3つのボタンがある画面は、そのボタンの段の上） */
+  header .wx { order: 8; flex: 1 0 100%; justify-items: end; text-align: right; margin: 0; padding: 0; }
+  @media (min-width: 901px) { header .wx .wxs.week { justify-self: end; } }
 `;
   document.head.appendChild(st);
 })();
