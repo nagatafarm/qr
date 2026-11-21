@@ -853,7 +853,7 @@ function renderSetup() {
       <div class="names" style="margin-bottom:6px"><button type="button" class="nmbtn dept${loginDept ? '' : ' sel'}" data-dept="">全員</button>${lg.depts.map(d => `<button type="button" class="nmbtn dept${d.name === loginDept ? ' sel' : ''}" data-dept="${esc(d.name)}">${esc(d.name)}</button>`).join('')}</div>
       <div class="names" id="names">${staff.map(p => `<button type="button" class="nmbtn${p.name === loginPick ? ' sel' : ''}" data-name="${esc(p.name)}">${esc(p.name)}</button>`).join('') || '<div class="muted">この部署の人は、まだいません。</div>'}</div>
       ${sel ? `<div class="card" style="margin-top:14px"><div><b>${esc(sel.name)}</b> さん　<span class="muted">${esc(sel.depts.join('・') || '部署なし')}</span></div>
-        ${sel.pw ? `<label class="field" style="margin-top:8px">パスワード（誕生日の4桁。8月24日 → 0824）<input id="pw" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" placeholder="例：0824"></label>`
+        ${sel.pw ? `<label class="field" style="margin-top:8px">パスワード（誕生日の4桁。1月10日 → 0110）<input id="pw" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" placeholder="例：0110"></label>`
           : '<p class="muted" style="margin:8px 0 0">パスワードは、まだ設定されていません（「ログイン」シートに誕生日を入れると、要るようになります）。</p>'}
         <button type="button" class="primary" id="go"${loginBusy ? ' disabled' : ''}>${loginBusy ? '確かめています…' : 'ログインする'}</button></div>` : ''}
       <button type="button" class="scanbtn" id="badgebtn" style="margin-top:14px">名札の QR を読んで、名前を選ぶ</button>
@@ -864,7 +864,7 @@ function renderSetup() {
     document.querySelectorAll('#names [data-name]').forEach(b => b.onclick = () => { loginPick = b.dataset.name; renderSetup(); const pw = document.getElementById('pw'); if (pw) pw.focus(); });
     const go = document.getElementById('go'), pw = document.getElementById('pw');
     const run = () => {
-      if (pw && !/^\d{4}$/.test(pw.value.trim())) return toast('誕生日を4桁の数字で入れてください（例：0824）', true);
+      if (pw && !/^\d{4}$/.test(pw.value.trim())) return toast('誕生日を4桁の数字で入れてください（例：0110）', true);
       doLogin(sel.name, pw ? pw.value.trim() : '');
     };
     if (go) go.onclick = run;
