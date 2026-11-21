@@ -3,7 +3,9 @@
 (function () {
   const st = document.createElement('style');
   st.textContent = `
-  .wx { display: inline-grid; justify-items: start; color: #fff; font-size: 12px; cursor: default; background: rgba(255,255,255,.16); border-radius: 999px; padding: 4px 12px; white-space: nowrap; overflow: hidden; max-width: 100%; min-width: 0; transition: background .4s, color .4s; }
+  .wx { display: inline-grid; justify-items: start; text-align: left; color: #fff; font-size: 12px; cursor: default; padding: 4px 0; white-space: nowrap; overflow: hidden; max-width: 100%; min-width: 0; transition: background .4s, color .4s; }
+  /* 見比べ用：URL に ?wxpill を付けると、前の形（文の後ろに角丸の帯）に戻る */
+  .wx.pill { background: rgba(255,255,255,.16); border-radius: 999px; padding: 4px 12px; }
   /* 文は全部、同じマスに重ねる（枠の幅がいちばん長い文に合う）。出番でない文は下に待たせ、出番が来たら下から上へ送る */
   .wx .wxs { grid-area: 1 / 1; transform: translateY(140%); opacity: 0; }
   .wx .wxs.cur { transform: none; opacity: 1; transition: transform .5s cubic-bezier(.2,.8,.2,1), opacity .35s; }
@@ -14,20 +16,25 @@
   .wx .wkd .d { font-weight: bold; } .wx .wkd .d small { font-size: 10px; font-weight: normal; margin-left: 1px; }
   /* 7日間の中の荒れそうな日：色は付けるが、うすく（透かして）目立ちすぎないように */
   .wx .wkd.warn { background: rgba(255, 210, 77, .38); } .wx .wkd.danger { background: rgba(229, 72, 77, .5); }
-  .wx.warn { background: #ffd24d; color: #4a3500; }
-  .wx.danger { background: #e5484d; color: #fff; }
+  /* 荒れそうなとき：帯が無いので、文の色を変える（黄＝注意、うすい赤＝強い注意） */
+  .wx.warn { color: #ffe27a; font-weight: bold; }
+  .wx.danger { color: #ffc4c6; font-weight: bold; }
+  .wx.pill.warn { background: #ffd24d; color: #4a3500; font-weight: normal; }
+  .wx.pill.danger { background: #e5484d; color: #fff; font-weight: normal; }
   @media (prefers-reduced-motion: reduce) { .wx .wxs.cur, .wx .wxs.out { transition: none; } }
   .wx[hidden] { display: none; }
   /* せまい画面：帯を題名の下の段に回し、長い文は切らずに折り返す（高さは、いちばん長い文に合う） */
-  @media (max-width: 900px) { .wx { order: 9; flex: 1 0 100%; justify-items: center; align-items: center; white-space: normal; text-align: center; border-radius: 12px; line-height: 1.45; }
+  @media (max-width: 900px) { .wx { order: 9; flex: 1 0 100%; justify-items: start; align-items: center; white-space: normal; text-align: left; line-height: 1.45; }
+    .wx.pill { border-radius: 12px; }
     .wx .wxs.week { justify-self: stretch; }
     .wx .wk { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
     .wx .wkd { display: grid; grid-template-columns: auto auto; justify-content: center; column-gap: 2px; padding: 0 1px; border-radius: 8px; white-space: nowrap; }
     .wx .wkd .t { grid-column: 1 / 3; } }
   header .wx { margin-right: auto; }
-  /* 名前の札やボタンが並ぶ上の帯で、横幅が足りないとき：天気の帯だけを下の段へ回す（名前の札は上の段に残す） */
-  @media (min-width: 901px) and (max-width: 1499px) { header:has(.me) .wx { order: 8; } }
   @media (max-width: 900px) { header { flex-wrap: wrap; } }
+  /* 3つのボタン（作業を登録する・作業を調べる・スケジュール）がある上の帯：名前の札の段と3つのボタンの段のあいだに、1段使って右寄せで出す */
+  header:has(.gnav) .wx { order: 8; flex: 1 0 100%; justify-items: end; text-align: right; margin-right: 0; padding: 0; }
+  @media (min-width: 901px) { header:has(.gnav) .wx .wxs.week { justify-self: end; } }
 `;
   document.head.appendChild(st);
 })();
@@ -144,6 +151,8 @@ function wxNext() {
   wxTimer = setTimeout(() => { wxTimer = 0; wxDraw(true); if (document.getElementById('wx')) wxNext(); }, x.week ? WX_WEEK_MS : x.lv ? WX_WARN_MS : WX_TURN_MS);
 }
 function wxStart() {
+  const el0 = document.getElementById('wx');
+  if (el0 && /[?&]wxpill(?![\w-])/.test(location.search)) el0.classList.add('pill');
   if (!wx) { try { const v = JSON.parse(localStorage.getItem('qrdemo.wx') || 'null'); if (v && v.d) { wx = v.d; wxAt = v.at; } } catch (e) {} }
   wxDraw();
   if (!wxTimer) wxNext();
