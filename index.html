@@ -78,7 +78,8 @@
   .wx.danger { background: #e5484d; color: #fff; }
   @media (prefers-reduced-motion: reduce) { .wx .wxs.cur, .wx .wxs.out { transition: none; } }
   .wx[hidden] { display: none; }
-  @media (max-width: 700px) { .wx { order: 9; flex: 1 0 100%; justify-items: center; } }
+  /* せまい画面：帯を題名の下の段に回し、長い文は切らずに折り返す（高さは、いちばん長い文に合う） */
+  @media (max-width: 700px) { .wx { order: 9; flex: 1 0 100%; justify-items: center; align-items: center; white-space: normal; text-align: center; border-radius: 12px; line-height: 1.45; } }
   .loginlogo { text-align: center; margin: 2px 0 10px; }
   .loginlogo .appname { font-size: 22px; font-weight: bold; color: var(--green-d); letter-spacing: .08em; margin-top: 2px; }
   .loginmain { padding-top: 28px; }   /* ログインの画面は、上の緑の帯を出さない */
@@ -1553,7 +1554,7 @@ function wishFor() {
 const WX_URL = 'https://api.open-meteo.com/v1/forecast?latitude=35.339&longitude=139.490&timezone=Asia%2FTokyo&forecast_days=7&forecast_hours=6&wind_speed_unit=ms'
   + '&hourly=weather_code,precipitation,wind_gusts_10m'
   + '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max,wind_direction_10m_dominant,wind_gusts_10m_max';
-const WX_KEEP_MS = 15 * 60000, WX_TURN_MS = 4500;
+const WX_KEEP_MS = 15 * 60000, WX_TURN_MS = 4500, WX_WARN_MS = 10000;   // 文を出しておく時間。荒天の文（黄・赤）は長めに出す
 // 色を変える目安：突風（最大瞬間風速）15m/s から注意・20m/s から強い注意。雨 1時間に 10mm から注意・30mm から強い注意。雷はいつも強い注意
 const WX_GUST = [15, 20], WX_RAIN = [10, 30];
 let wx = null, wxAt = 0, wxNo = 0, wxTimer = 0, wxBusy = false;
@@ -1628,7 +1629,7 @@ function wxWeekHtml() {
 // 枠の中に、文を全部重ねて置く（枠の幅は、いちばん長い文に合う）。出すのは cur の1つ。step ＝ true なら次の文へ送る
 function wxDraw(step) {
   const el = document.getElementById('wx'), s = wxSlides();
-  if (!el) { clearInterval(wxTimer); wxTimer = 0; return; }      // 最初の画面を離れたら、切り替えを止める
+  if (!el) { clearTimeout(wxTimer); wxTimer = 0; return; }      // 最初の画面を離れたら、切り替えを止める
   const wk = document.getElementById('wxweek');
   if (wk && !step) { const h = wxWeekHtml(); wk.hidden = !h; if (h && wk.dataset.at !== String(wxAt)) { wk.innerHTML = h; wk.dataset.at = String(wxAt); } }
   if (!s.length) { el.hidden = true; return; }
@@ -1645,14 +1646,20 @@ function wxDraw(step) {
   el.classList.toggle('warn', s[cur].lv === 1); el.classList.toggle('danger', s[cur].lv === 2);
   el.hidden = false;
 }
+// 今出ている文の荒れ具合に合わせて、次に送るまでの時間を決める
+function wxNext() {
+  const s = wxSlides(), lv = s.length ? s[wxNo % s.length].lv : 0;
+  wxTimer = setTimeout(() => { wxTimer = 0; wxDraw(true); if (document.getElementById('wx')) wxNext(); }, lv ? WX_WARN_MS : WX_TURN_MS);
+}
 function wxStart() {
   if (!wx) { try { const v = JSON.parse(localStorage.getItem('qrdemo.wx') || 'null'); if (v && v.d) { wx = v.d; wxAt = v.at; } } catch (e) {} }
   wxDraw();
-  if (!wxTimer) wxTimer = setInterval(() => wxDraw(true), WX_TURN_MS);
+  if (!wxTimer) wxNext();
   if (wxBusy || Date.now() - wxAt < WX_KEEP_MS) return;
   wxBusy = true;
   fetch(WX_URL, { credentials: 'omit' }).then(r => r.ok ? r.json() : Promise.reject()).then(d => {
     wx = d; wxAt = Date.now(); wxDraw();
+    clearTimeout(wxTimer); wxTimer = 0; if (document.getElementById('wx')) wxNext();   // 届いた中身に合わせて、出しておく時間を数え直す
     try { localStorage.setItem('qrdemo.wx', JSON.stringify({ at: wxAt, d: d })); } catch (e) {}
   }).catch(() => { wxAt = Date.now() - WX_KEEP_MS + 5 * 60000; }).finally(() => { wxBusy = false; });   // 取れなければ出さない。5分後にもう一度
 }
