@@ -51,7 +51,7 @@
   .big.sched { background: #3d6fa8; }
   .role.part { border-style: dashed; }
   /* ログインの画面：部署でしぼるタブ（下の名前のボタンとは別の見た目にする） */
-  .depttabs { display: flex; align-items: flex-end; gap: 2px; margin: 6px 0 12px; border-bottom: 2px solid var(--line); overflow-x: auto; white-space: nowrap; }
+  .depttabs { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 2px; margin: 6px 0 12px; border-bottom: 2px solid var(--line); }
   .depttabs .lb { font-size: 12px; color: var(--gray); padding: 0 8px 9px 2px; flex: none; }
   .dtab { flex: none; background: none; border: none; border-bottom: 3px solid transparent; margin-bottom: -2px; padding: 8px 12px; font-size: 14px; color: var(--gray); cursor: pointer; font-family: inherit; }
   .dtab.sel { color: var(--green-d); font-weight: bold; border-bottom-color: var(--green); }
@@ -63,6 +63,7 @@
   .wx[hidden] { display: none; }
   @media (max-width: 700px) { .wx { order: 9; flex: 1 0 100%; text-align: center; } }
   .loginlogo { text-align: center; margin: 2px 0 10px; }
+  .loginmain { padding-top: 28px; }   /* ログインの画面は、上の緑の帯を出さない */
   .loginlogo img { width: 120px; height: auto; mix-blend-mode: multiply; }   /* ロゴの白い地を、画面の地の色になじませる */
   .tologin { background: none; border: none; color: var(--green-d); text-decoration: underline; cursor: pointer; font-size: 13px; padding: 4px; }
   a.big, a.scanbtn { display: block; text-decoration: none; }
@@ -859,9 +860,7 @@ function renderSetup() {
     const staff = lg.staff.filter(p => !loginDept || p.depts.includes(loginDept));
     const sel = lg.staff.find(p => p.name === loginPick);
     document.getElementById('app').innerHTML = `
-    <header><div><h1>QR一元管理</h1><div class="sub">ログイン</div></div>
-      ${canBack ? `<div style="display:flex;gap:6px;flex:none"><button type="button" class="hbtn" id="home">最初へ</button></div>${navHtml()}` : ''}</header>
-    <main style="max-width:560px">
+    <main style="max-width:560px" class="loginmain">
       <div class="loginlogo"><img src="logo.png" alt="永田農園" width="120"></div>
       ${canBack ? `<div class="card" style="margin-bottom:12px"><div>いまは <b>${esc(getName())}</b> さん（${esc(roleLabel())}）でログインしています。</div>
         <div style="display:flex;gap:8px;margin-top:8px"><button type="button" class="backbtn" id="back" style="margin:0">このまま、もどる</button><button type="button" class="backbtn" id="logout" style="margin:0">ログアウト</button></div></div>` : ''}
