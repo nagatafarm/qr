@@ -7,7 +7,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="config.js"></script>
 <script src="common.js"></script>
-<script src="weather.js?v=6"></script>
+<script src="weather.js?v=7"></script>
 <style>
   :root { --orange: #d4834a; --orange-d: #9a5320; --orange-l: #fdf5ee; --green: #4f9363; --green-d: #2f6b3a; --green-l: #f0f6f1; --line: #d6e2d8; --gray: #6b6b6b; --red: #c33; --bg: #f6f7f5; }
   * { box-sizing: border-box; }
@@ -411,6 +411,16 @@
   table.ut { border-collapse: collapse; width: 100%; font-size: 13px; }
   table.ut th, table.ut td { border: 1px solid var(--line); padding: 4px 6px; text-align: left; }
   table.ut th { background: var(--green-l); }
+  /* PC：上の緑の帯は動かさず、その下（main）だけをスクロールする。スクロールバーが上の帯にかからないように（カレンダーと同じ形）。
+     main の幅（max-width）は、白い余白（padding）に置き換えて、中身は真ん中のまま、スクロールバーは画面の右はしに出す */
+  @media (min-width: 821px) {
+    html, body { height: 100%; overflow: hidden; }
+    #app { height: 100vh; height: 100dvh; display: flex; flex-direction: column; }
+    #app > header { position: relative; flex: none; }
+    #app > main { flex: 1 1 auto; min-height: 0; overflow-y: auto; width: 100%; max-width: none !important; margin: 0;
+      padding-left: max(16px, calc((100% - var(--mw, 1100px)) / 2 + 16px)); padding-right: max(16px, calc((100% - var(--mw, 1100px)) / 2 + 16px)); }
+    #app > main .fbar { top: -14px; }   /* main の上の余白（14px）の分だけ上げて、帯のすぐ下に付ける */
+  }
 </style>
 </head>
 <body>
@@ -1623,14 +1633,14 @@ function goPage(name) {
   asking = null; document.getElementById('ask').hidden = true;
   ID = ''; VIEW = false; page = name; inSetup = false; tab = ''; showAll = false;
   setUrl(name === 'front' ? '' : '?go=' + name);
-  window.scrollTo(0, 0);
+  toTop();
   render();
 }
 function openPlan(id, view) {
   ID = id; VIEW = !!view; page = view ? 'find' : 'reg'; showAll = false;
   if (view) showPlan = true;   // 調べるときは、計画の中身を開いて出す
   setUrl('?id=' + encodeURIComponent(id) + (view ? '&view=1' : ''));
-  window.scrollTo(0, 0);
+  toTop();
   render();
 }
 window.addEventListener('popstate', () => {
@@ -2033,6 +2043,17 @@ function planMissing() {
 // ログインが要るか：社員の画面で、まだログインしていない（パートさん用のスマホは、ログインしない）
 function needLogin() { return !isPart() && !loggedIn(); }
 function render() { renderBody(); afterRender(); }
+// PC では main がスクロールする。描き直しても、見ていた所を動かさない（画面を替えたときだけ、いちばん上へ）
+let paneTop = 0, paneReset = false;
+function toTop() { window.scrollTo(0, 0); paneTop = 0; paneReset = true; const m = document.querySelector('#app > main'); if (m) m.scrollTop = 0; }
+document.addEventListener('scroll', ev => { if (ev.target.matches && ev.target.matches('#app > main')) paneTop = ev.target.scrollTop; }, true);
+new MutationObserver(() => {
+  const m = document.querySelector('#app > main');
+  if (!m || m.dataset.pane) return;
+  m.dataset.pane = '1';
+  if (m.style.maxWidth) m.style.setProperty('--mw', m.style.maxWidth);
+  if (paneReset) { paneReset = false; paneTop = 0; } else if (paneTop) { const t = paneTop; m.scrollTop = t; requestAnimationFrame(() => { m.scrollTop = t; }); }
+}).observe(document.getElementById('app'), { childList: true });
 // 描いたあと：上の帯に天気の帯を入れる（ログインの画面には上の帯がない）。上の帯の高さを測っておく（絞り込みの帯を、そのすぐ下に固定するため）
 function afterRender() {
   const h = document.querySelector('#app > header');

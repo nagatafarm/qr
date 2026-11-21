@@ -59,7 +59,7 @@ function wxMount(h) {
 // 雷・強い雨・突風のおそれがあるときは、「注意」の文を足し、その文とその日の文で枠の色を変える（黄＝注意、赤＝強い注意）
 const WX_URL = 'https://api.open-meteo.com/v1/forecast?latitude=35.339&longitude=139.490&timezone=Asia%2FTokyo&forecast_days=7&forecast_hours=6&wind_speed_unit=ms'
   + '&hourly=weather_code,precipitation,wind_gusts_10m'
-  + '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max,wind_direction_10m_dominant,wind_gusts_10m_max';
+  + '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max,wind_direction_10m_dominant,wind_gusts_10m_max,sunrise,sunset';
 const WX_KEEP_MS = 15 * 60000, WX_TURN_MS = 4500, WX_WARN_MS = 10000, WX_WEEK_MS = 5000;   // 文を出しておく時間。荒天の文（黄・赤）は長めに出す
 // 色を変える目安：突風（最大瞬間風速）15m/s から注意・20m/s から強い注意。雨 1時間に 10mm から注意・30mm から強い注意。雷はいつも強い注意
 const WX_GUST = [15, 20], WX_RAIN = [10, 30];
@@ -82,6 +82,8 @@ function wxWord(c) {
 }
 const wxDir = d => ['北', '北東', '東', '南東', '南', '南西', '西', '北西'][Math.round(Number(d) / 45) % 8] || '';
 const wxNum = v => String(Math.round(Number(v)));
+// 日の出・日の入りの時刻（'2026-11-21T06:24' → '6:24'）
+const wxHm = t => { const m = /T(\d{2}):(\d{2})/.exec(String(t || '')); return m ? Number(m[1]) + ':' + m[2] : ''; };
 // 荒れ具合：0 ＝ ふつう、1 ＝ 注意、2 ＝ 強い注意（code ＝ 天気の番号、gust ＝ 最大瞬間風速 m/s、rain ＝ 1時間の雨 mm）
 function wxLevel(code, gust, rain) {
   let lv = 0;
@@ -120,7 +122,8 @@ function wxSlides() {
     const clv = wxLevel(d.weather_code[i], 0, 0), word = clv ? wxHz(w[0] + ' ' + w[1], clv) : w[0] + ' ' + w[1];
     const sg = t => '<span class="sg">' + t + '</span>';
     out.push({ html: [`<b>藤沢 ${lb}</b> ${word}`, `${wxNum(d.temperature_2m_max[i])}℃ / ${wxNum(d.temperature_2m_min[i])}℃`, rain == null ? '' : '雨 ' + wxNum(rain) + '%',
-      `風 ${wxDir(d.wind_direction_10m_dominant[i])} ${wxNum(d.wind_speed_10m_max[i])}m/s` + (gust >= WX_GUST[0] ? '（' + wxHz('突風 ' + wxNum(gust) + 'm/s', gust >= WX_GUST[1] ? 2 : 1) + '）' : '')].filter(Boolean).map(sg).join(' '), lv: lv });
+      `風 ${wxDir(d.wind_direction_10m_dominant[i])} ${wxNum(d.wind_speed_10m_max[i])}m/s` + (gust >= WX_GUST[0] ? '（' + wxHz('突風 ' + wxNum(gust) + 'm/s', gust >= WX_GUST[1] ? 2 : 1) + '）' : ''),
+      i === 0 && d.sunrise && wxHm(d.sunrise[0]) ? `日の出 ${wxHm(d.sunrise[0])} / 日の入り ${wxHm(d.sunset[0])}` : ''].filter(Boolean).map(sg).join(' '), lv: lv });
   });
   const wk = wxWeekHtml();
   if (wk) out.push({ html: wk, lv: 0, week: true });
@@ -162,7 +165,7 @@ function wxNext() {
 function wxStart() {
   const el0 = document.getElementById('wx');
   if (el0 && /[?&]wxpill(?![\w-])/.test(location.search)) el0.classList.add('pill');
-  if (!wx) { try { const v = JSON.parse(localStorage.getItem('qrdemo.wx') || 'null'); if (v && v.d) { wx = v.d; wxAt = v.at; } } catch (e) {} }
+  if (!wx) { try { const v = JSON.parse(localStorage.getItem('qrdemo.wx') || 'null'); if (v && v.d && v.d.daily && v.d.daily.sunrise) { wx = v.d; wxAt = v.at; } } catch (e) {} }
   wxDraw();
   if (!wxTimer) wxNext();
   if (wxBusy || Date.now() - wxAt < WX_KEEP_MS) return;

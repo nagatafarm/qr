@@ -36,7 +36,7 @@
   .bar .nav { border-radius: 50%; width: 34px; height: 34px; padding: 0; font-size: 15px; }
   .bar .ttl { font-size: 19px; font-weight: bold; min-width: 9em; cursor: pointer; border-radius: 8px; padding: 2px 6px; }
   .bar .ttl:hover, .bar .ttl.open { background: #f1f4f1; }
-  .bar .ttl::after { content: ' ▾'; font-size: 12px; color: #888; font-weight: normal; }
+  .bar .ttl::after { content: ' ▾'; font-size: 26px; line-height: 0; vertical-align: -2px; color: #777; font-weight: normal; }
   /* 見出しを押すと出る、小さなカレンダー（任意の日に飛ぶ） */
   #mini { position: fixed; z-index: 45; background: #fff; border: 1px solid #ccc; border-radius: 12px; box-shadow: 0 8px 28px rgba(0,0,0,.18); padding: 8px 10px 10px; width: 260px; }
   #mini[hidden] { display: none; }
@@ -85,7 +85,7 @@
   aside details > summary { list-style: none; cursor: pointer; }
   aside details > summary::-webkit-details-marker { display: none; }
   aside details > summary label { padding-left: 0; }
-  aside details > summary .tw { width: 14px; color: #999; font-size: 10px; flex: none; text-align: center; transition: transform .15s; }
+  aside details > summary .tw { width: 18px; color: #888; font-size: 16px; flex: none; text-align: center; transition: transform .15s; }
   aside details[open] > summary .tw { transform: rotate(90deg); }
   aside .kids { margin-left: 20px; }
   aside .preset { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -141,9 +141,9 @@
   .col .ch .load { text-align: center; margin-top: 2px; }
   .col .cb { flex: 1 0 auto; padding: 6px; }
   .grp { margin-bottom: 8px; border-radius: 8px; border: 1px solid color-mix(in srgb, var(--c) 35%, #fff); overflow: hidden; }
-  .grp .gh { background: var(--c); color: #fff; padding: 4px 8px; font-size: 13px; display: flex; gap: 6px; cursor: pointer; }
-  .grp .gh small { margin-left: auto; }
-  .grp .gh .tg { font-size: 10px; width: 10px; flex: none; align-self: center; transition: transform .15s; }
+  .grp .gh { background: var(--c); color: #fff; padding: 4px 8px; font-size: 13px; display: flex; align-items: center; gap: 5px; cursor: pointer; white-space: nowrap; overflow: hidden; }
+  .grp .gh small { margin-left: auto; flex: none; }
+  .grp .gh .tg { font-size: 23px; width: 18px; line-height: 1; flex: none; transition: transform .15s; }
   .grp.shut .gh .tg { transform: rotate(-90deg); }
   .grp.shut a.row { display: none; }
   .grp a.row { display: block; padding: 4px 8px; border-top: 1px solid #eee; color: #222; text-decoration: none; font-size: 12px; }
@@ -430,7 +430,8 @@ function bindSide() {
   });
   // 開いた・閉じた分類を覚える
   side.querySelectorAll('details[data-open]').forEach(d => d.ontoggle = () => { const o = loadJson('calOpen', {}); o[d.dataset.open] = d.open; save('calOpen', JSON.stringify(o)); });
-  side.querySelectorAll('summary label').forEach(l => l.onclick = ev => { if (ev.target.tagName !== 'INPUT') { ev.preventDefault(); } });
+  // 三角・名前を押すと、ひらく・たたむ（チェックの四角を押したときだけ、チェックを切り替える）
+  side.querySelectorAll('summary label').forEach(l => l.onclick = ev => { if (ev.target.tagName === 'INPUT') return; ev.preventDefault(); const d = l.closest('details'); d.open = !d.open; });
   side.querySelectorAll('[data-only]').forEach(b => b.onclick = () => { off[b.dataset.only].clear(); changed(); });
   document.getElementById('wds').onchange = ev => { wdStart = Number(ev.target.value); save('calDow', String(wdStart)); const keep = anchorDay(); reset(keep); };
 }
