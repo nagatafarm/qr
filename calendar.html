@@ -46,6 +46,11 @@
   .bar .fnote[hidden] { display: none; }
   .bar .fnote button { background: #fff; border: 1px solid #ecc3a3; color: #9a5320; border-radius: 999px; padding: 2px 10px; font-size: 12px; }
   .bar a.link { font-size: 13px; color: var(--green-d); white-space: nowrap; }
+  /* カレンダー／人の割り振り表の切り替え：どちらの画面でも、白い帯の右はしの同じ場所に出す */
+  .bar .vsw { display: inline-flex; border: 1px solid #bbb; border-radius: 999px; overflow: hidden; }
+  .bar .vsw a { padding: 5px 14px; font-size: 13px; color: #333; text-decoration: none; white-space: nowrap; background: #fff; }
+  .bar .vsw a + a { border-left: 1px solid #bbb; }
+  .bar .vsw a.on { background: var(--green-l); color: var(--green-d); font-weight: bold; }
   #fbtn { display: none; }
 
   .body { flex: 1; min-height: 0; display: flex; }
@@ -182,7 +187,7 @@
   <span class="fnote" id="fnote" hidden></span>
   <span class="sp"></span>
   <span class="seg"><button type="button" data-view="month">月</button><button type="button" data-view="week">週</button></span>
-  <a class="link" href="index.html?go=schedule">人の割り振り表 →</a>
+  <span class="vsw"><a href="index.html?go=calendar" class="on">カレンダー</a><a href="index.html?go=schedule">人の割り振り表</a></span>
 </div>
 <div class="body">
   <aside id="side"></aside>
