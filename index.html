@@ -93,6 +93,21 @@
   .loginlogo .appname { font-size: 22px; font-weight: bold; color: var(--green-d); letter-spacing: .08em; margin-top: 2px; }
   .loginmain { padding-top: 28px; }   /* ログインの画面は、上の緑の帯を出さない */
   .loginlogo img { width: 120px; height: auto; mix-blend-mode: multiply; }   /* ロゴの白い地を、画面の地の色になじませる */
+  /* お知らせ：予定日を過ぎた作業（メニューのいちばん上。押すと一覧がひらく） */
+  .notice { background: #fdecec; border: 1px solid #e9a8a8; border-radius: 14px; margin-top: 16px; overflow: hidden; }
+  .notice summary { list-style: none; cursor: pointer; padding: 14px 16px; display: flex; align-items: center; gap: 10px; color: #8f1d1d; }
+  .notice summary::-webkit-details-marker { display: none; }
+  .notice summary b { font-size: 17px; }
+  .notice summary .br { font-size: 12px; opacity: .9; }
+  .notice summary .tw { margin-left: auto; font-size: 12px; white-space: nowrap; }
+  .notice[open] summary .tw::after { content: 'とじる ▴'; } .notice:not([open]) summary .tw::after { content: '見る ▾'; }
+  .notice .nl { max-height: 46vh; overflow: auto; border-top: 1px solid #e9a8a8; background: #fff; }
+  .notice .nh { position: sticky; top: 0; background: #f8dcdc; color: #8f1d1d; font-size: 12px; font-weight: bold; padding: 4px 16px; }
+  .notice a.nr { display: flex; gap: 10px; align-items: baseline; padding: 9px 16px; border-top: 1px solid #f3e3e3; color: inherit; text-decoration: none; font-size: 14px; }
+  .notice a.nr:hover { background: #fdf5f5; }
+  .notice .nd { flex: none; min-width: 4.2em; color: var(--red); font-weight: bold; font-size: 13px; }
+  .notice .nn { flex: 1; min-width: 0; } .notice .nn small { display: block; color: #777; font-size: 12px; }
+  header .hbtn.ntc { background: #fff; color: #b3261e; border-color: #fff; font-weight: bold; }
   .tologin { background: none; border: none; color: var(--green-d); text-decoration: underline; cursor: pointer; font-size: 13px; padding: 4px; }
   a.big, a.scanbtn { display: block; text-decoration: none; }
   .big.wish { background: #7a5ea8; padding: 18px 22px; font-size: 22px; }
@@ -963,7 +978,8 @@ document.addEventListener('click', ev => {
 // extra ＝ その画面だけのボタン（いちばん左に足す）。noHome ＝ 最初の画面（メニューへ戻るを出さない）。noUser ＝ ログアウト・次の人を出さない
 function hbtnsHtml(extra, noHome, noUser) {
   const user = noUser ? '' : isPart() ? '<button type="button" class="hbtn" id="nextp">次の人</button>' : loggedIn() ? '<button type="button" class="hbtn" id="chg">ログアウト</button>' : '';
-  return `<div class="hbtns">${extra || ''}${noHome ? '' : '<button type="button" class="hbtn" id="home">メニューへ戻る</button>'}${user}</div>`;
+  const late = noHome ? 0 : overdueList().length;   // メニュー以外の画面：予定日を過ぎた作業の数。押すと、メニューのお知らせをひらく
+  return `<div class="hbtns">${extra || ''}${late ? '<button type="button" class="hbtn ntc" id="ntc" title="予定日を過ぎた作業">⚠ ' + late + '</button>' : ''}${noHome ? '' : '<button type="button" class="hbtn" id="home">メニューへ戻る</button>'}${user}</div>`;
 }
 // 上の帯：題名の下に今の担当と名前。右に「メニューへ戻る」「一覧へ」と、「担当・名前」（パートさん用のスマホでは「次の人」）
 function headerHtml(sub, back) {
@@ -998,6 +1014,35 @@ function todoList(m) {
     .map(x => Object.assign(x, { key: (x.p.w[col] || x.p.v[col] || '') }))
     .sort((a, b) => a.key < b.key ? -1 : a.key > b.key ? 1 : a.p.id < b.p.id ? -1 : 1);
 }
+// ---------- お知らせ：予定日を過ぎたのに、完了の記録がない作業 ----------
+// 1日でも過ぎたら出す。見るのは自分の部署の工程（計画の部署・パートさん用のスマホは全部）。出荷は、完了の記録がまだ無いので入れない
+// 予定日は年つきの日付（plan.d。窓口が送る）で比べる。古い窓口で d が無いときは、何も出さない
+function todayIso() { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function isoDays(a, b) { const u = k => Date.UTC(+k.slice(0, 4), +k.slice(5, 7) - 1, +k.slice(8, 10)); return Math.round((u(b) - u(a)) / 86400000); }
+function overdueList() {
+  if (!state || !state.plans || !(loggedIn() || isPart())) return [];
+  const today = todayIso(), out = [];
+  myMajors().forEach(m => {
+    const col = dateCol(m);
+    if (!col) return;
+    state.plans.forEach(p => {
+      const iso = p.d && p.d[col], s = iso && iso < today ? nextIn(p, m) : null;
+      if (s) out.push({ p, m, s, iso, days: isoDays(iso, today) });
+    });
+  });
+  return out.sort((a, b) => a.iso < b.iso ? -1 : a.iso > b.iso ? 1 : a.p.id < b.p.id ? -1 : 1);
+}
+let noticeOpen = false;
+// 上の帯の札（⚠ 数）：どの画面からでも、メニューへ戻ってお知らせをひらく
+document.addEventListener('click', e => { if (e.target.closest && e.target.closest('#ntc')) { noticeOpen = true; goPage('front'); const n = document.getElementById('notice'); if (n) n.scrollIntoView({ block: 'start' }); } });
+function noticeHtml() {
+  const list = overdueList();
+  if (!list.length) return '';
+  const ms = myMajors().filter(m => list.some(x => x.m === m));
+  const row = x => `<a class="nr" href="${esc(planUrl(x.p.id))}"><span class="nd">${x.days}日過ぎ</span><span class="nn">${esc(planName(x.p))}<small>${esc(x.p.id)}　予定日 ${esc((x.p.w && x.p.w[dateCol(x.m)]) || x.iso)}　次の作業：${esc(taskName(x.s))}</small></span></a>`;
+  return `<details class="notice" id="notice"${noticeOpen ? ' open' : ''}><summary><span>⚠</span><span><b>予定日を過ぎた作業 ${list.length}件</b><br><span class="br">${ms.map(m => esc(m) + ' ' + list.filter(x => x.m === m).length).join('・')}</span></span><span class="tw"></span></summary>
+    <div class="nl">${ms.map(m => `<div class="nh">${esc(m)}　${list.filter(x => x.m === m).length}件</div>` + list.filter(x => x.m === m).map(row).join('')).join('')}</div></details>`;
+}
 function todayKey() { const d = new Date(); return String(d.getMonth() + 1).padStart(2, '0') + '/' + String(d.getDate()).padStart(2, '0'); }
 // 登録する工程がない人（総務だけ、など）の「作業を登録する」
 function renderNoMajor() {
@@ -1022,8 +1067,8 @@ function renderWorker() {
     list.forEach(x => { const g = groups[groups.length - 1]; if (g && g.key === x.key) g.items.push(x); else groups.push({ key: x.key, items: [x] }); });
     const today = todayKey();
     body = (list.length ? '<button type="button" class="scanbtn" id="scanbtn">QR をまとめて読む</button><p class="muted" style="margin:0 0 6px">読んだ計画が選ばれます。そのあと下の「まとめて完了にする」で一度に記録できます。</p>' : '') + groups.map(g => {
-      const k = g.key.slice(0, 5);
-      const when = !k ? '' : k < today ? '<span class="when late">予定日を過ぎています</span>' : k === today ? '<span class="when today">今日</span>' : '';
+      const k = g.key.slice(0, 5), iso0 = g.items[0].p.d && g.items[0].p.d[dateCol(m)];
+      const when = !k ? '' : (iso0 ? iso0 < todayIso() : k < today) ? '<span class="when late">予定日を過ぎています</span>' : (iso0 ? iso0 === todayIso() : k === today) ? '<span class="when today">今日</span>' : '';
       return `<div class="day"><h3>${esc(g.key || '予定日なし')}${when}<span class="muted">　${g.items.length}件</span></h3>
         <button type="button" class="selall" data-day="${esc(g.key)}">全部選ぶ</button></div>` +
         g.items.map(({ p, s }) => {
@@ -1588,6 +1633,7 @@ function renderFront() {
       <span class="wx" id="wx" title="藤沢市の天気（Open-Meteo の予報）" hidden></span>
       ${hbtnsHtml('', true)}${meHtml()}</header>
     <main style="max-width:520px">
+      ${noticeHtml()}
       <button type="button" class="big reg" id="f-reg">作業を登録する<small>終わった作業を記録する（QR を読む・やることの一覧）</small></button>
       <button type="button" class="big find" id="f-find">作業を調べる<small>計画の中身と進み具合を見る（QR を読む・名前で探す）</small></button>
       <button type="button" class="big sched" data-nav="calendar">スケジュール<small>いつ・どの作業が・どれだけあるかを、月・週のカレンダーで見る（人の割り振り表もここから）</small></button>
@@ -1597,6 +1643,7 @@ function renderFront() {
     </main>`;
   document.getElementById('bulkbar').hidden = true;
   const fl = document.getElementById('f-login'); if (fl) fl.onclick = () => { save('mode', ''); logout(); render(); };
+  const nt = document.getElementById('notice'); if (nt) nt.ontoggle = () => { noticeOpen = nt.open; };
   document.getElementById('f-reg').onclick = () => goPage('reg');
   document.getElementById('f-find').onclick = () => goPage('find');
 }
