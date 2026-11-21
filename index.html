@@ -146,7 +146,11 @@
     header .me .ic svg { width: 16px; height: 16px; }
     header .me small { display: none; }
     header .me b { font-size: 13px; }
-    header:has(.me) > div:first-child { flex: 1 1 0; }
+    header:has(.me) > div:first-child { flex: 1 1 0; min-width: 0; }
+    /* 1段目＝題名と名前の札、2段目＝ボタン。題名は1行に収める（ボタンに押されて、1字ずつ縦に折り返すのを防ぐ） */
+    header:not(.fronthead):has(.me) h1, header:not(.fronthead):has(.me) .sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    header:not(.fronthead):has(.me) .me { order: 1; }
+    header:not(.fronthead):has(.me) .hbtns { order: 4; flex: 1 0 100%; }
   }
   /* スマホのスケジュール画面：上の緑の帯は3つのボタンの1段だけにする（カレンダーと割り振り表の切り替えは、中の白い帯のリンクで） */
   @media (max-width: 820px) {
