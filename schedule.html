@@ -512,7 +512,7 @@ function render() {
   app.dataset.start = sch.start;
   app.innerHTML = `
     <header><div><h1>人の割り振り表</h1><div class="sub">いつまでに・どの作業を・だれが</div></div>
-      <div style="display:flex;gap:6px"><a href="index.html">最初へ</a></div>
+      <div style="display:flex;gap:6px"><a href="index.html">メニューへ戻る</a></div>
       <nav class="gnav"><a href="index.html?go=reg">作業を登録する</a><a href="index.html?go=find">作業を調べる</a><a href="index.html?go=calendar" class="on">スケジュール</a></nav></header>
     <div class="bar">
       <button type="button" id="fbtn">設定</button>
@@ -917,7 +917,7 @@ function openJobMenu(aid, x, y) {
 }
 
 function showMessage(msg) {
-  document.getElementById('app').innerHTML = `<header><h1>人の割り振り表</h1><a href="index.html">最初へ</a></header><div class="card">${esc(msg)}</div>`;
+  document.getElementById('app').innerHTML = `<header><h1>人の割り振り表</h1><a href="index.html">メニューへ戻る</a></header><div class="card">${esc(msg)}</div>`;
 }
 showMessage('読み込んでいます…');
 reload();

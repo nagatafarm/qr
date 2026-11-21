@@ -476,6 +476,8 @@ function saveCaps(c) {
   save('caps', JSON.stringify({ depts: c.depts || [], planner: !!c.planner, wish: !!c.wish, majors: c.majors || [] }));
   save('role', c.planner ? PLANNER : 'staff');     // schedule.html は role で計画担当かを見る
 }
+// 「ログアウト」ボタン：確かめてからログアウトし、ログインの画面へ
+function askLogout() { if (!confirm('ログアウトしますか？')) return; logout(); loginPick = ''; inSetup = false; toast('ログアウトしました'); render(); }
 function logout() { save('person', ''); save('token', ''); save('caps', ''); save('role', ''); }
 // 窓口の状態が届くたびに、部署マスタから「できること」を作り直す（部署を変えたら、次の読み込みで変わる）。ログインの一覧から外れた人はログアウト
 function syncCaps() {
@@ -871,7 +873,7 @@ function renderSetup() {
   const lg = state.login, canBack = loggedIn();
   if (!lg) {
     document.getElementById('app').innerHTML = `<header><div><h1>なえログ</h1><div class="sub">ログイン</div></div>
-      <div style="display:flex;gap:6px;flex:none"><button type="button" class="hbtn" id="home">最初へ</button></div>${navHtml()}</header>
+      <div style="display:flex;gap:6px;flex:none"><button type="button" class="hbtn" id="home">メニューへ戻る</button></div>${navHtml()}</header>
       <main style="max-width:520px"><div class="card">スケジュール用のスプレッドシートがまだないので、ログインの一覧を作れません。</div>
         <button type="button" class="role part" id="partbtn" style="width:100%;margin-top:12px">パートさん用<small>共有のスマホ用。名札の QR を読んで、その人として記録する</small></button></main>`;
   } else {
@@ -930,16 +932,16 @@ document.addEventListener('click', ev => {
   const m = ev.target.closest && ev.target.closest('[data-me]');
   if (m) { ev.preventDefault(); if (isPart()) nextPerson(); else renderSetup(); }
 });
-// 上の帯：題名の下に今の担当と名前。右に「最初へ」「一覧へ」と、「担当・名前」（パートさん用のスマホでは「次の人」）
+// 上の帯：題名の下に今の担当と名前。右に「メニューへ戻る」「一覧へ」と、「担当・名前」（パートさん用のスマホでは「次の人」）
 function headerHtml(sub, back) {
   return `<header><div style="min-width:0"><h1>なえログ${sub ? '<span style="font-size:12px;font-weight:normal">　' + esc(sub) + '</span>' : ''}</h1>
       <div class="sub">${esc(roleLabel())}・${esc(getName())}</div></div>
     <span id="sync" hidden></span>
-    <div style="display:flex;gap:6px;flex:none"><button type="button" class="hbtn" id="home">最初へ</button>${back ? '<button type="button" class="hbtn" id="tolist">一覧へ</button>' : ''}${
-      isPart() ? '<button type="button" class="hbtn" id="nextp">次の人</button>' : '<button type="button" class="hbtn" id="chg">ログイン</button>'}</div>${navHtml()}</header>`;
+    <div style="display:flex;gap:6px;flex:none"><button type="button" class="hbtn" id="home">メニューへ戻る</button>${back ? '<button type="button" class="hbtn" id="tolist">一覧へ</button>' : ''}${
+      isPart() ? '<button type="button" class="hbtn" id="nextp">次の人</button>' : '<button type="button" class="hbtn" id="chg">ログアウト</button>'}</div>${navHtml()}</header>`;
 }
 function bindHeader() {
-  const c = document.getElementById('chg'); if (c) c.onclick = () => renderSetup();   // 今の担当・名前を選んだまま開く（名前だけ変えるのも2回押すだけ）
+  const c = document.getElementById('chg'); if (c) c.onclick = askLogout;   // 今の担当・名前を選んだまま開く（名前だけ変えるのも2回押すだけ）
   const h = document.getElementById('home'); if (h) h.onclick = () => goPage('front');
   const l = document.getElementById('tolist'); if (l) l.onclick = () => goPage('reg');
   const n = document.getElementById('nextp'); if (n) n.onclick = nextPerson;
@@ -1677,7 +1679,7 @@ function renderFront() {
     </main>`;
   document.getElementById('bulkbar').hidden = true;
   const fl = document.getElementById('f-login'); if (fl) fl.onclick = () => { save('mode', ''); logout(); render(); };
-  const fo = document.getElementById('f-out'); if (fo) fo.onclick = () => { if (!confirm('ログアウトしますか？')) return; logout(); toast('ログアウトしました'); render(); };
+  const fo = document.getElementById('f-out'); if (fo) fo.onclick = askLogout;
   wxStart();
   document.getElementById('f-reg').onclick = () => goPage('reg');
   document.getElementById('f-find').onclick = () => goPage('find');
@@ -1696,7 +1698,7 @@ function renderSchedule() {
   const cal = page === 'calendar';
   document.getElementById('app').innerHTML = `
     <header class="schedhead"><div class="ht"><h1>スケジュール</h1><div class="sub">${cal ? 'いつ・どの作業が・どれだけあるか' : 'いつまでに・どの作業を・だれが'}</div></div>
-      <div class="hsw" style="display:flex;gap:6px;flex:none;flex-wrap:wrap"><button type="button" class="hbtn${cal ? ' on' : ''}" data-nav="calendar">カレンダー</button><button type="button" class="hbtn${cal ? '' : ' on'}" data-nav="schedule">人の割り振り表</button><button type="button" class="hbtn" id="home">最初へ</button></div>${navHtml()}</header>
+      <div class="hsw" style="display:flex;gap:6px;flex:none;flex-wrap:wrap"><button type="button" class="hbtn${cal ? ' on' : ''}" data-nav="calendar">カレンダー</button><button type="button" class="hbtn${cal ? '' : ' on'}" data-nav="schedule">人の割り振り表</button><button type="button" class="hbtn" id="home">メニューへ戻る</button></div>${navHtml()}</header>
     <iframe id="schedframe" src="${src}" title="${cal ? 'カレンダー' : 'スケジュール'}"></iframe>`;
   document.getElementById('bulkbar').hidden = true;
   document.getElementById('home').onclick = () => goPage('front');
@@ -1838,7 +1840,7 @@ function renderGate() {
   const names = parts.length ? parts : all;
   document.getElementById('app').innerHTML = `
     <header><div><h1>なえログ</h1><div class="sub">パートさん用</div></div>
-      <div style="display:flex;gap:6px;flex:none"><button type="button" class="hbtn" id="home">最初へ</button></div>${navHtml()}</header>
+      <div style="display:flex;gap:6px;flex:none"><button type="button" class="hbtn" id="home">メニューへ戻る</button></div>${navHtml()}</header>
     <main style="max-width:520px">
       <div class="card" style="text-align:center">
         <div class="name" style="font-size:20px">自分の名札の QR を読んでください</div>
@@ -1950,7 +1952,7 @@ function renderFind() {
   const nShort = shortOpen(), nDone = (state.shorts || []).length - nShort;
   document.getElementById('app').innerHTML = `
     <header><div><h1>作業を調べる</h1><div class="sub">計画の中身と進み具合を見る（ここからは記録しません）</div></div>
-      <div style="display:flex;gap:6px;flex:none"><button type="button" class="hbtn" id="home">最初へ</button></div>${navHtml()}</header>
+      <div style="display:flex;gap:6px;flex:none"><button type="button" class="hbtn" id="home">メニューへ戻る</button></div>${navHtml()}</header>
     <main style="max-width:720px">
       <button type="button" class="scanbtn" id="findscan">QR を読む</button>
       <label class="field" style="margin-top:10px">名前・QRID・注文NO で探す<input id="findq" type="search" value="${esc(findText)}" placeholder="例：ミニトマト、26-00012"></label>
@@ -2002,7 +2004,7 @@ function renderPlanView(plan) {
   }).join('');
   document.getElementById('app').innerHTML = `
     <header><div style="min-width:0"><h1>作業を調べる</h1><div class="sub">見るだけの画面です</div></div>
-      <div style="display:flex;gap:6px;flex:none"><button type="button" class="hbtn" id="home">最初へ</button><button type="button" class="hbtn" id="tofind">一覧へ</button></div>${navHtml()}</header>
+      <div style="display:flex;gap:6px;flex:none"><button type="button" class="hbtn" id="home">メニューへ戻る</button><button type="button" class="hbtn" id="tofind">一覧へ</button></div>${navHtml()}</header>
     <main style="max-width:560px">
       <div class="card plan-card">
         <span class="badge">${esc(plan.id)}</span>
