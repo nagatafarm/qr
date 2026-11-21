@@ -42,4 +42,8 @@ function fetchSchedule(from) { return callApi('api=schedule' + (from ? '&from=' 
 function postRecord(rec) { return postApi(Object.assign({ action: 'record' }, rec)); }
 
 // body.action：record（1件）／recordMany（まとめて）／delete（24時間以内の記録を消す）
-function postApi(body) { return callApi({ method: 'POST', body: JSON.stringify(body) }); }
+// ログインの合言葉（token）は、どの POST にも付けて送る（計画担当・総務の操作を、窓口が本人と部署で確かめる）
+function authToken() { try { return localStorage.getItem('qrdemo.token') || ''; } catch (e) { return ''; } }
+// ログインした人のできること：{ depts[], planner, wish, majors[] }（index.html がログインのときと、窓口の状態が届くたびに覚え直す）
+function authCaps() { try { return JSON.parse(localStorage.getItem('qrdemo.caps') || '{}') || {}; } catch (e) { return {}; } }
+function postApi(body) { return callApi({ method: 'POST', body: JSON.stringify(Object.assign({ token: authToken() }, body)) }); }

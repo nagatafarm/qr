@@ -213,7 +213,7 @@ function save(k, v) { try { localStorage.setItem('qrdemo.' + k, v); } catch (e) 
 let stale = false;
 function saveLast(key, s) { try { localStorage.setItem('qrdemo.schedLast', JSON.stringify({ key: key, s: s })); } catch (e) {} }
 function loadLast(key) { try { const v = JSON.parse(localStorage.getItem('qrdemo.schedLast') || 'null'); return v && v.key === key && v.s && v.s.days ? v.s : null; } catch (e) { return null; } }
-const canEdit = () => !stale && load('role') === '__all__';     // 手直しできるのは計画担当だけ（index.html の PLANNER と同じ）
+const canEdit = () => !stale && load('role') === '__all__' && !!authToken();     // 手直しできるのは計画担当だけ（index.html の PLANNER と同じ）
 // 人の行の並び順と非表示（このブラウザに覚える。見え方の好みなので、だれでも変えられる）
 function loadList(k) { try { const v = JSON.parse(load(k) || '[]'); return Array.isArray(v) ? v.map(String) : []; } catch (e) { return []; } }
 let rowOrder = loadList('schedOrder');               // 名前の並び。ここに無い人は、シートの順で後ろに付く

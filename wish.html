@@ -74,12 +74,12 @@
 <script>
 // 出勤希望：パートさんが、次の月・次の次の月の出勤する日に 〇 を付けて出す（紙の「出勤予定表」の代わり）。
 // 名前は、QR一元管理（index.html）で決めた名前（名札の QR か、担当・名前の画面）を使う。
-// 計画担当は、全員ぶんの一覧を見て、代わりに入れる・出勤の表に入れる、ができる。窓口は 出勤希望.gs
+// 総務（出勤希望の管理ができる部署の人）は、全員ぶんの一覧を見て、代わりに入れる・出勤の表に入れる、ができる。窓口は 出勤希望.gs
 function load(k) { try { return localStorage.getItem('qrdemo.' + k) || ''; } catch (e) { return ''; } }
 function save(k, v) { try { localStorage.setItem('qrdemo.' + k, v); } catch (e) {} }
 const ME = load('person');
 const PART_PHONE = load('mode') === 'part';                       // 共有の「パートさん用」のスマホ
-const PLANNER = !PART_PHONE && load('role') === '__all__';        // 計画担当
+const PLANNER = !PART_PHONE && !!authToken() && authCaps().wish === true;   // 総務（「部署」シートで「出勤希望の管理」が 〇 の部署の人）
 const WD = '日月火水木金土';
 let W = null;            // 窓口の返事
 let ym = '';             // 見ている月
@@ -111,7 +111,7 @@ function locked() { const r = rowOf(who, ym); return !PLANNER && !!(r && r.appli
 async function boot() {
   if (!PLANNER && !ME) return renderNoName();
   try {
-    W = await callApi('api=wish&name=' + encodeURIComponent(ME) + (PLANNER ? '&planner=1' : ''));
+    W = await callApi('api=wish&name=' + encodeURIComponent(ME) + (PLANNER ? '&planner=1&token=' + encodeURIComponent(authToken()) : ''));
   } catch (e) { return renderError(e.message); }
   ym = W.months[0].ym;
   // 最初に出す月：まだ出していない月を先に
@@ -187,14 +187,14 @@ function listHtml() {
   }).join('');
   return `<div class="card">
       <div class="row" style="justify-content:space-between"><b>${monthLabel(ym)}の出勤希望（締め切り ${mdw(m.deadline)}）</b><span class="muted">${sent.length} / ${names.length} 人が提出</span></div>
-      <table><thead><tr><th></th><th>名前</th><th>状態</th><th class="r">出勤</th><th class="r">有休</th><th>出した日時</th></tr></thead><tbody>${rows || '<tr><td colspan="6" class="muted">パートさんが、人の一覧（「人と仕事」の区分）にいません。</td></tr>'}</tbody></table>
+      <table><thead><tr><th></th><th>名前</th><th>状態</th><th class="r">出勤</th><th class="r">有休</th><th>出した日時</th></tr></thead><tbody>${rows || '<tr><td colspan="6" class="muted">区分がパートの人が、人の一覧（「人と仕事」）にいません。</td></tr>'}</tbody></table>
       <div class="row" style="margin-top:10px"><button type="button" class="btn" id="chkall"${wait.length ? '' : ' disabled'}>出した人を全部選ぶ</button>
         <button type="button" class="btn go" id="apply"${checked.size && !busy ? '' : ' disabled'}>選んだ ${checked.size} 人を、出勤の表に入れる</button></div>
-      <p class="muted" style="margin-bottom:0">名前を押すと、中身を見られます（紙で受け取った分を、代わりに入れることもできます）。「出勤の表に入れる」を押すと、その人のその月の出勤が、希望の日 ＝ 〇・有休の日 ＝ 有休 に書き換わり、人の割り振り表に反映されます。一覧に出るのは、「人と仕事」の区分が社員でない人です。</p>
+      <p class="muted" style="margin-bottom:0">名前を押すと、中身を見られます（紙で受け取った分を、代わりに入れることもできます）。「出勤の表に入れる」を押すと、その人のその月の出勤が、希望の日 ＝ 〇・有休の日 ＝ 有休 に書き換わり、人の割り振り表に反映されます。一覧に出るのは、「人と仕事」の区分がパートの人です。</p>
     </div>`;
 }
 function render() {
-  const sub = PLANNER ? '計画担当：みんなの出勤希望' : ME + ' さん';
+  const sub = PLANNER ? '総務：みんなの出勤希望' : ME + ' さん';
   const body = PLANNER
     ? `<main class="wide">${tabsHtml()}<div class="cols${who ? ' two' : ''}"><div>${listHtml()}</div>${who ? `<div>${editorHtml()}</div>` : ''}</div></main>`
     : `<main>${W.known ? '' : `<div class="note warn">「${esc(ME)}」は、人の一覧にいません。社員に伝えてください。</div>`}${tabsHtml()}${editorHtml()}
