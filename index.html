@@ -55,6 +55,13 @@
   .depttabs .lb { font-size: 12px; color: var(--gray); padding: 0 8px 9px 2px; flex: none; }
   .dtab { flex: none; background: none; border: none; border-bottom: 3px solid transparent; margin-bottom: -2px; padding: 8px 12px; font-size: 14px; color: var(--gray); cursor: pointer; font-family: inherit; }
   .dtab.sel { color: var(--green-d); font-weight: bold; border-bottom-color: var(--green); }
+  /* 最初の画面の上の帯：まん中に天気、右に名前とログアウト */
+  .fronthead { flex-wrap: wrap; }
+  .fronthead .fme { display: flex; align-items: center; gap: 8px; flex: none; margin-left: auto; }
+  .fronthead .fname { font-size: 14px; white-space: nowrap; }
+  .wx { color: #fff; text-decoration: none; font-size: 12px; background: rgba(255,255,255,.16); border-radius: 999px; padding: 4px 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; min-width: 0; }
+  .wx[hidden] { display: none; }
+  @media (max-width: 700px) { .wx { order: 9; flex: 1 0 100%; text-align: center; } }
   .loginlogo { text-align: center; margin: 2px 0 10px; }
   .loginlogo img { width: 120px; height: auto; mix-blend-mode: multiply; }   /* ロゴの白い地を、画面の地の色になじませる */
   .tologin { background: none; border: none; color: var(--green-d); text-decoration: underline; cursor: pointer; font-size: 13px; padding: 4px; }
@@ -1522,21 +1529,78 @@ function wishFor() {
   const p = state && (state.people || []).find(x => x.name === getName());
   return !!(p && p.kubun && p.kubun.indexOf('パート') >= 0);
 }
+// ---------- 最初の画面の天気：藤沢市の「いま」「今日」「明日」を、数秒ごとに切り替えて出す ----------
+// 予報は Open-Meteo（鍵のいらない公開の予報。送るのは藤沢市の緯度・経度だけ）。30分はこのブラウザに覚えて、読み直さない
+const WX_URL = 'https://api.open-meteo.com/v1/forecast?latitude=35.339&longitude=139.490&timezone=Asia%2FTokyo&forecast_days=2&wind_speed_unit=ms'
+  + '&current=temperature_2m,weather_code,wind_speed_10m,wind_direction_10m'
+  + '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max,wind_direction_10m_dominant';
+const WX_KEEP_MS = 30 * 60000, WX_TURN_MS = 4000;
+let wx = null, wxAt = 0, wxNo = 0, wxTimer = 0, wxBusy = false;
+// 天気の番号（WMO）→ 絵と言葉
+function wxWord(c) {
+  if (c === 0) return ['☀', '快晴'];
+  if (c === 1) return ['🌤', '晴れ'];
+  if (c === 2) return ['⛅', '晴れ時々くもり'];
+  if (c === 3) return ['☁', 'くもり'];
+  if (c === 45 || c === 48) return ['🌫', '霧'];
+  if (c >= 51 && c <= 57) return ['🌦', '霧雨'];
+  if (c === 61 || c === 80) return ['🌧', '弱い雨'];
+  if (c === 63 || c === 81) return ['🌧', '雨'];
+  if (c === 65 || c === 82) return ['🌧', '強い雨'];
+  if (c === 66 || c === 67) return ['🌧', '冷たい雨'];
+  if ((c >= 71 && c <= 77) || c === 85 || c === 86) return ['❄', '雪'];
+  if (c >= 95) return ['⛈', '雷雨'];
+  return ['', ''];
+}
+const wxDir = d => ['北', '北東', '東', '南東', '南', '南西', '西', '北西'][Math.round(Number(d) / 45) % 8] || '';
+const wxNum = v => String(Math.round(Number(v)));
+function wxSlides() {
+  if (!wx || !wx.current || !wx.daily) return [];
+  const c = wx.current, d = wx.daily, out = [];
+  const w0 = wxWord(c.weather_code);
+  out.push(`<b>藤沢 いま</b> ${w0[0]} ${w0[1]}　${wxNum(c.temperature_2m)}℃　風 ${wxDir(c.wind_direction_10m)} ${wxNum(c.wind_speed_10m)}m/s`);
+  ['今日', '明日'].forEach((lb, i) => {
+    if (d.weather_code[i] == null) return;
+    const w = wxWord(d.weather_code[i]), rain = d.precipitation_probability_max && d.precipitation_probability_max[i];
+    out.push(`<b>藤沢 ${lb}</b> ${w[0]} ${w[1]}　${wxNum(d.temperature_2m_max[i])}℃ / ${wxNum(d.temperature_2m_min[i])}℃${rain == null ? '' : '　雨 ' + wxNum(rain) + '%'}　風 ${wxDir(d.wind_direction_10m_dominant[i])} ${wxNum(d.wind_speed_10m_max[i])}m/s`);
+  });
+  return out;
+}
+function wxDraw() {
+  const el = document.getElementById('wx'), s = wxSlides();
+  if (!el) { clearInterval(wxTimer); wxTimer = 0; return; }      // 最初の画面を離れたら、切り替えを止める
+  if (!s.length) { el.hidden = true; return; }
+  el.hidden = false; el.innerHTML = s[wxNo % s.length];
+}
+function wxStart() {
+  if (!wx) { try { const v = JSON.parse(localStorage.getItem('qrdemo.wx') || 'null'); if (v && v.d) { wx = v.d; wxAt = v.at; } } catch (e) {} }
+  wxDraw();
+  if (!wxTimer) wxTimer = setInterval(() => { wxNo++; wxDraw(); }, WX_TURN_MS);
+  if (wxBusy || Date.now() - wxAt < WX_KEEP_MS) return;
+  wxBusy = true;
+  fetch(WX_URL, { credentials: 'omit' }).then(r => r.ok ? r.json() : Promise.reject()).then(d => {
+    wx = d; wxAt = Date.now(); wxDraw();
+    try { localStorage.setItem('qrdemo.wx', JSON.stringify({ at: wxAt, d: d })); } catch (e) {}
+  }).catch(() => { wxAt = Date.now() - WX_KEEP_MS + 5 * 60000; }).finally(() => { wxBusy = false; });   // 取れなければ出さない。5分後にもう一度
+}
 // ---------- 画面：最初の画面（作業を登録する／作業を調べる） ----------
 function renderFront() {
   const who = isPart() ? 'このスマホは「パートさん用」です' : loggedIn() ? 'ログイン中：' + getName() + '（' + roleLabel() + '）' : '';
   document.getElementById('app').innerHTML = `
-    <header><div><h1>QR一元管理</h1><div class="sub">作業の記録と、進み具合の確認</div></div></header>
+    <header class="fronthead"><div><h1>QR一元管理</h1><div class="sub">作業の記録と、進み具合の確認</div></div>
+      <a class="wx" id="wx" href="https://open-meteo.com/" target="_blank" rel="noopener" title="藤沢市の天気（Open-Meteo の予報）" hidden></a>
+      <div class="fme">${isPart() ? '<span class="fname">パートさん用</span>' : `<span class="fname"><b>${esc(getName())}</b> さん</span><button type="button" class="hbtn" id="f-out">ログアウト</button>`}</div></header>
     <main style="max-width:520px">
       <button type="button" class="big reg" id="f-reg">作業を登録する<small>終わった作業を記録する（QR を読む・やることの一覧）</small></button>
       <button type="button" class="big find" id="f-find">作業を調べる<small>計画の中身と進み具合を見る（QR を読む・名前で探す）</small></button>
       <button type="button" class="big sched" data-nav="calendar">スケジュール<small>いつ・どの作業が・どれだけあるかを、月・週のカレンダーで見る（人の割り振り表もここから）</small></button>
       ${wishFor() ? `<a class="big wish" href="wish.html">出勤希望<small>${canWish() ? 'パートさんの来月・再来月の出勤希望を見る。出勤の表に入れる' : '来月・再来月の出勤する日に 〇 を付けて出す'}</small></a>` : ''}
-      ${who ? `<p class="muted" style="text-align:center;margin-top:16px">${esc(who)}<br>${isPart() ? '<button type="button" class="tologin" id="f-login">社員としてログインする</button>' : '<button type="button" class="tologin" id="f-chg">ログアウト・ほかの人でログイン</button>'}</p>` : ''}
+      ${who ? `<p class="muted" style="text-align:center;margin-top:16px">${esc(who)}${isPart() ? '<br><button type="button" class="tologin" id="f-login">社員としてログインする</button>' : ''}</p>` : ''}
     </main>`;
   document.getElementById('bulkbar').hidden = true;
   const fl = document.getElementById('f-login'); if (fl) fl.onclick = () => { save('mode', ''); logout(); render(); };
-  const fc = document.getElementById('f-chg'); if (fc) fc.onclick = () => renderSetup();
+  const fo = document.getElementById('f-out'); if (fo) fo.onclick = () => { if (!confirm('ログアウトしますか？')) return; logout(); toast('ログアウトしました'); render(); };
+  wxStart();
   document.getElementById('f-reg').onclick = () => goPage('reg');
   document.getElementById('f-find').onclick = () => goPage('find');
 }
