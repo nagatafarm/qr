@@ -7,6 +7,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="config.js"></script>
 <script src="common.js"></script>
+<script src="weather.js?v=1"></script>
 <style>
   :root { --orange: #d4834a; --orange-d: #9a5320; --orange-l: #fdf5ee; --green: #4f9363; --green-d: #2f6b3a; --green-l: #f0f6f1; --line: #d6e2d8; --gray: #6b6b6b; --red: #c33; --bg: #f6f7f5; }
   * { box-sizing: border-box; }
@@ -59,27 +60,24 @@
   .fronthead { flex-wrap: wrap; }
   .fronthead .fme { display: flex; align-items: center; gap: 8px; flex: none; margin-left: auto; }
   .fronthead .fname { font-size: 14px; white-space: nowrap; }
-  .wx { display: inline-grid; justify-items: start; color: #fff; font-size: 12px; cursor: default; background: rgba(255,255,255,.16); border-radius: 999px; padding: 4px 12px; white-space: nowrap; overflow: hidden; max-width: 100%; min-width: 0; transition: background .4s, color .4s; }
-  /* 文は全部、同じマスに重ねる（枠の幅がいちばん長い文に合う）。出番でない文は下に待たせ、出番が来たら下から上へ送る */
-  .wx .wxs { grid-area: 1 / 1; transform: translateY(140%); opacity: 0; }
-  .wx .wxs.cur { transform: none; opacity: 1; transition: transform .5s cubic-bezier(.2,.8,.2,1), opacity .35s; }
-  .wx .wxs.out { transform: translateY(-140%); opacity: 0; transition: transform .5s cubic-bezier(.2,.8,.2,1), opacity .35s; }
-  /* 帯の中の7日間：1日ぶん ＝ 日付・絵・最高/最低。広い画面は横1列、せまい画面は7列のます（上に日付と絵、下に気温） */
-  .wx .wk { display: inline-flex; gap: 4px; align-items: center; }
-  .wx .wkd { display: inline-flex; gap: 3px; align-items: baseline; border-radius: 999px; padding: 0 6px; }
-  .wx .wkd .d { font-weight: bold; } .wx .wkd .d small { font-size: 10px; font-weight: normal; margin-left: 1px; }
-  /* 7日間の中の荒れそうな日：色は付けるが、うすく（透かして）目立ちすぎないように */
-  .wx .wkd.warn { background: rgba(255, 210, 77, .38); } .wx .wkd.danger { background: rgba(229, 72, 77, .5); }
-  .wx.warn { background: #ffd24d; color: #4a3500; }
-  .wx.danger { background: #e5484d; color: #fff; }
-  @media (prefers-reduced-motion: reduce) { .wx .wxs.cur, .wx .wxs.out { transition: none; } }
-  .wx[hidden] { display: none; }
-  /* せまい画面：帯を題名の下の段に回し、長い文は切らずに折り返す（高さは、いちばん長い文に合う） */
-  @media (max-width: 700px) { .wx { order: 9; flex: 1 0 100%; justify-items: center; align-items: center; white-space: normal; text-align: center; border-radius: 12px; line-height: 1.45; }
-    .wx .wxs.week { justify-self: stretch; }
-    .wx .wk { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
-    .wx .wkd { display: grid; grid-template-columns: auto auto; justify-content: center; column-gap: 2px; padding: 0 1px; border-radius: 8px; white-space: nowrap; }
-    .wx .wkd .t { grid-column: 1 / 3; } }
+  /* 作業を調べる：絞り込みの帯。項目を横1列に並べ、押すと下に開く。スクロールしても、上の帯のすぐ下に残る */
+  .fbar { position: sticky; top: var(--hh, 0px); z-index: 4; background: var(--bg); margin: 12px -4px 4px; padding: 8px 4px 6px; border-bottom: 1px solid var(--line); }
+  .fcats { display: flex; gap: 6px; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
+  .fcats::-webkit-scrollbar { display: none; }
+  .fcat { flex: none; border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 7px 10px 7px 12px; font-size: 14px; color: #333; cursor: pointer; font-family: inherit; }
+  .fcat .ar { font-size: 10px; color: #999; margin-left: 4px; display: inline-block; transition: transform .15s; }
+  .fcat.open { background: var(--green-l); border-color: var(--green); } .fcat.open .ar { transform: rotate(180deg); }
+  .fcat.has { border-color: var(--green); color: var(--green-d); font-weight: bold; }
+  .fcat .n { display: inline-block; min-width: 18px; margin-left: 5px; padding: 0 5px; border-radius: 999px; background: var(--green); color: #fff; font-size: 11px; line-height: 18px; text-align: center; }
+  .fclear { flex: none; border: none; background: none; color: var(--gray); text-decoration: underline; font-size: 13px; cursor: pointer; font-family: inherit; padding: 0 6px; }
+  .fpanel { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px 0 2px; max-height: 38vh; overflow-y: auto; }
+  .fchip { border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 6px 12px; font-size: 14px; color: #333; cursor: pointer; font-family: inherit; }
+  .fchip small { color: #999; font-size: 11px; margin-left: 5px; }
+  .fchip.on { background: var(--green); border-color: var(--green); color: #fff; font-weight: bold; } .fchip.on small { color: rgba(255,255,255,.8); }
+  .fmore { font-size: 13px; color: var(--gray); display: inline-flex; align-items: center; gap: 6px; margin-left: 4px; }
+  .fmore input { font-size: 14px; padding: 5px 6px; border: 1px solid #ccc; border-radius: 8px; font-family: inherit; }
+  .fsum { font-size: 12px; color: var(--green-d); padding-top: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fhit { display: inline-block; margin-left: 6px; padding: 0 7px; border-radius: 999px; background: var(--orange-l); color: var(--orange-d); font-size: 11px; font-weight: normal; vertical-align: 1px; }
   .loginlogo { text-align: center; margin: 2px 0 10px; }
   .loginlogo .appname { font-size: 22px; font-weight: bold; color: var(--green-d); letter-spacing: .08em; margin-top: 2px; }
   .loginmain { padding-top: 28px; }   /* ログインの画面は、上の緑の帯を出さない */
@@ -1549,120 +1547,6 @@ function wishFor() {
   const p = state && (state.people || []).find(x => x.name === getName());
   return !!(p && p.kubun && p.kubun.indexOf('パート') >= 0);
 }
-// ---------- 最初の画面の天気：上の帯に、藤沢市の「今日」「明日」「7日間（天気と最高/最低気温）」を数秒ごとに切り替えて出す ----------
-// 予報は Open-Meteo（鍵のいらない公開の予報。送るのは藤沢市の緯度・経度だけ）。15分はこのブラウザに覚えて、読み直さない
-// 切り替えは、駅の行き先表示のように下から上へ送る。枠の幅は、いちばん長い文に合わせて変えない。
-// 雷・強い雨・突風のおそれがあるときは、「注意」の文を足し、その文とその日の文で枠の色を変える（黄＝注意、赤＝強い注意）
-const WX_URL = 'https://api.open-meteo.com/v1/forecast?latitude=35.339&longitude=139.490&timezone=Asia%2FTokyo&forecast_days=7&forecast_hours=6&wind_speed_unit=ms'
-  + '&hourly=weather_code,precipitation,wind_gusts_10m'
-  + '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max,wind_direction_10m_dominant,wind_gusts_10m_max';
-const WX_KEEP_MS = 15 * 60000, WX_TURN_MS = 4500, WX_WARN_MS = 10000, WX_WEEK_MS = 5000;   // 文を出しておく時間。荒天の文（黄・赤）は長めに出す
-// 色を変える目安：突風（最大瞬間風速）15m/s から注意・20m/s から強い注意。雨 1時間に 10mm から注意・30mm から強い注意。雷はいつも強い注意
-const WX_GUST = [15, 20], WX_RAIN = [10, 30];
-let wx = null, wxAt = 0, wxNo = 0, wxTimer = 0, wxBusy = false;
-// 天気の番号（WMO）→ 絵と言葉
-function wxWord(c) {
-  if (c === 0) return ['☀', '快晴'];
-  if (c === 1) return ['🌤', '晴れ'];
-  if (c === 2) return ['⛅', '晴れ時々くもり'];
-  if (c === 3) return ['☁', 'くもり'];
-  if (c === 45 || c === 48) return ['🌫', '霧'];
-  if (c >= 51 && c <= 57) return ['🌦', '霧雨'];
-  if (c === 61 || c === 80) return ['🌧', '弱い雨'];
-  if (c === 63 || c === 81) return ['🌧', '雨'];
-  if (c === 65 || c === 82) return ['🌧', '強い雨'];
-  if (c === 66 || c === 67) return ['🌧', '冷たい雨'];
-  if ((c >= 71 && c <= 77) || c === 85 || c === 86) return ['❄', '雪'];
-  if (c >= 95) return ['⛈', '雷雨'];
-  return ['', ''];
-}
-const wxDir = d => ['北', '北東', '東', '南東', '南', '南西', '西', '北西'][Math.round(Number(d) / 45) % 8] || '';
-const wxNum = v => String(Math.round(Number(v)));
-// 荒れ具合：0 ＝ ふつう、1 ＝ 注意、2 ＝ 強い注意（code ＝ 天気の番号、gust ＝ 最大瞬間風速 m/s、rain ＝ 1時間の雨 mm）
-function wxLevel(code, gust, rain) {
-  let lv = 0;
-  if (code >= 95) lv = 2;
-  else if (code === 65 || code === 82) lv = 1;
-  if (gust >= WX_GUST[1]) lv = 2; else if (gust >= WX_GUST[0]) lv = Math.max(lv, 1);
-  if (rain >= WX_RAIN[1]) lv = 2; else if (rain >= WX_RAIN[0]) lv = Math.max(lv, 1);
-  return lv;
-}
-// これから6時間のうちに、雷・強い雨・突風がありそうなら、その知らせ（なければ null）
-function wxAlert() {
-  const h = wx && wx.hourly;
-  if (!h || !h.time) return null;
-  const at = i => Number(String(h.time[i]).slice(11, 13)) + '時ごろ', parts = [];
-  let lv = 0;
-  const th = h.weather_code.findIndex(c => c >= 95);
-  if (th >= 0) { parts.push('⛈ 雷雨のおそれ（' + at(th) + '）'); lv = 2; }
-  let ri = -1; (h.precipitation || []).forEach((v, i) => { if (v >= WX_RAIN[0] && (ri < 0 || v > h.precipitation[ri])) ri = i; });
-  if (ri >= 0) { parts.push('🌧 ' + (h.precipitation[ri] >= WX_RAIN[1] ? '激しい雨' : '強い雨') + ' ' + wxNum(h.precipitation[ri]) + 'mm/時（' + at(ri) + '）'); lv = Math.max(lv, h.precipitation[ri] >= WX_RAIN[1] ? 2 : 1); }
-  let gi = -1; (h.wind_gusts_10m || []).forEach((v, i) => { if (v >= WX_GUST[0] && (gi < 0 || v > h.wind_gusts_10m[gi])) gi = i; });
-  if (gi >= 0) { parts.push('🌬 突風 ' + wxNum(h.wind_gusts_10m[gi]) + 'm/s（' + at(gi) + '）'); lv = Math.max(lv, h.wind_gusts_10m[gi] >= WX_GUST[1] ? 2 : 1); }
-  return parts.length ? { html: '<b>⚠ 藤沢 注意</b> ' + parts.join('　'), lv: lv } : null;
-}
-// 出す文の並び：{ html, lv }
-function wxSlides() {
-  if (!wx || !wx.daily || !wx.daily.weather_code) return [];
-  const d = wx.daily, out = [];
-  const al = wxAlert();
-  if (al) out.push(al);
-  ['今日', '明日'].forEach((lb, i) => {
-    if (d.weather_code[i] == null) return;
-    const w = wxWord(d.weather_code[i]), rain = d.precipitation_probability_max && d.precipitation_probability_max[i];
-    const gust = (d.wind_gusts_10m_max && d.wind_gusts_10m_max[i]) || 0, lv = wxLevel(d.weather_code[i], gust, 0);
-    out.push({ html: `<b>藤沢 ${lb}</b> ${w[0]} ${w[1]}　${wxNum(d.temperature_2m_max[i])}℃ / ${wxNum(d.temperature_2m_min[i])}℃${rain == null ? '' : '　雨 ' + wxNum(rain) + '%'}　風 ${wxDir(d.wind_direction_10m_dominant[i])} ${wxNum(d.wind_speed_10m_max[i])}m/s`
-      + (gust >= WX_GUST[0] ? '（突風 ' + wxNum(gust) + 'm/s）' : ''), lv: lv });
-  });
-  const wk = wxWeekHtml();
-  if (wk) out.push({ html: wk, lv: 0, week: true });
-  return out;
-}
-// 7日間：日ごとに、日付（曜日）・天気の絵・最高/最低気温（数字だけ）。帯の中の1枚として出す。荒れそうな日は、その日だけ色を付ける
-function wxWeekHtml() {
-  const d = wx && wx.daily;
-  if (!d || !d.time || d.time.length < 3) return '';
-  return '<span class="wk">' + d.time.slice(0, 7).map((k, i) => {
-    const dow = new Date(Date.UTC(+k.slice(0, 4), +k.slice(5, 7) - 1, +k.slice(8, 10))).getUTCDay();
-    const w = wxWord(d.weather_code[i]), lv = wxLevel(d.weather_code[i], (d.wind_gusts_10m_max && d.wind_gusts_10m_max[i]) || 0, 0);
-    return `<span class="wkd${lv === 2 ? ' danger' : lv === 1 ? ' warn' : ''}"><span class="d">${i === 0 ? '今日' : Number(k.slice(8, 10)) + '<small>' + '日月火水木金土'[dow] + '</small>'}</span><span class="i">${w[0]}</span><span class="t">${wxNum(d.temperature_2m_max[i])}/${wxNum(d.temperature_2m_min[i])}</span></span>`;
-  }).join('') + '</span>';
-}
-// 枠の中に、文を全部重ねて置く（枠の幅は、いちばん長い文に合う）。出すのは cur の1つ。step ＝ true なら次の文へ送る
-function wxDraw(step) {
-  const el = document.getElementById('wx'), s = wxSlides();
-  if (!el) { clearTimeout(wxTimer); wxTimer = 0; return; }      // 最初の画面を離れたら、切り替えを止める
-  if (!s.length) { el.hidden = true; return; }
-  const sig = s.map(x => x.html).join('|');
-  const prev = wxNo % s.length;
-  if (step) wxNo++;
-  const cur = wxNo % s.length;
-  if (el.dataset.sig !== sig) {       // 初めて描く・中身が変わった・画面が描き直された：作り直す（このときは送らない）
-    el.innerHTML = s.map((x, i) => `<span class="wxs${x.week ? ' week' : ''}${i === cur ? ' cur' : ''}">${x.html}</span>`).join('');
-    el.dataset.sig = sig;
-  } else if (step && cur !== prev) {
-    [...el.children].forEach((c, i) => { c.classList.toggle('out', i === prev); c.classList.toggle('cur', i === cur); });
-  }
-  el.classList.toggle('warn', s[cur].lv === 1); el.classList.toggle('danger', s[cur].lv === 2);
-  el.hidden = false;
-}
-// 今出ている文の荒れ具合に合わせて、次に送るまでの時間を決める
-function wxNext() {
-  const s = wxSlides(), x = s.length ? s[wxNo % s.length] : {};
-  wxTimer = setTimeout(() => { wxTimer = 0; wxDraw(true); if (document.getElementById('wx')) wxNext(); }, x.week ? WX_WEEK_MS : x.lv ? WX_WARN_MS : WX_TURN_MS);
-}
-function wxStart() {
-  if (!wx) { try { const v = JSON.parse(localStorage.getItem('qrdemo.wx') || 'null'); if (v && v.d) { wx = v.d; wxAt = v.at; } } catch (e) {} }
-  wxDraw();
-  if (!wxTimer) wxNext();
-  if (wxBusy || Date.now() - wxAt < WX_KEEP_MS) return;
-  wxBusy = true;
-  fetch(WX_URL, { credentials: 'omit' }).then(r => r.ok ? r.json() : Promise.reject()).then(d => {
-    wx = d; wxAt = Date.now(); wxDraw();
-    clearTimeout(wxTimer); wxTimer = 0; if (document.getElementById('wx')) wxNext();   // 届いた中身に合わせて、出しておく時間を数え直す
-    try { localStorage.setItem('qrdemo.wx', JSON.stringify({ at: wxAt, d: d })); } catch (e) {}
-  }).catch(() => { wxAt = Date.now() - WX_KEEP_MS + 5 * 60000; }).finally(() => { wxBusy = false; });   // 取れなければ出さない。5分後にもう一度
-}
 // ---------- 画面：最初の画面（作業を登録する／作業を調べる） ----------
 function renderFront() {
   const who = isPart() ? 'このスマホは「パートさん用」です' : loggedIn() ? 'ログイン中：' + getName() + '（' + roleLabel() + '）' : '';
@@ -1681,7 +1565,6 @@ function renderFront() {
   document.getElementById('bulkbar').hidden = true;
   const fl = document.getElementById('f-login'); if (fl) fl.onclick = () => { save('mode', ''); logout(); render(); };
   const fo = document.getElementById('f-out'); if (fo) fo.onclick = askLogout;
-  wxStart();
   document.getElementById('f-reg').onclick = () => goPage('reg');
   document.getElementById('f-find').onclick = () => goPage('find');
 }
@@ -1931,20 +1814,97 @@ function renderPart() {
 
 // ---------- 作業を調べる（見るだけ。担当や名前を決めていなくても見られる） ----------
 const nk = s => String(s == null ? '' : s).normalize('NFKC').toLowerCase().replace(/\s+/g, '');
+// 絞り込み：日時・動き・出荷先・品目・品種。どれも、いくつでも選べる。同じ項目の中は「どれか」、項目どうしは「全部」に当てはまる計画を出す。
+// 出てくる言葉は、計画の表（スプレッドシート）の中身から作る。
+//   日時 … その日に予定のある計画（動きも選んでいれば、その動きの予定日。選んでいなければ、どの動きでも）
+//   動き … 日時を選んでいなければ、その作業がまだ終わっていない計画（接木・出荷は、予定日のある計画）
+const FIND_CATS = [['date', '日時'], ['move', '動き'], ['cust', '出荷先'], ['item', '品目'], ['kind', '品種']];
+const findF = { date: new Set(), move: new Set(), cust: new Set(), item: new Set(), kind: new Set() };
+let findCat = '';                         // 開いている項目
+const MOVE_SHIP = '出荷', MOVE_GRAFT = '接木';
+const mdKey = v => { const m = String(v == null ? '' : v).match(/(\d{1,2})\/(\d{1,2})/); return m ? m[1].padStart(2, '0') + '/' + m[2].padStart(2, '0') : ''; };
+const moveCol = m => m === MOVE_SHIP ? '出荷日' : m === MOVE_GRAFT ? '接木日' : dateCol(m);
+const moveDate = (p, m) => { const c = moveCol(m); return c ? mdKey((p.w && p.w[c]) || p.v[c]) : ''; };
+function findMoves() {
+  const l = majors().slice();
+  if (state.plans.some(p => mdKey(p.v['接木日']))) l.push(MOVE_GRAFT);
+  if (state.plans.some(p => mdKey(p.v['出荷日']))) l.push(MOVE_SHIP);
+  return l;
+}
+const planVal = (p, cols) => { for (const c of cols) { const v = String(p.v[c] == null ? '' : p.v[c]).trim(); if (v) return v; } return ''; };
+const FIND_VAL = { cust: p => planVal(p, ['出荷先', '受注先', '取引先']), item: p => planVal(p, ['品目', '穂木', '商品名']), kind: p => planVal(p, ['品種', '台木']) };
+const moveLeft = (p, m) => m === MOVE_SHIP || m === MOVE_GRAFT ? !!moveDate(p, m) : !!nextIn(p, m);
+// その計画で、選んだ日時（と動き）に当たるもの：[{ m 動き, d 月/日 }]
+function findHits(p) {
+  if (!findF.date.size) return [];
+  return (findF.move.size ? [...findF.move] : findMoves()).map(m => ({ m, d: moveDate(p, m) })).filter(x => findF.date.has(x.d));
+}
+function findPass(p) {
+  for (const k of ['cust', 'item', 'kind']) if (findF[k].size && !findF[k].has(FIND_VAL[k](p))) return false;
+  if (findF.date.size) return findHits(p).length > 0;
+  if (findF.move.size) return [...findF.move].some(m => moveLeft(p, m));
+  return true;
+}
+const findCount = () => FIND_CATS.reduce((n, c) => n + findF[c[0]].size, 0);
 function findList() {
   const q = nk(findText);
-  return state.plans.filter(p => !q || nk([planName(p), p.id, p.v['注文NO'], p.v['品番'], p.v['商品名'], p.v['出荷先']].join(' ')).includes(q));
+  return state.plans.filter(p => findPass(p) && (!q || nk([planName(p), p.id, p.v['注文NO'], p.v['品番'], p.v['商品名'], p.v['出荷先']].join(' ')).includes(q)));
+}
+// 今日から7日間（月/日 と、出す文字）
+function findDays() {
+  const out = [], t = new Date();
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(t.getFullYear(), t.getMonth(), t.getDate() + i);
+    out.push({ k: String(d.getMonth() + 1).padStart(2, '0') + '/' + String(d.getDate()).padStart(2, '0'), label: (d.getMonth() + 1) + '/' + d.getDate() + '(' + '日月火水木金土'[d.getDay()] + ')' + (i === 0 ? ' 今日' : '') });
+  }
+  return out;
+}
+// 項目を開いたときに並べる言葉：[{ k 鍵, label, n 件数 }]
+function findOptions(cat) {
+  if (cat === 'date') {
+    const days = findDays(), more = [...findF.date].filter(k => !days.some(d => d.k === k)).sort();
+    return days.concat(more.map(k => ({ k, label: Number(k.slice(0, 2)) + '/' + Number(k.slice(3)) })));
+  }
+  if (cat === 'move') return findMoves().map(m => ({ k: m, label: m }));
+  const cnt = {};
+  state.plans.forEach(p => { const v = FIND_VAL[cat](p); if (v) cnt[v] = (cnt[v] || 0) + 1; });
+  return Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a] || a.localeCompare(b, 'ja')).map(k => ({ k, label: k, n: cnt[k] }));
+}
+function fbarHtml() {
+  const cats = FIND_CATS.map(([k, lb]) => `<button type="button" class="fcat${findF[k].size ? ' has' : ''}${findCat === k ? ' open' : ''}" data-fcat="${k}" aria-expanded="${findCat === k}">${lb}${findF[k].size ? `<span class="n">${findF[k].size}</span>` : ''}<span class="ar">▾</span></button>`).join('');
+  let panel = '';
+  if (findCat) {
+    const opts = findOptions(findCat);
+    panel = `<div class="fpanel">${opts.map(o => `<button type="button" class="fchip${findF[findCat].has(o.k) ? ' on' : ''}" data-fval="${esc(o.k)}">${esc(o.label)}${o.n ? `<small>${o.n}</small>` : ''}</button>`).join('') || '<span class="muted">計画の表に、まだ中身がありません</span>'}
+      ${findCat === 'date' ? '<label class="fmore">それより先の日<input type="date" id="fdate"></label>' : ''}</div>`;
+  }
+  // 選んでいるものを、1行でも出す（項目を閉じていても分かるように）
+  const sum = FIND_CATS.map(([k]) => [...findF[k]].map(v => k === 'date' ? Number(v.slice(0, 2)) + '/' + Number(v.slice(3)) : v).join('・')).filter(String).join(' ／ ');
+  return `<div class="fcats">${cats}${findCount() ? '<button type="button" class="fclear" id="fclear">全部はずす</button>' : ''}</div>${panel}${sum && !findCat ? `<div class="fsum">${esc(sum)}</div>` : ''}`;
+}
+function findRedraw() {
+  document.getElementById('fbar').innerHTML = fbarHtml();
+  document.getElementById('findlist').innerHTML = findRowsHtml();
+  document.getElementById('findcnt').textContent = '　' + findList().length + '件';
+  bindFbar(); bindOpen();
+}
+function bindFbar() {
+  document.querySelectorAll('[data-fcat]').forEach(b => b.onclick = () => { findCat = findCat === b.dataset.fcat ? '' : b.dataset.fcat; findRedraw(); });
+  document.querySelectorAll('[data-fval]').forEach(b => b.onclick = () => { const s = findF[findCat], v = b.dataset.fval; s.has(v) ? s.delete(v) : s.add(v); findRedraw(); });
+  const c = document.getElementById('fclear'); if (c) c.onclick = () => { FIND_CATS.forEach(x => findF[x[0]].clear()); findRedraw(); };
+  const d = document.getElementById('fdate'); if (d) d.onchange = () => { const m = d.value.match(/^\d{4}-(\d{2})-(\d{2})$/); if (m) { findF.date.add(m[1] + '/' + m[2]); findRedraw(); } };
 }
 function findRowsHtml() {
   const list = findList(), max = 60;
   return (list.slice(0, max).map(p => {
     const nx = nextStep(p);
     const prog = majors().map(m => { const pr = majorProgress(p, m); return `<span class="${pr.done === pr.total ? 'ok' : ''}">${esc(m)} ${pr.done === pr.total ? '✓' : pr.done + '/' + pr.total}</span>`; }).join('');
+    const hits = findHits(p).map(x => `<span class="fhit">${esc(Number(x.d.slice(0, 2)) + '/' + Number(x.d.slice(3)) + ' ' + x.m)}</span>`).join('');
     return `<button type="button" class="task findrow" data-open="${esc(p.id)}"><div class="body">
-      <div class="nm">${esc(planName(p))} <span class="muted">${esc(p.id)}</span></div>
+      <div class="nm">${esc(planName(p))} <span class="muted">${esc(p.id)}</span>${hits}</div>
       <div class="fs">${prog}${nx ? '次の作業：' + esc(fullTask(nx, '：')) : '<span class="ok">すべて完了</span>'}</div></div></button>`;
   }).join('') || '<div class="empty">当てはまる計画がありません</div>') +
-    (list.length > max ? `<p class="muted">${list.length}件のうち、はじめの${max}件を出しています。文字を足してしぼってください。</p>` : '');
+    (list.length > max ? `<p class="muted">${list.length}件のうち、はじめの${max}件を出しています。絞り込みや、探す文字でしぼってください。</p>` : '');
 }
 function bindOpen() {
   document.querySelectorAll('[data-open]').forEach(b => b.onclick = ev => { ev.preventDefault(); openPlan(b.dataset.open, true); });
@@ -1961,6 +1921,7 @@ function renderFind() {
         <button type="button" class="btn-link${findShort === 'open' ? ' on' : ''}" data-fs="open">未完了のマイナス（${nShort}件）</button>
         <button type="button" class="btn-link${findShort === 'done' ? ' on' : ''}" data-fs="done">完了したマイナス（${nDone}件）</button></div>
       ${findShort ? shortListHtml(findShort) : ''}
+      <div class="fbar" id="fbar">${fbarHtml()}</div>
       <div class="day"><h3>計画の一覧<span class="muted" id="findcnt">　${findList().length}件</span></h3></div>
       <div id="findlist">${findRowsHtml()}</div>
       <p class="muted">最終更新 ${esc(state.updated)}（自動で更新）。</p>
@@ -1968,6 +1929,7 @@ function renderFind() {
   document.getElementById('bulkbar').hidden = true;
   document.getElementById('home').onclick = () => goPage('front');
   document.getElementById('findscan').onclick = () => startScan('find');
+  bindFbar();
   // もう一度押すと閉じる
   document.querySelectorAll('[data-fs]').forEach(b => b.onclick = () => { findShort = findShort === b.dataset.fs ? '' : b.dataset.fs; render(); });
   if (findShort) bindShortTab();
@@ -2035,7 +1997,17 @@ function planMissing() {
 }
 // ログインが要るか：社員の画面で、まだログインしていない（パートさん用のスマホは、ログインしない）
 function needLogin() { return !isPart() && !loggedIn(); }
-function render() {
+function render() { renderBody(); afterRender(); }
+// 描いたあと：上の帯に天気の帯を入れる（ログインの画面には上の帯がない）。上の帯の高さを測っておく（絞り込みの帯を、そのすぐ下に固定するため）
+function afterRender() {
+  const h = document.querySelector('#app > header');
+  if (!h) return;
+  if (typeof wxMount === 'function') wxMount(h);
+  const fit = () => { if (h.isConnected) document.documentElement.style.setProperty('--hh', h.offsetHeight + 'px'); };
+  fit(); setTimeout(fit, 700);
+}
+window.addEventListener('resize', () => { const h = document.querySelector('#app > header'); if (h) document.documentElement.style.setProperty('--hh', h.offsetHeight + 'px'); });
+function renderBody() {
   // 最初の画面をふくめ、どの画面の前にも、まずログイン（ログインの一覧は窓口の状態に入っているので、届くまで待つ）
   if (needLogin()) { if (state) renderSetup(); return; }
   if (page === 'schedule' || page === 'calendar') return renderSchedule();   // 窓口の状態を待たずに出す（表は自分で読み込む）
