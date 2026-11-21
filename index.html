@@ -68,7 +68,8 @@
   .wx .wk { display: inline-flex; gap: 4px; align-items: center; }
   .wx .wkd { display: inline-flex; gap: 3px; align-items: baseline; border-radius: 999px; padding: 0 6px; }
   .wx .wkd .d { font-weight: bold; } .wx .wkd .d small { font-size: 10px; font-weight: normal; margin-left: 1px; }
-  .wx .wkd.warn { background: #ffd24d; color: #4a3500; } .wx .wkd.danger { background: #e5484d; color: #fff; }
+  /* 7日間の中の荒れそうな日：色は付けるが、うすく（透かして）目立ちすぎないように */
+  .wx .wkd.warn { background: rgba(255, 210, 77, .38); } .wx .wkd.danger { background: rgba(229, 72, 77, .5); }
   .wx.warn { background: #ffd24d; color: #4a3500; }
   .wx.danger { background: #e5484d; color: #fff; }
   @media (prefers-reduced-motion: reduce) { .wx .wxs.cur, .wx .wxs.out { transition: none; } }
