@@ -34,7 +34,24 @@
   .bar { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 8px 12px; background: #fff; border-bottom: 1px solid var(--line); }
   .bar button, .bar select { background: #fff; border: 1px solid #bbb; border-radius: 999px; padding: 5px 14px; font-size: 14px; cursor: pointer; color: #222; }
   .bar .nav { border-radius: 50%; width: 34px; height: 34px; padding: 0; font-size: 15px; }
-  .bar .ttl { font-size: 19px; font-weight: bold; min-width: 9em; }
+  .bar .ttl { font-size: 19px; font-weight: bold; min-width: 9em; cursor: pointer; border-radius: 8px; padding: 2px 6px; }
+  .bar .ttl:hover, .bar .ttl.open { background: #f1f4f1; }
+  .bar .ttl::after { content: ' ▾'; font-size: 12px; color: #888; font-weight: normal; }
+  /* 見出しを押すと出る、小さなカレンダー（任意の日に飛ぶ） */
+  #mini { position: fixed; z-index: 45; background: #fff; border: 1px solid #ccc; border-radius: 12px; box-shadow: 0 8px 28px rgba(0,0,0,.18); padding: 8px 10px 10px; width: 260px; }
+  #mini[hidden] { display: none; }
+  #mini .mh { display: flex; align-items: center; justify-content: space-between; font-weight: bold; font-size: 14px; margin-bottom: 4px; }
+  #mini .mh button { border: none; background: none; font-size: 18px; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; color: #333; }
+  #mini .g { display: grid; grid-template-columns: repeat(7, 1fr); row-gap: 2px; text-align: center; }
+  #mini .g .w { font-size: 11px; color: #888; padding: 2px 0; }
+  #mini .g button { border: none; background: none; height: 32px; padding: 0; cursor: pointer; font-size: 13px; color: #222; border-radius: 50%; }
+  #mini .g button.o { color: #bbb; }
+  #mini .g button.in { background: var(--green-l); border-radius: 0; }
+  #mini .g button.t { color: #1a73e8; font-weight: bold; box-shadow: inset 0 0 0 2px #1a73e8; border-radius: 50%; }
+  #mini .g .sun { color: #d33; } #mini .g .sat { color: #1a5fb4; }
+  #mini .mh button:hover, #mini .g button:hover { background: #e3ece4; }
+  #mini .mf { display: flex; justify-content: flex-end; margin-top: 6px; }
+  #mini .mf button { background: #fff; border: 1px solid #bbb; border-radius: 999px; padding: 3px 12px; font-size: 12px; cursor: pointer; }
   .bar .seg { display: inline-flex; border: 1px solid #bbb; border-radius: 999px; overflow: hidden; }
   .bar .seg button { border: none; border-radius: 0; padding: 5px 14px; }
   .bar .seg button.on { background: var(--green-l); color: var(--green-d); font-weight: bold; }
@@ -185,7 +202,7 @@
   <button type="button" id="today">今日</button>
   <button type="button" class="nav" id="prev" aria-label="前へ">‹</button>
   <button type="button" class="nav" id="next" aria-label="次へ">›</button>
-  <span class="ttl" id="ttl"></span>
+  <span class="ttl" id="ttl" role="button" tabindex="0" title="押すと、日を選んで飛べます"></span>
   <span class="loading" id="loading" hidden>読み込んでいます…</span>
   <span class="fnote" id="fnote" hidden></span>
   <span class="sp"></span>
@@ -193,6 +210,7 @@
   <span class="seg"><button type="button" data-view="month">月</button><button type="button" data-view="week">週</button></span>
   <span class="vsw"><a href="index.html?go=calendar" class="on">カレンダー</a><a href="index.html?go=schedule">人の割り振り表</a></span>
 </div>
+<div id="mini" hidden></div>
 <div class="body">
   <aside id="side"></aside>
   <main>
@@ -592,6 +610,42 @@ document.querySelectorAll('.seg button').forEach(b => b.onclick = () => {
   if (b.dataset.view === view) return;
   const k = anchorDay(); view = b.dataset.view; save('calView', view); reset(view === 'week' ? (k <= TODAY && TODAY < addDays(k, 7 * 5) ? TODAY : k) : k);
 });
+// ---- 見出しを押すと、小さなカレンダーを出す（選んだ日に飛ぶ） ----
+let miniM = '';                    // 小さなカレンダーで出している月の1日
+function goDay(k) {
+  const w = weekOf(k);
+  if (!sc().querySelector(view === 'month' ? `.wk[data-w="${w}"]` : `.col[data-d="${w}"]`)) reset(k); else scrollToDay(w, true);
+}
+function miniDraw() {
+  const m = document.getElementById('mini'), s0 = weekOf(miniM), a = anchorDay(), mon = miniM.slice(0, 7);
+  const inView = k => view === 'week' ? a <= k && k <= addDays(a, 6) : false;
+  const days = Array.from({ length: 42 }, (_, i) => addDays(s0, i));
+  m.innerHTML = `<div class="mh"><button type="button" data-m="-1" aria-label="前の月">‹</button><span>${miniM.slice(0, 4)}年${Number(miniM.slice(5, 7))}月</span><button type="button" data-m="1" aria-label="次の月">›</button></div>
+    <div class="g">${Array.from({ length: 7 }, (_, i) => { const d = (wdStart + i) % 7; return `<span class="w${d === 0 ? ' sun' : d === 6 ? ' sat' : ''}">${'日月火水木金土'[d]}</span>`; }).join('')}
+    ${days.map(k => { const d = dow(k); return `<button type="button" data-k="${k}" class="${k.slice(0, 7) !== mon ? 'o' : d === 0 ? 'sun' : d === 6 ? 'sat' : ''}${inView(k) ? ' in' : ''}${k === TODAY ? ' t' : ''}">${Number(k.slice(8))}</button>`; }).join('')}</div>
+    <div class="mf"><button type="button" data-k="${TODAY}">今日</button></div>`;
+}
+function miniShift(n) { const y = Number(miniM.slice(0, 4)), mo = Number(miniM.slice(5, 7)) - 1 + n; miniM = new Date(Date.UTC(y, mo, 1)).toISOString().slice(0, 10); miniDraw(); }
+function miniClose() { document.getElementById('mini').hidden = true; document.getElementById('ttl').classList.remove('open'); }
+function miniOpen() {
+  const m = document.getElementById('mini'), t = document.getElementById('ttl'), k = anchorDay();
+  miniM = (view === 'month' ? addDays(k, 3) : k).slice(0, 8) + '01';
+  miniDraw(); m.hidden = false; t.classList.add('open');
+  const r = t.getBoundingClientRect();
+  m.style.top = (r.bottom + 6) + 'px';
+  m.style.left = Math.max(8, Math.min(r.left, innerWidth - m.offsetWidth - 8)) + 'px';
+}
+document.getElementById('ttl').onclick = () => document.getElementById('mini').hidden ? miniOpen() : miniClose();
+document.getElementById('ttl').onkeydown = ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); document.getElementById('ttl').click(); } };
+document.getElementById('mini').onclick = ev => {
+  const b = ev.target.closest('button'); if (!b) return;
+  if (b.dataset.m) return miniShift(Number(b.dataset.m));
+  if (b.dataset.k) { miniClose(); goDay(b.dataset.k); }
+};
+document.addEventListener('mousedown', ev => { if (!document.getElementById('mini').hidden && !ev.target.closest('#mini, #ttl')) miniClose(); });
+document.addEventListener('keydown', ev => { if (ev.key === 'Escape') miniClose(); });
+window.addEventListener('resize', miniClose);
+
 document.getElementById('fbtn').onclick = () => document.body.classList.toggle('side-on');
 document.body.addEventListener('click', ev => { if (document.body.classList.contains('side-on') && !ev.target.closest('aside') && ev.target.id !== 'fbtn') document.body.classList.remove('side-on'); });
 
