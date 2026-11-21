@@ -22,6 +22,8 @@
   .wx.pill.warn { background: #ffd24d; color: #4a3500; }
   .wx.pill.danger { background: #e5484d; color: #fff; }
   .wx.pill .hz { color: inherit; }
+  /* 文は、意味のまとまり（天気・気温・雨・風）ごとに切れないようにしてある。1行に入りきらないときは、まとまりの間で折り返す */
+  .wx .wxs { word-spacing: .7em; } .wx .sg { display: inline-block; white-space: nowrap; word-spacing: normal; }
   @media (prefers-reduced-motion: reduce) { .wx .wxs.cur, .wx .wxs.out { transition: none; } }
   .wx[hidden] { display: none; }
   /* せまい画面：帯を題名の下の段に回し、長い文は切らずに折り返す（高さは、いちばん長い文に合う） */
@@ -32,6 +34,9 @@
     .wx .wkd { display: grid; grid-template-columns: auto auto; justify-content: center; column-gap: 2px; padding: 0 1px; border-radius: 8px; white-space: nowrap; }
     .wx .wkd .t { grid-column: 1 / 3; } }
   @media (max-width: 900px) { header { flex-wrap: wrap; } }
+  /* せまい画面：枠の幅は画面の幅まで（7日間のますが広くても、ほかの文が右に切れないように）。とてもせまいスマホは7日間の字を小さく */
+  @media (max-width: 900px) { .wx { grid-template-columns: minmax(0, 1fr); } }
+  @media (max-width: 340px) { .wx .wk { font-size: 10.5px; gap: 0; } }
   /* どの画面でも同じ位置：題名と名前の札の段のすぐ下に、1段使って右寄せで出す（3つのボタンがある画面は、そのボタンの段の上） */
   header .wx { order: 8; flex: 1 0 100%; justify-items: end; text-align: right; margin: 0; padding: 0; }
   @media (min-width: 901px) { header .wx .wxs.week { justify-self: end; } }
@@ -100,7 +105,7 @@ function wxAlert() {
   if (ri >= 0) { parts.push(wxHz('🌧 ' + (h.precipitation[ri] >= WX_RAIN[1] ? '激しい雨' : '強い雨') + ' ' + wxNum(h.precipitation[ri]) + 'mm/時', h.precipitation[ri] >= WX_RAIN[1] ? 2 : 1) + '（' + at(ri) + '）'); lv = Math.max(lv, h.precipitation[ri] >= WX_RAIN[1] ? 2 : 1); }
   let gi = -1; (h.wind_gusts_10m || []).forEach((v, i) => { if (v >= WX_GUST[0] && (gi < 0 || v > h.wind_gusts_10m[gi])) gi = i; });
   if (gi >= 0) { parts.push(wxHz('🌬 突風 ' + wxNum(h.wind_gusts_10m[gi]) + 'm/s', h.wind_gusts_10m[gi] >= WX_GUST[1] ? 2 : 1) + '（' + at(gi) + '）'); lv = Math.max(lv, h.wind_gusts_10m[gi] >= WX_GUST[1] ? 2 : 1); }
-  return parts.length ? { html: '<b>⚠ 藤沢 注意</b> ' + parts.join('　'), lv: lv } : null;
+  return parts.length ? { html: parts.map((x, i) => '<span class="sg">' + (i ? '' : '<b>⚠ 藤沢 注意</b> ') + x + '</span>').join(' '), lv: lv } : null;
 }
 // 出す文の並び：{ html, lv }
 function wxSlides() {
@@ -113,8 +118,9 @@ function wxSlides() {
     const w = wxWord(d.weather_code[i]), rain = d.precipitation_probability_max && d.precipitation_probability_max[i];
     const gust = (d.wind_gusts_10m_max && d.wind_gusts_10m_max[i]) || 0, lv = wxLevel(d.weather_code[i], gust, 0);
     const clv = wxLevel(d.weather_code[i], 0, 0), word = clv ? wxHz(w[0] + ' ' + w[1], clv) : w[0] + ' ' + w[1];
-    out.push({ html: `<b>藤沢 ${lb}</b> ${word}　${wxNum(d.temperature_2m_max[i])}℃ / ${wxNum(d.temperature_2m_min[i])}℃${rain == null ? '' : '　雨 ' + wxNum(rain) + '%'}　風 ${wxDir(d.wind_direction_10m_dominant[i])} ${wxNum(d.wind_speed_10m_max[i])}m/s`
-      + (gust >= WX_GUST[0] ? '（' + wxHz('突風 ' + wxNum(gust) + 'm/s', gust >= WX_GUST[1] ? 2 : 1) + '）' : ''), lv: lv });
+    const sg = t => '<span class="sg">' + t + '</span>';
+    out.push({ html: [`<b>藤沢 ${lb}</b> ${word}`, `${wxNum(d.temperature_2m_max[i])}℃ / ${wxNum(d.temperature_2m_min[i])}℃`, rain == null ? '' : '雨 ' + wxNum(rain) + '%',
+      `風 ${wxDir(d.wind_direction_10m_dominant[i])} ${wxNum(d.wind_speed_10m_max[i])}m/s` + (gust >= WX_GUST[0] ? '（' + wxHz('突風 ' + wxNum(gust) + 'm/s', gust >= WX_GUST[1] ? 2 : 1) + '）' : '')].filter(Boolean).map(sg).join(' '), lv: lv });
   });
   const wk = wxWeekHtml();
   if (wk) out.push({ html: wk, lv: 0, week: true });
