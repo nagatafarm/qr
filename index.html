@@ -50,6 +50,11 @@
   a.big { text-decoration: none; }
   .big.sched { background: #3d6fa8; }
   .role.part { border-style: dashed; }
+  /* ログインの画面：部署でしぼるタブ（下の名前のボタンとは別の見た目にする） */
+  .depttabs { display: flex; align-items: flex-end; gap: 2px; margin: 6px 0 12px; border-bottom: 2px solid var(--line); overflow-x: auto; white-space: nowrap; }
+  .depttabs .lb { font-size: 12px; color: var(--gray); padding: 0 8px 9px 2px; flex: none; }
+  .dtab { flex: none; background: none; border: none; border-bottom: 3px solid transparent; margin-bottom: -2px; padding: 8px 12px; font-size: 14px; color: var(--gray); cursor: pointer; font-family: inherit; }
+  .dtab.sel { color: var(--green-d); font-weight: bold; border-bottom-color: var(--green); }
   .loginlogo { text-align: center; margin: 2px 0 10px; }
   .loginlogo img { width: 120px; height: auto; mix-blend-mode: multiply; }   /* ロゴの白い地を、画面の地の色になじませる */
   .tologin { background: none; border: none; color: var(--green-d); text-decoration: underline; cursor: pointer; font-size: 13px; padding: 4px; }
@@ -854,7 +859,7 @@ function renderSetup() {
       ${canBack ? `<div class="card" style="margin-bottom:12px"><div>いまは <b>${esc(getName())}</b> さん（${esc(roleLabel())}）でログインしています。</div>
         <div style="display:flex;gap:8px;margin-top:8px"><button type="button" class="backbtn" id="back" style="margin:0">このまま、もどる</button><button type="button" class="backbtn" id="logout" style="margin:0">ログアウト</button></div></div>` : ''}
       <label class="field" style="margin-top:0">${canBack ? 'ほかの人でログインする：' : ''}自分の名前を選んでください</label>
-      <div class="names" style="margin-bottom:6px"><button type="button" class="nmbtn dept${loginDept ? '' : ' sel'}" data-dept="">全員</button>${lg.depts.map(d => `<button type="button" class="nmbtn dept${d.name === loginDept ? ' sel' : ''}" data-dept="${esc(d.name)}">${esc(d.name)}</button>`).join('')}</div>
+      <div class="depttabs" role="tablist" aria-label="部署でしぼる"><span class="lb">部署</span><button type="button" role="tab" class="dtab${loginDept ? '' : ' sel'}" data-dept="">全員</button>${lg.depts.map(d => `<button type="button" role="tab" class="dtab${d.name === loginDept ? ' sel' : ''}" data-dept="${esc(d.name)}">${esc(d.name)}</button>`).join('')}</div>
       <div class="names" id="names">${staff.map(p => `<button type="button" class="nmbtn${p.name === loginPick ? ' sel' : ''}" data-name="${esc(p.name)}">${esc(p.name)}</button>`).join('') || '<div class="muted">この部署の人は、まだいません。</div>'}</div>
       ${sel ? `<div class="card" style="margin-top:14px"><div><b>${esc(sel.name)}</b> さん　<span class="muted">${esc(sel.depts.join('・') || '部署なし')}</span></div>
         ${sel.pw ? `<label class="field" style="margin-top:8px">パスワード（誕生日の4桁。1月10日 → 0110）<input id="pw" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" placeholder="例：0110"></label>`
