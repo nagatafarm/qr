@@ -50,6 +50,9 @@
   a.big { text-decoration: none; }
   .big.sched { background: #3d6fa8; }
   .role.part { border-style: dashed; }
+  .loginlogo { text-align: center; margin: 2px 0 10px; }
+  .loginlogo img { width: 120px; height: auto; mix-blend-mode: multiply; }   /* ロゴの白い地を、画面の地の色になじませる */
+  .tologin { background: none; border: none; color: var(--green-d); text-decoration: underline; cursor: pointer; font-size: 13px; padding: 4px; }
   a.big, a.scanbtn { display: block; text-decoration: none; }
   .big.wish { background: #7a5ea8; padding: 18px 22px; font-size: 22px; }
   a.wishbtn { margin-top: 8px; background: #fff; color: var(--green-d); border: 2px solid var(--green); text-align: center; }
@@ -845,8 +848,9 @@ function renderSetup() {
     const sel = lg.staff.find(p => p.name === loginPick);
     document.getElementById('app').innerHTML = `
     <header><div><h1>QR一元管理</h1><div class="sub">ログイン</div></div>
-      <div style="display:flex;gap:6px;flex:none"><button type="button" class="hbtn" id="home">最初へ</button></div>${navHtml()}</header>
+      ${canBack ? `<div style="display:flex;gap:6px;flex:none"><button type="button" class="hbtn" id="home">最初へ</button></div>${navHtml()}` : ''}</header>
     <main style="max-width:560px">
+      <div class="loginlogo"><img src="logo.png" alt="永田農園" width="120"></div>
       ${canBack ? `<div class="card" style="margin-bottom:12px"><div>いまは <b>${esc(getName())}</b> さん（${esc(roleLabel())}）でログインしています。</div>
         <div style="display:flex;gap:8px;margin-top:8px"><button type="button" class="backbtn" id="back" style="margin:0">このまま、もどる</button><button type="button" class="backbtn" id="logout" style="margin:0">ログアウト</button></div></div>` : ''}
       <label class="field" style="margin-top:0">${canBack ? 'ほかの人でログインする：' : ''}自分の名前を選んでください</label>
@@ -876,7 +880,7 @@ function renderSetup() {
   document.getElementById('bulkbar').hidden = true;
   // パートさん用：このスマホに覚えて、名札の読み取りへ（ログインは消す）
   document.getElementById('partbtn').onclick = () => { logout(); save('mode', 'part'); save('role', PART); inSetup = false; gateManual = false; tab = ''; picked.clear(); render(); };
-  document.getElementById('home').onclick = () => goPage('front');
+  const home = document.getElementById('home'); if (home) home.onclick = () => goPage('front');
 }
 // どの画面でも上の帯の下段に出す3つのボタン（最初の画面と同じ行き先）。今いる画面のボタンは白くする
 // 右上の札：今このスマホ・PC を使っている人の名前と役割（人のアイコン付き）。押すと担当・名前を変える（パートさん用は次の人）
@@ -1523,9 +1527,11 @@ function renderFront() {
       <button type="button" class="big find" id="f-find">作業を調べる<small>計画の中身と進み具合を見る（QR を読む・名前で探す）</small></button>
       <button type="button" class="big sched" data-nav="calendar">スケジュール<small>いつ・どの作業が・どれだけあるかを、月・週のカレンダーで見る（人の割り振り表もここから）</small></button>
       ${wishFor() ? `<a class="big wish" href="wish.html">出勤希望<small>${canWish() ? 'パートさんの来月・再来月の出勤希望を見る。出勤の表に入れる' : '来月・再来月の出勤する日に 〇 を付けて出す'}</small></a>` : ''}
-      ${who ? `<p class="muted" style="text-align:center;margin-top:16px">${esc(who)}</p>` : ''}
+      ${who ? `<p class="muted" style="text-align:center;margin-top:16px">${esc(who)}<br>${isPart() ? '<button type="button" class="tologin" id="f-login">社員としてログインする</button>' : '<button type="button" class="tologin" id="f-chg">ログアウト・ほかの人でログイン</button>'}</p>` : ''}
     </main>`;
   document.getElementById('bulkbar').hidden = true;
+  const fl = document.getElementById('f-login'); if (fl) fl.onclick = () => { save('mode', ''); logout(); render(); };
+  const fc = document.getElementById('f-chg'); if (fc) fc.onclick = () => renderSetup();
   document.getElementById('f-reg').onclick = () => goPage('reg');
   document.getElementById('f-find').onclick = () => goPage('find');
 }
@@ -1877,7 +1883,11 @@ function planMissing() {
   document.getElementById('bulkbar').hidden = true;
   bindHeader();
 }
+// ログインが要るか：社員の画面で、まだログインしていない（パートさん用のスマホは、ログインしない）
+function needLogin() { return !isPart() && !loggedIn(); }
 function render() {
+  // 最初の画面をふくめ、どの画面の前にも、まずログイン（ログインの一覧は窓口の状態に入っているので、届くまで待つ）
+  if (needLogin()) { if (state) renderSetup(); return; }
   if (page === 'schedule' || page === 'calendar') return renderSchedule();   // 窓口の状態を待たずに出す（表は自分で読み込む）
   if (!state) return;
   if (page === 'front' && !inSetup) return renderFront();
@@ -1902,7 +1912,7 @@ function render() {
 function showMessage(msg) {
   document.getElementById('app').innerHTML = `<header><h1>QR一元管理</h1></header><main><div class="card">${esc(msg)}</div></main>`;
 }
-if (page === 'schedule' || page === 'calendar') renderSchedule(); else showMessage('読み込んでいます…');
+if ((page === 'schedule' || page === 'calendar') && !needLogin()) renderSchedule(); else showMessage('読み込んでいます…');
 fetchState()
   .then(s => {
     server = s; if (!server.logs) server.logs = []; rebuild(); syncCaps();
