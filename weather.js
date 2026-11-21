@@ -16,11 +16,12 @@
   .wx .wkd .d { font-weight: bold; } .wx .wkd .d small { font-size: 10px; font-weight: normal; margin-left: 1px; }
   /* 7日間の中の荒れそうな日：色は付けるが、うすく（透かして）目立ちすぎないように */
   .wx .wkd.warn { background: rgba(255, 210, 77, .38); } .wx .wkd.danger { background: rgba(229, 72, 77, .5); }
-  /* 荒れそうなとき：帯が無いので、文の色を変える（黄＝注意、うすい赤＝強い注意） */
-  .wx.warn { color: #ffe27a; font-weight: bold; }
-  .wx.danger { color: #ffc4c6; font-weight: bold; }
-  .wx.pill.warn { background: #ffd24d; color: #4a3500; font-weight: normal; }
-  .wx.pill.danger { background: #e5484d; color: #fff; font-weight: normal; }
+  /* 気をつける項目（雷・強い雨・突風など）：その言葉だけを太字にして、色を付ける（黄＝注意、うすい赤＝強い注意） */
+  .wx .hz { font-weight: bold; } .wx .hz.l1 { color: #ffe27a; } .wx .hz.l2 { color: #ffc4c6; }
+  .wx .wkd.warn, .wx .wkd.danger { font-weight: bold; }
+  .wx.pill.warn { background: #ffd24d; color: #4a3500; }
+  .wx.pill.danger { background: #e5484d; color: #fff; }
+  .wx.pill .hz { color: inherit; }
   @media (prefers-reduced-motion: reduce) { .wx .wxs.cur, .wx .wxs.out { transition: none; } }
   .wx[hidden] { display: none; }
   /* せまい画面：帯を題名の下の段に回し、長い文は切らずに折り返す（高さは、いちばん長い文に合う） */
@@ -86,17 +87,19 @@ function wxLevel(code, gust, rain) {
   return lv;
 }
 // これから6時間のうちに、雷・強い雨・突風がありそうなら、その知らせ（なければ null）
+// 気をつける言葉を太字にする（lv：1 ＝ 注意、2 ＝ 強い注意）
+const wxHz = (t, lv) => `<span class="hz l${lv}">${t}</span>`;
 function wxAlert() {
   const h = wx && wx.hourly;
   if (!h || !h.time) return null;
   const at = i => Number(String(h.time[i]).slice(11, 13)) + '時ごろ', parts = [];
   let lv = 0;
   const th = h.weather_code.findIndex(c => c >= 95);
-  if (th >= 0) { parts.push('⛈ 雷雨のおそれ（' + at(th) + '）'); lv = 2; }
+  if (th >= 0) { parts.push(wxHz('⛈ 雷雨のおそれ', 2) + '（' + at(th) + '）'); lv = 2; }
   let ri = -1; (h.precipitation || []).forEach((v, i) => { if (v >= WX_RAIN[0] && (ri < 0 || v > h.precipitation[ri])) ri = i; });
-  if (ri >= 0) { parts.push('🌧 ' + (h.precipitation[ri] >= WX_RAIN[1] ? '激しい雨' : '強い雨') + ' ' + wxNum(h.precipitation[ri]) + 'mm/時（' + at(ri) + '）'); lv = Math.max(lv, h.precipitation[ri] >= WX_RAIN[1] ? 2 : 1); }
+  if (ri >= 0) { parts.push(wxHz('🌧 ' + (h.precipitation[ri] >= WX_RAIN[1] ? '激しい雨' : '強い雨') + ' ' + wxNum(h.precipitation[ri]) + 'mm/時', h.precipitation[ri] >= WX_RAIN[1] ? 2 : 1) + '（' + at(ri) + '）'); lv = Math.max(lv, h.precipitation[ri] >= WX_RAIN[1] ? 2 : 1); }
   let gi = -1; (h.wind_gusts_10m || []).forEach((v, i) => { if (v >= WX_GUST[0] && (gi < 0 || v > h.wind_gusts_10m[gi])) gi = i; });
-  if (gi >= 0) { parts.push('🌬 突風 ' + wxNum(h.wind_gusts_10m[gi]) + 'm/s（' + at(gi) + '）'); lv = Math.max(lv, h.wind_gusts_10m[gi] >= WX_GUST[1] ? 2 : 1); }
+  if (gi >= 0) { parts.push(wxHz('🌬 突風 ' + wxNum(h.wind_gusts_10m[gi]) + 'm/s', h.wind_gusts_10m[gi] >= WX_GUST[1] ? 2 : 1) + '（' + at(gi) + '）'); lv = Math.max(lv, h.wind_gusts_10m[gi] >= WX_GUST[1] ? 2 : 1); }
   return parts.length ? { html: '<b>⚠ 藤沢 注意</b> ' + parts.join('　'), lv: lv } : null;
 }
 // 出す文の並び：{ html, lv }
@@ -109,8 +112,9 @@ function wxSlides() {
     if (d.weather_code[i] == null) return;
     const w = wxWord(d.weather_code[i]), rain = d.precipitation_probability_max && d.precipitation_probability_max[i];
     const gust = (d.wind_gusts_10m_max && d.wind_gusts_10m_max[i]) || 0, lv = wxLevel(d.weather_code[i], gust, 0);
-    out.push({ html: `<b>藤沢 ${lb}</b> ${w[0]} ${w[1]}　${wxNum(d.temperature_2m_max[i])}℃ / ${wxNum(d.temperature_2m_min[i])}℃${rain == null ? '' : '　雨 ' + wxNum(rain) + '%'}　風 ${wxDir(d.wind_direction_10m_dominant[i])} ${wxNum(d.wind_speed_10m_max[i])}m/s`
-      + (gust >= WX_GUST[0] ? '（突風 ' + wxNum(gust) + 'm/s）' : ''), lv: lv });
+    const clv = wxLevel(d.weather_code[i], 0, 0), word = clv ? wxHz(w[0] + ' ' + w[1], clv) : w[0] + ' ' + w[1];
+    out.push({ html: `<b>藤沢 ${lb}</b> ${word}　${wxNum(d.temperature_2m_max[i])}℃ / ${wxNum(d.temperature_2m_min[i])}℃${rain == null ? '' : '　雨 ' + wxNum(rain) + '%'}　風 ${wxDir(d.wind_direction_10m_dominant[i])} ${wxNum(d.wind_speed_10m_max[i])}m/s`
+      + (gust >= WX_GUST[0] ? '（' + wxHz('突風 ' + wxNum(gust) + 'm/s', gust >= WX_GUST[1] ? 2 : 1) + '）' : ''), lv: lv });
   });
   const wk = wxWeekHtml();
   if (wk) out.push({ html: wk, lv: 0, week: true });

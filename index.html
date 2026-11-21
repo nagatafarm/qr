@@ -7,7 +7,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="config.js"></script>
 <script src="common.js"></script>
-<script src="weather.js?v=4"></script>
+<script src="weather.js?v=5"></script>
 <style>
   :root { --orange: #d4834a; --orange-d: #9a5320; --orange-l: #fdf5ee; --green: #4f9363; --green-d: #2f6b3a; --green-l: #f0f6f1; --line: #d6e2d8; --gray: #6b6b6b; --red: #c33; --bg: #f6f7f5; }
   * { box-sizing: border-box; }
@@ -74,6 +74,19 @@
   .fchip { border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 6px 12px; font-size: 14px; color: #333; cursor: pointer; font-family: inherit; }
   .fchip small { color: #999; font-size: 11px; margin-left: 5px; }
   .fchip.on { background: var(--green); border-color: var(--green); color: #fff; font-weight: bold; } .fchip.on small { color: rgba(255,255,255,.8); }
+  /* 日時：カレンダーで、日をいくつでも選ぶ（押すたびに、選ぶ／はずす） */
+  .fpanel.dt { max-height: none; }
+  .fcalw { flex: 1 0 100%; }
+  .fcal { max-width: 340px; margin-top: 4px; border: 1px solid var(--line); border-radius: 10px; background: #fff; padding: 8px; }
+  .fcal .hd { display: flex; align-items: center; justify-content: space-between; font-weight: bold; font-size: 14px; margin-bottom: 4px; }
+  .fcal .hd button { border: 1px solid var(--line); background: #fff; border-radius: 8px; width: 36px; height: 30px; cursor: pointer; font-size: 15px; font-family: inherit; color: #333; }
+  .fcal .g { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; }
+  .fcal .w { font-size: 11px; color: var(--gray); padding: 2px 0; } .fcal .w.su { color: var(--red); } .fcal .w.sa { color: #2563eb; }
+  .fcal .dy { border: 0; background: none; border-radius: 8px; height: 36px; font-size: 14px; cursor: pointer; font-family: inherit; color: #333; padding: 0; }
+  .fcal .dy:hover { background: var(--green-l); }
+  .fcal .dy.td { box-shadow: inset 0 0 0 1px var(--green); }
+  .fcal .dy.on { background: var(--green); color: #fff; font-weight: bold; }
+  .fcal .nt { font-size: 11px; color: var(--gray); margin-top: 4px; }
   .fmore { font-size: 13px; color: var(--gray); display: inline-flex; align-items: center; gap: 6px; margin-left: 4px; }
   .fmore input { font-size: 14px; padding: 5px 6px; border: 1px solid #ccc; border-radius: 8px; font-family: inherit; }
   .fsum { font-size: 12px; color: var(--green-d); padding-top: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1821,6 +1834,7 @@ const nk = s => String(s == null ? '' : s).normalize('NFKC').toLowerCase().repla
 const FIND_CATS = [['date', '日時'], ['move', '動き'], ['cust', '出荷先'], ['item', '品目'], ['kind', '品種']];
 const findF = { date: new Set(), move: new Set(), cust: new Set(), item: new Set(), kind: new Set() };
 let findCat = '';                         // 開いている項目
+let findMon = null;                       // 日時のカレンダーで出している月（その月の1日）
 const MOVE_SHIP = '出荷', MOVE_GRAFT = '接木';
 const mdKey = v => { const m = String(v == null ? '' : v).match(/(\d{1,2})\/(\d{1,2})/); return m ? m[1].padStart(2, '0') + '/' + m[2].padStart(2, '0') : ''; };
 const moveCol = m => m === MOVE_SHIP ? '出荷日' : m === MOVE_GRAFT ? '接木日' : dateCol(m);
@@ -1870,13 +1884,25 @@ function findOptions(cat) {
   state.plans.forEach(p => { const v = FIND_VAL[cat](p); if (v) cnt[v] = (cnt[v] || 0) + 1; });
   return Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a] || a.localeCompare(b, 'ja')).map(k => ({ k, label: k, n: cnt[k] }));
 }
+// 日時のカレンダー：1か月ぶん。日を押すたびに、選ぶ／はずす（いくつでも選べる）。月は ‹ › で送る
+function fcalHtml() {
+  const t = new Date();
+  if (!findMon) findMon = new Date(t.getFullYear(), t.getMonth(), 1);
+  const y = findMon.getFullYear(), mo = findMon.getMonth(), lead = new Date(y, mo, 1).getDay(), n = new Date(y, mo + 1, 0).getDate();
+  const k2 = d => String(mo + 1).padStart(2, '0') + '/' + String(d).padStart(2, '0');
+  const isT = d => y === t.getFullYear() && mo === t.getMonth() && d === t.getDate();
+  let cells = '日月火水木金土'.split('').map((w, i) => `<span class="w${i === 0 ? ' su' : i === 6 ? ' sa' : ''}">${w}</span>`).join('') + '<span></span>'.repeat(lead);
+  for (let d = 1; d <= n; d++) cells += `<button type="button" class="dy${findF.date.has(k2(d)) ? ' on' : ''}${isT(d) ? ' td' : ''}" data-fval="${k2(d)}" aria-pressed="${findF.date.has(k2(d))}">${d}</button>`;
+  return `<div class="fcalw"><div class="fcal"><div class="hd"><button type="button" data-fmon="-1" aria-label="前の月">‹</button><span>${y}年${mo + 1}月</span><button type="button" data-fmon="1" aria-label="次の月">›</button></div>
+    <div class="g">${cells}</div><div class="nt">日を押すと選ぶ。もう一度押すとはずす。いくつでも選べる</div></div></div>`;
+}
 function fbarHtml() {
   const cats = FIND_CATS.map(([k, lb]) => `<button type="button" class="fcat${findF[k].size ? ' has' : ''}${findCat === k ? ' open' : ''}" data-fcat="${k}" aria-expanded="${findCat === k}">${lb}${findF[k].size ? `<span class="n">${findF[k].size}</span>` : ''}<span class="ar">▾</span></button>`).join('');
   let panel = '';
   if (findCat) {
     const opts = findOptions(findCat);
-    panel = `<div class="fpanel">${opts.map(o => `<button type="button" class="fchip${findF[findCat].has(o.k) ? ' on' : ''}" data-fval="${esc(o.k)}">${esc(o.label)}${o.n ? `<small>${o.n}</small>` : ''}</button>`).join('') || '<span class="muted">計画の表に、まだ中身がありません</span>'}
-      ${findCat === 'date' ? '<label class="fmore">それより先の日<input type="date" id="fdate"></label>' : ''}</div>`;
+    panel = `<div class="fpanel${findCat === 'date' ? ' dt' : ''}">${opts.map(o => `<button type="button" class="fchip${findF[findCat].has(o.k) ? ' on' : ''}" data-fval="${esc(o.k)}">${esc(o.label)}${o.n ? `<small>${o.n}</small>` : ''}</button>`).join('') || '<span class="muted">計画の表に、まだ中身がありません</span>'}
+      ${findCat === 'date' ? fcalHtml() : ''}</div>`;
   }
   // 選んでいるものを、1行でも出す（項目を閉じていても分かるように）
   const sum = FIND_CATS.map(([k]) => [...findF[k]].map(v => k === 'date' ? Number(v.slice(0, 2)) + '/' + Number(v.slice(3)) : v).join('・')).filter(String).join(' ／ ');
@@ -1892,7 +1918,7 @@ function bindFbar() {
   document.querySelectorAll('[data-fcat]').forEach(b => b.onclick = () => { findCat = findCat === b.dataset.fcat ? '' : b.dataset.fcat; findRedraw(); });
   document.querySelectorAll('[data-fval]').forEach(b => b.onclick = () => { const s = findF[findCat], v = b.dataset.fval; s.has(v) ? s.delete(v) : s.add(v); findRedraw(); });
   const c = document.getElementById('fclear'); if (c) c.onclick = () => { FIND_CATS.forEach(x => findF[x[0]].clear()); findRedraw(); };
-  const d = document.getElementById('fdate'); if (d) d.onchange = () => { const m = d.value.match(/^\d{4}-(\d{2})-(\d{2})$/); if (m) { findF.date.add(m[1] + '/' + m[2]); findRedraw(); } };
+  document.querySelectorAll('[data-fmon]').forEach(b => b.onclick = () => { findMon = new Date(findMon.getFullYear(), findMon.getMonth() + Number(b.dataset.fmon), 1); findRedraw(); });
 }
 function findRowsHtml() {
   const list = findList(), max = 60;
