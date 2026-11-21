@@ -64,6 +64,16 @@
   .wx .wxs { grid-area: 1 / 1; transform: translateY(140%); opacity: 0; }
   .wx .wxs.cur { transform: none; opacity: 1; transition: transform .5s cubic-bezier(.2,.8,.2,1), opacity .35s; }
   .wx .wxs.out { transform: translateY(-140%); opacity: 0; transition: transform .5s cubic-bezier(.2,.8,.2,1), opacity .35s; }
+  /* 7日間の天気：曜日・絵・最高/最低 */
+  .wxweek { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 6px; }
+  .wxweek[hidden] { display: none; }
+  .wxweek .wd { display: flex; flex-direction: column; align-items: center; gap: 1px; border-radius: 8px; padding: 3px 0; min-width: 0; }
+  .wxweek .dw { font-size: 12px; color: #444; white-space: nowrap; } .wxweek .dw small { font-size: 10px; margin-left: 1px; }
+  .wxweek .dw.sun { color: var(--red); } .wxweek .dw.sat { color: #2a6fb8; }
+  .wxweek .ic { font-size: 20px; line-height: 1.2; }
+  .wxweek .tp { font-size: 13px; white-space: nowrap; } .wxweek .tp i { font-style: normal; color: #bbb; margin: 0 1px; }
+  .wxweek .hi { color: #c33; } .wxweek .lo { color: #2a6fb8; }
+  .wxweek .wd.warn { background: #fff1c2; } .wxweek .wd.danger { background: #fde0e1; }
   .wx.warn { background: #ffd24d; color: #4a3500; }
   .wx.danger { background: #e5484d; color: #fff; }
   @media (prefers-reduced-motion: reduce) { .wx .wxs.cur, .wx .wxs.out { transition: none; } }
@@ -1536,12 +1546,11 @@ function wishFor() {
   const p = state && (state.people || []).find(x => x.name === getName());
   return !!(p && p.kubun && p.kubun.indexOf('パート') >= 0);
 }
-// ---------- 最初の画面の天気：藤沢市の「いま」「今日」「明日」を、数秒ごとに切り替えて出す ----------
+// ---------- 最初の画面の天気：上の帯に藤沢市の「今日」「明日」を数秒ごとに切り替えて出し、その下に7日間の天気と最高・最低気温を並べる ----------
 // 予報は Open-Meteo（鍵のいらない公開の予報。送るのは藤沢市の緯度・経度だけ）。15分はこのブラウザに覚えて、読み直さない
 // 切り替えは、駅の行き先表示のように下から上へ送る。枠の幅は、いちばん長い文に合わせて変えない。
 // 雷・強い雨・突風のおそれがあるときは、「注意」の文を足し、その文とその日の文で枠の色を変える（黄＝注意、赤＝強い注意）
-const WX_URL = 'https://api.open-meteo.com/v1/forecast?latitude=35.339&longitude=139.490&timezone=Asia%2FTokyo&forecast_days=2&forecast_hours=6&wind_speed_unit=ms'
-  + '&current=temperature_2m,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation'
+const WX_URL = 'https://api.open-meteo.com/v1/forecast?latitude=35.339&longitude=139.490&timezone=Asia%2FTokyo&forecast_days=7&forecast_hours=6&wind_speed_unit=ms'
   + '&hourly=weather_code,precipitation,wind_gusts_10m'
   + '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max,wind_direction_10m_dominant,wind_gusts_10m_max';
 const WX_KEEP_MS = 15 * 60000, WX_TURN_MS = 4500;
@@ -1591,13 +1600,10 @@ function wxAlert() {
 }
 // 出す文の並び：{ html, lv }
 function wxSlides() {
-  if (!wx || !wx.current || !wx.daily) return [];
-  const c = wx.current, d = wx.daily, out = [];
+  if (!wx || !wx.daily || !wx.daily.weather_code) return [];
+  const d = wx.daily, out = [];
   const al = wxAlert();
   if (al) out.push(al);
-  const w0 = wxWord(c.weather_code);
-  out.push({ html: `<b>藤沢 いま</b> ${w0[0]} ${w0[1]}　${wxNum(c.temperature_2m)}℃　風 ${wxDir(c.wind_direction_10m)} ${wxNum(c.wind_speed_10m)}m/s`,
-    lv: wxLevel(c.weather_code, c.wind_gusts_10m || 0, c.precipitation || 0) });
   ['今日', '明日'].forEach((lb, i) => {
     if (d.weather_code[i] == null) return;
     const w = wxWord(d.weather_code[i]), rain = d.precipitation_probability_max && d.precipitation_probability_max[i];
@@ -1607,10 +1613,24 @@ function wxSlides() {
   });
   return out;
 }
+// 7日間：日ごとに、曜日・天気の絵・最高/最低気温（数字だけ）。荒れそうな日は、ます目の色を変える
+function wxWeekHtml() {
+  const d = wx && wx.daily;
+  if (!d || !d.time || d.time.length < 3) return '';
+  return d.time.slice(0, 7).map((k, i) => {
+    const dow = new Date(Date.UTC(+k.slice(0, 4), +k.slice(5, 7) - 1, +k.slice(8, 10))).getUTCDay();
+    const w = wxWord(d.weather_code[i]), lv = wxLevel(d.weather_code[i], (d.wind_gusts_10m_max && d.wind_gusts_10m_max[i]) || 0, 0);
+    return `<div class="wd${lv === 2 ? ' danger' : lv === 1 ? ' warn' : ''}" title="${esc(Number(k.slice(5, 7)) + '/' + Number(k.slice(8, 10)) + ' ' + w[1])}">
+      <span class="dw${dow === 0 ? ' sun' : dow === 6 ? ' sat' : ''}">${i === 0 ? '今日' : Number(k.slice(8, 10)) + '<small>' + '日月火水木金土'[dow] + '</small>'}</span>
+      <span class="ic">${w[0]}</span><span class="tp"><b class="hi">${wxNum(d.temperature_2m_max[i])}</b><i>/</i><b class="lo">${wxNum(d.temperature_2m_min[i])}</b></span></div>`;
+  }).join('');
+}
 // 枠の中に、文を全部重ねて置く（枠の幅は、いちばん長い文に合う）。出すのは cur の1つ。step ＝ true なら次の文へ送る
 function wxDraw(step) {
   const el = document.getElementById('wx'), s = wxSlides();
   if (!el) { clearInterval(wxTimer); wxTimer = 0; return; }      // 最初の画面を離れたら、切り替えを止める
+  const wk = document.getElementById('wxweek');
+  if (wk && !step) { const h = wxWeekHtml(); wk.hidden = !h; if (h && wk.dataset.at !== String(wxAt)) { wk.innerHTML = h; wk.dataset.at = String(wxAt); } }
   if (!s.length) { el.hidden = true; return; }
   const sig = s.map(x => x.html).join('|');
   const prev = wxNo % s.length;
@@ -1644,6 +1664,7 @@ function renderFront() {
       <span class="wx" id="wx" title="藤沢市の天気（Open-Meteo の予報）" hidden></span>
       <div class="fme">${isPart() ? '<span class="fname">パートさん用</span>' : `<span class="fname"><b>${esc(getName())}</b> さん</span><button type="button" class="hbtn" id="f-out">ログアウト</button>`}</div></header>
     <main style="max-width:520px">
+      <div class="wxweek" id="wxweek" title="藤沢市の7日間の天気と、最高 / 最低気温（℃）" hidden></div>
       <button type="button" class="big reg" id="f-reg">作業を登録する<small>終わった作業を記録する（QR を読む・やることの一覧）</small></button>
       <button type="button" class="big find" id="f-find">作業を調べる<small>計画の中身と進み具合を見る（QR を読む・名前で探す）</small></button>
       <button type="button" class="big sched" data-nav="calendar">スケジュール<small>いつ・どの作業が・どれだけあるかを、月・週のカレンダーで見る（人の割り振り表もここから）</small></button>
