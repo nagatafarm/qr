@@ -126,6 +126,9 @@
   .grp { margin-bottom: 8px; border-radius: 8px; border: 1px solid color-mix(in srgb, var(--c) 35%, #fff); overflow: hidden; }
   .grp .gh { background: var(--c); color: #fff; padding: 4px 8px; font-size: 13px; display: flex; gap: 6px; cursor: pointer; }
   .grp .gh small { margin-left: auto; }
+  .grp .gh .tg { font-size: 10px; width: 10px; flex: none; align-self: center; transition: transform .15s; }
+  .grp.shut .gh .tg { transform: rotate(-90deg); }
+  .grp.shut a.row { display: none; }
   .grp a.row { display: block; padding: 4px 8px; border-top: 1px solid #eee; color: #222; text-decoration: none; font-size: 12px; }
   .grp a.row:hover { background: #f6f8f6; }
   .grp a.row .nm { font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -186,6 +189,7 @@
   <span class="loading" id="loading" hidden>読み込んでいます…</span>
   <span class="fnote" id="fnote" hidden></span>
   <span class="sp"></span>
+  <button type="button" id="fold" hidden>全部たたむ</button>
   <span class="seg"><button type="button" data-view="month">月</button><button type="button" data-view="week">週</button></span>
   <span class="vsw"><a href="index.html?go=calendar" class="on">カレンダー</a><a href="index.html?go=schedule">人の割り振り表</a></span>
 </div>
@@ -364,11 +368,6 @@ function drawSide() {
   const names = Object.keys(presets);
   const sideEl = document.getElementById('side'), sideTop = sideEl.scrollTop;
   sideEl.innerHTML = `
-    <h3>自分の担当</h3>
-    <div class="preset"><select id="preset" aria-label="自分の担当"><option value="">全部を見る</option>${names.map(n => `<option${n === presetName ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select>
-      <button type="button" id="psave">今のチェックを保存</button><button type="button" id="pdel"${presetName ? '' : ' disabled'}>この担当を消す</button></div>
-    <p class="muted" style="margin:4px 0 0">よく見る組み合わせ（例：播種＋ヒューケラ）にチェックして保存すると、次から選ぶだけで出せる。</p>
-    <button type="button" class="allbtn" id="all"${offCount() ? '' : ' disabled'}>全部を見る${offCount() ? '（隠しているもの ' + offCount() + '）' : ''}</button>
     <h3>工程 <button type="button" data-only="s">全部</button></h3>
     ${steps.map(s => `<label style="--c:${colorOf(s)}"><input type="checkbox" data-s="${esc(s)}"${off.s.has(s) ? '' : ' checked'}><span class="dot"></span>${esc(s)}<span class="n">${stepCnt[s] || 0}</span></label>`).join('') || '<div class="muted">読み込んでいます…</div>'}
     <h3>分類 <button type="button" data-only="t">全部</button></h3>
@@ -415,18 +414,6 @@ function bindSide() {
   side.querySelectorAll('details[data-open]').forEach(d => d.ontoggle = () => { const o = loadJson('calOpen', {}); o[d.dataset.open] = d.open; save('calOpen', JSON.stringify(o)); });
   side.querySelectorAll('summary label').forEach(l => l.onclick = ev => { if (ev.target.tagName !== 'INPUT') { ev.preventDefault(); } });
   side.querySelectorAll('[data-only]').forEach(b => b.onclick = () => { off[b.dataset.only].clear(); changed(); });
-  const all = document.getElementById('all'); if (offCount()) all.onclick = () => { off = fromSaved({}); changed(); };
-  document.getElementById('preset').onchange = ev => {
-    const n = ev.target.value;
-    off = fromSaved(n && presets[n] ? presets[n] : {}); presetName = n; save('calPreset', n); saveOff(); drawSide(); draw(true);
-  };
-  document.getElementById('psave').onclick = () => {
-    const n = (prompt('担当の名前（例：播種・ヒューケラ）', presetName || '') || '').trim();
-    if (!n) return;
-    presets[n] = toSaved(off); save('calPresets', JSON.stringify(presets)); presetName = n; save('calPreset', n); drawSide(); toast('「' + n + '」を保存しました');
-  };
-  const del = document.getElementById('pdel');
-  if (presetName) del.onclick = () => { if (!confirm('「' + presetName + '」を消しますか？')) return; delete presets[presetName]; save('calPresets', JSON.stringify(presets)); presetName = ''; save('calPreset', ''); drawSide(); };
   document.getElementById('wds').onchange = ev => { wdStart = Number(ev.target.value); save('calDow', String(wdStart)); const keep = anchorDay(); reset(keep); };
 }
 
@@ -470,13 +457,19 @@ function drawMonth() {
 }
 
 // ---- 週表示：日の列を横に続ける。端に近づいたら、前後に7日ずつ足す ----
+// 工程ごとのまとまりは、見出しを押すと、たたむ・ひらく。上の「全部たたむ／全部ひらく」で、まとめて切り替える（このブラウザに覚える）。
+// foldAll ＝ 全部たたんでいるか。foldExc ＝ それと逆にしてある所（日|工程）
+let foldAll = load('calFold') === '1';
+const foldExc = new Set();
+const isShut = key => foldAll !== foldExc.has(key);
+function foldBtn() { const b = document.getElementById('fold'); if (b) { b.hidden = view !== 'week'; b.textContent = foldAll ? '全部ひらく' : '全部たたむ'; } }
 let cols = [];
 function colHtml(k) {
   const gs = stepGroups(eventsOn(k)), d = dow(k);
   return `<div class="col${k < TODAY ? ' past' : ''}${k === TODAY ? ' today' : ''}" data-d="${k}">
     <div class="ch"><div class="w ${d === 0 ? 'sun' : d === 6 ? 'sat' : ''}">${WD[d]}</div><div class="d"><b>${k.slice(8) === '01' ? Number(k.slice(5, 7)) + '/' : ''}${Number(k.slice(8))}</b></div>${loadHtml(k)}</div>
-    <div class="cb">${!loaded(k) ? '<div class="empty">読み込んでいます…</div>' : gs.length ? gs.map(g => `<div class="grp" style="--c:${colorOf(g.s)}">
-        <div class="gh" data-d="${k}" data-s="${esc(g.s)}"><b>${esc(g.s)}</b>${esc(qtyText(g))}<small>${g.es.length}件 ›</small></div>
+    <div class="cb">${!loaded(k) ? '<div class="empty">読み込んでいます…</div>' : gs.length ? gs.map(g => `<div class="grp${isShut(k + '|' + g.s) ? ' shut' : ''}" style="--c:${colorOf(g.s)}">
+        <div class="gh" data-d="${k}" data-s="${esc(g.s)}" title="押すと、たたむ・ひらく"><span class="tg">▾</span><b>${esc(g.s)}</b>${esc(qtyText(g))}<small title="内訳を見る">${g.es.length}件 ›</small></div>
         ${g.es.slice().sort(byPlan).map(rowHtml).join('')}</div>`).join('') : '<div class="empty">ありません</div>'}</div></div>`;
 }
 const byPlan = (a, b) => (a.done - b.done) || (custOf(plans[a.id] || {}) > custOf(plans[b.id] || {}) ? 1 : -1);
@@ -498,6 +491,7 @@ function draw(keepPos) {
   document.querySelectorAll('.seg button').forEach(b => b.classList.toggle('on', b.dataset.view === view));
   s.className = view === 'week' ? 'week' : '';
   if (view === 'month') drawMonth(); else drawWeek();
+  foldBtn();
   if (a) restoreAnchor(a);
   notes();
   title();
@@ -604,8 +598,17 @@ document.body.addEventListener('click', ev => { if (document.body.classList.cont
 // ---- 内訳（チップ・見出しを押したとき）：取引先ごとの量と、計画の一覧 ----
 sc().addEventListener('click', ev => {
   const c = ev.target.closest('.chip, .gh');
-  if (c) openPop(c.dataset.d, c.dataset.s);
+  if (!c) return;
+  // 週表示の見出し：件数の所（◯件 ›）は内訳を出す。それ以外は、たたむ・ひらく
+  if (c.classList.contains('gh') && !ev.target.closest('small')) {
+    const key = c.dataset.d + '|' + c.dataset.s;
+    foldExc.has(key) ? foldExc.delete(key) : foldExc.add(key);
+    c.parentElement.classList.toggle('shut', isShut(key));
+    return;
+  }
+  openPop(c.dataset.d, c.dataset.s);
 });
+document.getElementById('fold').onclick = () => { foldAll = !foldAll; foldExc.clear(); save('calFold', foldAll ? '1' : ''); draw(true); };
 function openPop(k, s) {
   const es = eventsOn(k).filter(e => e.s === s);
   if (!es.length) return;
