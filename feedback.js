@@ -4,7 +4,8 @@
 // 使い方：ページの終わりで <script src="feedback.js"></script> を読む。はめ込みの画面（iframe の中）では出さない（外の画面がまとめて写す）。
 (function () {
   if (window.top !== window.self) return;
-  const H2C_URL = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+  // html2canvas の改良版（color-mix など新しい色の書き方も読める。元の 1.4.1 はカレンダーで止まって真っ白になった）
+  const H2C_URL = 'https://cdn.jsdelivr.net/npm/html2canvas-pro@1.5.8/dist/html2canvas-pro.min.js';
   const MAX_W = 1600;                     // 送る画像の幅の上限（大きい画面は縮める）
   const COLORS = [['#e5252a', '赤'], ['#1a5fb4', '青']];
 
@@ -60,6 +61,8 @@
       document.head.appendChild(s);
     });
   }
+  // たたんである所（閉じた details の中身）は、写すときも隠す（そのままだと中身が重なって写る）
+  const hideClosed = d => d.querySelectorAll('details:not([open]) > :not(summary)').forEach(e => { e.style.display = 'none'; });
   // 今、見えている所を写す。はめ込みの画面（同じサイトの iframe）は、中身を別に写して、その場所に重ねる
   async function shoot() {
     const h2c = await loadH2C();
@@ -69,7 +72,7 @@
     try {
       const base = await h2c(document.body, { x: window.scrollX, y: window.scrollY, width: W, height: Hh, windowWidth: W, windowHeight: Hh,
         scale: scale, useCORS: true, logging: false, backgroundColor: getComputedStyle(document.body).backgroundColor || '#fff',
-        ignoreElements: el => el.id === 'fbbtn' || el.id === 'fbed' || el.tagName === 'IFRAME' });
+        ignoreElements: el => el.id === 'fbbtn' || el.id === 'fbed' || el.tagName === 'IFRAME', onclone: hideClosed });
       const out = document.createElement('canvas');
       out.width = Math.round(W * scale); out.height = Math.round(Hh * scale);
       const g = out.getContext('2d');
@@ -82,7 +85,7 @@
         try {
           const fw = f.contentWindow;
           const c = await h2c(doc.body, { x: fw.scrollX, y: fw.scrollY, width: f.clientWidth, height: f.clientHeight, windowWidth: f.clientWidth, windowHeight: f.clientHeight,
-            scale: scale, useCORS: true, logging: false, backgroundColor: getComputedStyle(doc.body).backgroundColor || '#fff' });
+            scale: scale, useCORS: true, logging: false, backgroundColor: getComputedStyle(doc.body).backgroundColor || '#fff', onclone: hideClosed });
           g.drawImage(c, r.left * scale, r.top * scale, f.clientWidth * scale, f.clientHeight * scale);
         } catch (e) { /* 写せなければ、その所は空のまま */ }
       }
