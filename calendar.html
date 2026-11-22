@@ -94,7 +94,8 @@
   aside .allbtn { width: 100%; margin-top: 6px; padding: 6px; font-size: 13px; }
   /* 使えないときも消さずに薄くする（出たり消えたりして、下の行がずれないように） */
   aside button:disabled { opacity: .4; cursor: default; }
-  aside .opt { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--gray); }
+  aside .opt { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--gray); margin-bottom: 6px; white-space: nowrap; }
+  aside .opt select { min-width: 0; max-width: 100%; flex: 1; }
   aside .opt select { font-size: 13px; padding: 3px 6px; border: 1px solid #bbb; border-radius: 6px; }
 
   main { flex: 1; min-width: 0; display: flex; flex-direction: column; background: #fff; }
@@ -126,11 +127,14 @@
   /* 週表示：日の列を横に続ける */
   /* 週表示：表全体を縦にも横にも動かす。くるくる＝縦、Shift＋くるくる＝横（Chrome にもともとある動き） */
   #scroller.week { overflow: auto; }
+  /* 2週：1列をせまくする（PC で14日が1画面に入る）。字は少し小さく */
+  #scroller.week[style*="--days: 14"] { --colmin: 96px; }
+  #scroller.week[style*="--days: 14"] .grp a.row .sub { display: none; }
   /* 列を横に並べる箱。高さは「画面の高さ」か「いちばん長い列」の大きいほうで、どの列もその高さにそろう（区切り線が途中で切れない） */
   #scroller.week .strip { display: flex; align-items: stretch; width: max-content; min-height: 100%; }
   /* 列の頭に吸い付くのはスマホ（指で送る）だけ。PC で付けると、ホイールで少し動かしても元の列へ引き戻される */
   @media (max-width: 820px) and (pointer: coarse) { #scroller.week { scroll-snap-type: x proximity; } }
-  .col { flex: none; width: max(150px, calc((100vw - var(--side) - 2px) / 7));border-right: 1px solid var(--line); display: flex; flex-direction: column; scroll-snap-align: start; }
+  .col { flex: none; width: max(var(--colmin, 150px), calc((100vw - var(--side) - 2px) / var(--days, 7)));border-right: 1px solid var(--line); display: flex; flex-direction: column; scroll-snap-align: start; }
   .col.past { background: #f7f7f7; }
   .col .ch { flex: none; text-align: center; padding: 6px 4px; border-bottom: 1px solid var(--line); background: #fff; position: sticky; top: 0; z-index: 2; }
   .col.past .ch { background: #f7f7f7; }
@@ -155,6 +159,33 @@
   .grp a.row.done { opacity: .5; }
   .grp a.row.done .nm::before { content: '✓ '; color: var(--green-d); }
   .empty { color: #bbb; font-size: 12px; text-align: center; margin-top: 12px; }
+  /* 必要人数（工程の見出し）。計画担当は押して人数を手で決められる（2026-11-23 近藤さんFB） */
+  .grp .gh .ppl { flex: none; font-size: 11px; background: rgba(255,255,255,.25); border-radius: 999px; padding: 0 6px; }
+  .grp .gh .ppl.man { background: #fff; color: var(--c); font-weight: bold; }
+  .grp .gh .ppl.edit { cursor: pointer; text-decoration: underline dotted; }
+  /* メモ（計画にない作業：土づくり・廃棄・除草剤 など） */
+  .cnote { display: block; background: #fff6c8; border: 1px solid #e8d48a; color: #5a4800; border-radius: 5px; font-size: 11px; padding: 1px 5px; margin-top: 2px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cnote.del { cursor: pointer; }
+  .addnote { border: 1px dashed #c9b25a; background: none; color: #8a7420; border-radius: 5px; font-size: 11px; padding: 0 6px; cursor: pointer; margin-top: 2px; font-family: inherit; }
+  .day .addnote { align-self: flex-start; }
+  /* マウスのある画面では、「＋メモ」はその日に乗ったときだけ出す（並ぶとうるさい） */
+  @media (hover: hover) { .addnote { opacity: 0; } .col:hover .addnote, .day:hover .addnote, .addnote:focus { opacity: 1; } }
+  #scroller.week[style*="--days: 14"] .grp .sum .cnt { display: none; }
+  #scroller.week[style*="--days: 14"] .grp .gh .ppl { display: none; }
+  /* 計画ごとのまとめ（取引先＝メーカー・品目・ハウス）。押すと中の計画を出す */
+  .grp .sum { display: flex; gap: 6px; align-items: center; padding: 4px 8px; border-top: 1px solid #eee; font-size: 12px; cursor: pointer; background: #fafcfa; white-space: nowrap; }
+  .grp .sum b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .grp .sum .tw2 { font-size: 11px; width: 12px; flex: none; transition: transform .15s; }
+  .grp .sum.open .tw2 { transform: rotate(90deg); }
+  .grp.shut .sum { display: none; }
+  .grp a.row.sub2 { padding-left: 22px; }
+  /* 日をのばす：行の右端のつまみ（⇔）を、右の日へ引っぱる（左へ戻すと縮む） */
+  .grp a.row { position: relative; }
+  .grp a.row.ex { padding-right: 18px; }
+  .grp a.row .ext { position: absolute; right: 0; top: 0; bottom: 0; width: 16px; cursor: ew-resize; display: flex; align-items: center; justify-content: center; color: #999; font-size: 12px; touch-action: none; }
+  .grp a.row .ext:hover { background: #e6efe8; color: #222; }
+  .grp a.row .spn { color: var(--c); font-weight: bold; font-size: 11px; margin-right: 3px; }
+  .col.drop { background: #e8f1ff !important; }
 
   /* 内訳（チップを押したとき） */
   #pop { position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,.25); display: flex; align-items: center; justify-content: center; padding: 16px; }
@@ -207,7 +238,7 @@
   <span class="fnote" id="fnote" hidden></span>
   <span class="sp"></span>
   <button type="button" id="fold" hidden>全部たたむ</button>
-  <span class="seg"><button type="button" data-view="month">月</button><button type="button" data-view="week">週</button></span>
+  <span class="seg"><button type="button" data-view="month">月</button><button type="button" data-view="week">週</button><button type="button" data-view="week2">2週</button></span>
   <span class="vsw"><a href="index.html?go=calendar" class="on">カレンダー</a><a href="index.html?go=schedule">人の割り振り表</a></span>
 </div>
 <div id="mini" hidden></div>
@@ -248,7 +279,9 @@ const md = k => Number(k.slice(5, 7)) + '/' + Number(k.slice(8));
 const label = k => md(k) + '(' + WD[dow(k)] + ')';
 
 // ---- 見え方の好み（このブラウザに覚える） ----
-let view = load('calView') === 'week' ? 'week' : 'month';
+// 表示：month 月／week 週（7日）／week2 2週（14日を1画面に。2026-11-23 近藤さんFB）。week と week2 は列の幅と送る日数だけがちがう
+let view = ['week', 'week2'].includes(load('calView')) ? load('calView') : 'month';
+const span = () => view === 'week2' ? 14 : 7;
 let wdStart = /^[0-6]$/.test(load('calDow')) ? Number(load('calDow')) : 0;   // 週の始まりの曜日（0＝日）
 // 隠すもの（新しく出てきた工程・品目・取引先は、はじめは出す）。s ＝ 工程、t ＝ 「営利|野菜|トマト」、c ＝ 取引先
 let off = fromSaved(loadJson('calOff', {}));
@@ -274,6 +307,14 @@ const inflight = new Map();
 let plans = {}, steps = [];
 let byDay = new Map();             // 日 → [作業]
 let capOf = new Map();             // 日 → 出勤の時間の合計
+let capN = new Map();              // 日 → 出勤する人数
+let notesOf = new Map();           // 日 → [メモ]（カレンダーの手直し）
+let manPeople = {};                // '日|工程' → 手で決めた人数
+// 行のまとめ方：c 取引先（メーカー）ごと／i 品目ごと／h ハウスごと／row 1行ずつ。はじめは取引先ごと（生産計画＝Excel の1ファイルごとに見る。近藤さんFB）
+let groupBy = ['row', 'c', 'i', 'h'].includes(load('calGroup')) ? load('calGroup') : 'c';
+const sumOpen = new Set();         // ひらいている、まとめの行（日|工程|まとめの名前）
+// 手直し（メモ・人数・日数）ができるか：ログインした計画担当。手元の試験（?mock=1）では、いつでもできる
+function canEdit() { if (MOCK) return true; try { return !!(authToken() && authCaps().planner); } catch (e) { return false; } }
 const blockOf = k => Math.floor(diff(EPOCH, k) / BLOCK);
 const blockStart = b => addDays(EPOCH, b * BLOCK);
 (function restore() {
@@ -286,23 +327,45 @@ const blockStart = b => addDays(EPOCH, b * BLOCK);
 function persist() {
   // 今日に近い8塊だけ取っておく（localStorage の大きさを守る）
   const t = blockOf(TODAY), keep = {};
-  [...blocks.keys()].sort((a, b) => Math.abs(a - t) - Math.abs(b - t)).slice(0, 8).forEach(b => { const x = blocks.get(b); keep[b] = { events: x.events, days: x.days }; });
+  [...blocks.keys()].sort((a, b) => Math.abs(a - t) - Math.abs(b - t)).slice(0, 8).forEach(b => { const x = blocks.get(b); keep[b] = { events: x.events, days: x.days, notes: x.notes || [] }; });
   const used = new Set(); Object.values(keep).forEach(x => x.events.forEach(e => used.add(e.id)));
   const pl = {}; used.forEach(id => { if (plans[id]) pl[id] = plans[id]; });
   try { localStorage.setItem('qrdemo.calCache', JSON.stringify({ blocks: keep, plans: pl, steps })); } catch (e) {}
 }
 function reindex() {
-  byDay = new Map(); capOf = new Map();
+  byDay = new Map(); capOf = new Map(); capN = new Map(); notesOf = new Map();
   blocks.forEach(x => {
     x.events.forEach(e => { if (!byDay.has(e.d)) byDay.set(e.d, []); byDay.get(e.d).push(e); });
-    x.days.forEach(d => capOf.set(d.d, d.cap));
+    x.days.forEach(d => { capOf.set(d.d, d.cap); capN.set(d.d, d.n || 0); });
+    (x.notes || []).forEach(n => { if (!notesOf.has(n.d)) notesOf.set(n.d, []); notesOf.get(n.d).push(n); });
   });
 }
+// 手元の試験用（?mock=1）：手直しは、このページの中だけに覚える
+const mockEdits = { notes: [], people: {}, spans: {} };
 async function fetchRange(from, to) {
   if (!MOCK) return callApi('api=calendar&from=' + from + '&to=' + to);
   const all = window.__mock || (window.__mock = await (await fetch('cal_mock.json', { cache: 'no-store' })).json());
   await new Promise(r => setTimeout(r, 400));
-  return Object.assign({}, all, { from, to, events: all.events.filter(e => e.d >= from && e.d <= to), days: all.days.filter(d => d.d >= from && d.d <= to) });
+  const ev = [];
+  all.events.forEach(e => {
+    const n = mockEdits.spans[e.id + '|' + e.s] || 1;
+    for (let i = 0; i < n; i++) ev.push(Object.assign({}, e, { d: addDays(e.d, i), q: e.q === '' ? '' : Math.round(e.q / n * 10) / 10, h: e.h == null ? null : e.h / n, part: i + 1, of: n, d0: e.d }));
+  });
+  return Object.assign({}, all, { from, to, events: ev.filter(e => e.d >= from && e.d <= to), days: all.days.filter(d => d.d >= from && d.d <= to),
+    notes: mockEdits.notes.filter(x => x.d >= from && x.d <= to), people: Object.assign({}, mockEdits.people) });
+}
+// 手直しを窓口に送る。送ったら、読み込んだ分を古い扱いにして読み直す
+async function calEditApi(o) {
+  if (MOCK) {
+    if (o.op === 'note') mockEdits.notes.push({ id: String(Date.now()), d: o.d, t: o.text, by: 'ためし' });
+    if (o.op === 'delnote') mockEdits.notes = mockEdits.notes.filter(n => n.id !== o.id);
+    if (o.op === 'people') { if (o.n === '') delete mockEdits.people[o.d + '|' + o.s]; else mockEdits.people[o.d + '|' + o.s] = Number(o.n); }
+    if (o.op === 'span') { if (o.days > 1) mockEdits.spans[o.id + '|' + o.s] = o.days; else delete mockEdits.spans[o.id + '|' + o.s]; }
+  } else {
+    await postApi(Object.assign({ action: 'calEdit', from: TODAY, to: TODAY }, o));
+  }
+  blocks.forEach(x => { x.at = 0; });
+  need();
 }
 function fetchBlock(b) {
   if (inflight.has(b)) return inflight.get(b);
@@ -310,7 +373,8 @@ function fetchBlock(b) {
   const p = fetchRange(from, to).then(r => {
     Object.assign(plans, r.plans || {});
     if (r.steps && r.steps.length) steps = r.steps;
-    blocks.set(b, { events: r.events || [], days: r.days || [], at: Date.now() });
+    blocks.set(b, { events: r.events || [], days: r.days || [], notes: r.notes || [], at: Date.now() });
+    if (r.people) manPeople = r.people;
     if (r.noBook) noBook = true;
     reindex(); persist(); return r;
   }).finally(() => { inflight.delete(b); showLoading(); });
@@ -393,6 +457,7 @@ function drawSide() {
     <h3>取引先 <button type="button" data-only="c">全部</button></h3>
     ${cHtml || '<div class="muted">まだありません</div>'}
     <h3>表示</h3>
+    <div class="opt">まとめ方<select id="grpby">${[['c', '取引先（メーカー）'], ['i', '品目'], ['h', 'ハウス'], ['row', '1つずつ（Excel の行）']].map(([v, t]) => `<option value="${v}"${v === groupBy ? ' selected' : ''}>${t}</option>`).join('')}</select></div>
     <div class="opt">週の始まり<select id="wds">${[0, 1, 2, 3, 4, 5, 6].map(d => `<option value="${d}"${d === wdStart ? ' selected' : ''}>${WD[d]}曜</option>`).join('')}</select></div>
     <p class="muted">マウスのホイールで縦に、Shift を押しながら回すと横に動く（週表示）。チップの数は TR 数（トレイ）。下の「作業 ◯h / 出勤 ◯h」（作業のある日だけ）は、その日の残りの作業の時間（絞り込みに関係なく全部）と、出勤する人の時間の合計。作業が出勤を超える日は赤。</p>`;
   document.querySelectorAll('#side input[data-mix="1"]').forEach(x => { x.indeterminate = true; });
@@ -433,6 +498,7 @@ function bindSide() {
   // 三角・名前を押すと、ひらく・たたむ（チェックの四角を押したときだけ、チェックを切り替える）
   side.querySelectorAll('summary label').forEach(l => l.onclick = ev => { if (ev.target.tagName === 'INPUT') return; ev.preventDefault(); const d = l.closest('details'); d.open = !d.open; });
   side.querySelectorAll('[data-only]').forEach(b => b.onclick = () => { off[b.dataset.only].clear(); changed(); });
+  document.getElementById('grpby').onchange = ev => { groupBy = ev.target.value; save('calGroup', groupBy); sumOpen.clear(); draw(true); };
   document.getElementById('wds').onchange = ev => { wdStart = Number(ev.target.value); save('calDow', String(wdStart)); const keep = anchorDay(); reset(keep); };
 }
 
@@ -463,6 +529,7 @@ function monthCells(w) {
     const gs = stepGroups(eventsOn(k));
     return `<div class="day${m % 2 ? ' odd' : ''}${k < TODAY ? ' past' : ''}${k === TODAY ? ' today' : ''}${first ? ' first' : ''}" data-d="${k}">
       <div class="dn"><b>${first ? m + '月1日' : Number(k.slice(8))}</b></div>
+      ${notesHtml(k)}
       ${!loaded(k) ? '<div class="wait">…</div>' : gs.map(g => {
         const p = g.dn && g.dn < g.es.length ? Math.round(g.dn / g.es.length * 100) : 0;
         return `<button type="button" class="chip${g.dn === g.es.length ? ' done' : ''}${p ? ' part' : ''}" style="--c:${colorOf(g.s)}${p ? ';--p:' + p + '%' : ''}" data-d="${k}" data-s="${esc(g.s)}" title="${esc(g.s)} ${esc(qtyText(g))}・${g.es.length}件${g.dn ? '（済 ' + g.dn + '件）' : ''}"><b>${esc(g.s)}</b>${esc(qtyText(g))}<small>${g.es.length}件</small></button>`;
@@ -481,21 +548,53 @@ function drawMonth() {
 let foldAll = load('calFold') === '1';
 const foldExc = new Set();
 const isShut = key => foldAll !== foldExc.has(key);
-function foldBtn() { const b = document.getElementById('fold'); if (b) { b.hidden = view !== 'week'; b.textContent = foldAll ? '全部ひらく' : '全部たたむ'; } }
+function foldBtn() { const b = document.getElementById('fold'); if (b) { b.hidden = view === 'month'; b.textContent = foldAll ? '全部ひらく' : '全部たたむ'; } }
 let cols = [];
 function colHtml(k) {
   const gs = stepGroups(eventsOn(k)), d = dow(k);
   return `<div class="col${k < TODAY ? ' past' : ''}${k === TODAY ? ' today' : ''}" data-d="${k}">
-    <div class="ch"><div class="w ${d === 0 ? 'sun' : d === 6 ? 'sat' : ''}">${WD[d]}</div><div class="d"><b>${k.slice(8) === '01' ? Number(k.slice(5, 7)) + '/' : ''}${Number(k.slice(8))}</b></div>${loadHtml(k)}</div>
+    <div class="ch"><div class="w ${d === 0 ? 'sun' : d === 6 ? 'sat' : ''}">${WD[d]}</div><div class="d"><b>${k.slice(8) === '01' ? Number(k.slice(5, 7)) + '/' : ''}${Number(k.slice(8))}</b></div>${loadHtml(k)}${notesHtml(k)}</div>
     <div class="cb">${!loaded(k) ? '<div class="empty">読み込んでいます…</div>' : gs.length ? gs.map(g => `<div class="grp${isShut(k + '|' + g.s) ? ' shut' : ''}" style="--c:${colorOf(g.s)}">
-        <div class="gh" data-d="${k}" data-s="${esc(g.s)}" title="押すと、たたむ・ひらく"><span class="tg">▾</span><b>${esc(g.s)}</b>${esc(qtyText(g))}<small title="内訳を見る">${g.es.length}件 ›</small></div>
-        ${g.es.slice().sort(byPlan).map(rowHtml).join('')}</div>`).join('') : '<div class="empty">ありません</div>'}</div></div>`;
+        <div class="gh" data-d="${k}" data-s="${esc(g.s)}" title="押すと、たたむ・ひらく"><span class="tg">▾</span><b>${esc(g.s)}</b>${esc(qtyText(g))}${pplHtml(k, g)}<small title="内訳を見る">${g.es.length}件 ›</small></div>
+        ${rowsHtml(k, g)}</div>`).join('') : '<div class="empty">ありません</div>'}</div></div>`;
 }
 const byPlan = (a, b) => (a.done - b.done) || (custOf(plans[a.id] || {}) > custOf(plans[b.id] || {}) ? 1 : -1);
-function rowHtml(e) {
+// 必要人数：残りの作業の時間 ÷ 1人の出勤の時間（その日の出勤の合計 ÷ 人数。分からなければ 8 時間）を、0.5 人きざみで切り上げ。
+// 計画担当が手で決めた人数があれば、そちらを出す（白地）。押すと決め直せる
+function pplHtml(k, g) {
+  const h = g.es.filter(e => !e.done && e.h != null).reduce((n, e) => n + e.h, 0);
+  const man = manPeople[k + '|' + g.s];
+  const per = capN.get(k) ? (capOf.get(k) || 0) / capN.get(k) : 8;
+  const need = h > 0 ? Math.ceil(h / (per || 8) * 2) / 2 : 0;
+  const ed = canEdit() && k >= TODAY;
+  if (man == null && !need) return ed ? `<span class="ppl edit" data-ppl="${k}|${esc(g.s)}" title="この日に入れる人数を決める">人数</span>` : '';
+  const tip = man != null ? '手で決めた人数（作業からの目安は ' + need + ' 人）' : '残りの作業 ' + num(h) + 'h ÷ 1人の出勤 ' + num(per) + 'h';
+  return `<span class="ppl${man != null ? ' man' : ''}${ed ? ' edit' : ''}" data-ppl="${k}|${esc(g.s)}" title="${esc(tip)}${ed ? '（押すと人数を決める）' : ''}">${man != null ? num(man) + '人' : need + '人'}</span>`;
+}
+// その日のメモ（計画にない作業）。計画担当は「＋メモ」で足し、押すと消せる
+function notesHtml(k) {
+  const ns = notesOf.get(k) || [], ed = canEdit();
+  return ns.map(n => `<div class="cnote${ed ? ' del' : ''}" data-note="${esc(n.id)}" title="${esc(n.t)}（${esc(n.by)}）${ed ? '　押すと消す' : ''}">📝 ${esc(n.t)}</div>`).join('')
+    + (ed && loaded(k) ? `<button type="button" class="addnote" data-addnote="${k}" title="この日にメモを書く（土づくり・廃棄・除草剤 など）">＋メモ</button>` : '');
+}
+// 工程のまとまりの中の行：まとめ方（取引先・品目・ハウス）でまとめた行。押すと中の計画が出る。「1つずつ」なら計画をそのまま並べる
+const groupKey = e => { const p = plans[e.id] || {}; return groupBy === 'i' ? (p.i || '（品目なし）') : groupBy === 'h' ? (p.hs || '（ハウスの記録なし）') : custOf(p); };
+function rowsHtml(k, g) {
+  const es = g.es.slice().sort(byPlan);
+  if (groupBy === 'row') return es.map(e => rowHtml(e)).join('');
+  const m = new Map();
+  es.forEach(e => { const key = groupKey(e); if (!m.has(key)) m.set(key, []); m.get(key).push(e); });
+  return [...m.entries()].map(([key, list]) => {
+    const q = list.reduce((n, e) => n + (Number(e.q) || 0), 0), dn = list.filter(e => e.done).length, id = k + '|' + g.s + '|' + key, open = sumOpen.has(id);
+    return `<div class="sum${open ? ' open' : ''}" data-sum="${esc(id)}" title="押すと、中の計画を出す"><span class="tw2">▶</span><b>${esc(key)}</b><span class="cnt">${list.length}件${dn ? '（済' + dn + '）' : ''}</span><span>${q ? num(q) + 'TR' : ''}</span></div>`
+      + (open ? list.map(e => rowHtml(e, true)).join('') : '');
+  }).join('');
+}
+function rowHtml(e, nested) {
   const p = plans[e.id] || { n: e.id };
-  return `<a class="row${e.done ? ' done' : ''}" href="index.html?id=${encodeURIComponent(e.id)}&view=1"><div class="nm">${esc(p.n)}</div>
-    <div class="sub"><span>${esc(p.c || '')}</span><span>${esc(p.k || '')}・${esc(p.f || '')}</span><b>${e.q !== '' ? esc(num(e.q)) + esc(e.u) : ''}</b></div></a>`;
+  const ex = canEdit() && view !== 'month';
+  return `<a class="row${e.done ? ' done' : ''}${nested ? ' sub2' : ''}${ex ? ' ex' : ''}" draggable="false" href="index.html?id=${encodeURIComponent(e.id)}&view=1"><div class="nm">${e.of > 1 ? `<span class="spn">${e.part}/${e.of}日</span>` : ''}${esc(p.n)}</div>
+    <div class="sub"><span>${esc(p.c || '')}</span><span>${esc(p.k || '')}・${esc(p.f || '')}</span><b>${e.q !== '' ? esc(num(e.q)) + esc(e.u) : ''}</b></div>${ex ? `<span class="ext" data-ext="${esc(e.id)}" data-s="${esc(e.s)}" data-d0="${e.d0 || e.d}" data-of="${e.of || 1}" title="右の日へ引っぱると、何日かにのばせます（左へ戻すと縮む）">⇔</span>` : ''}</a>`;
 }
 function drawWeek() {
   document.getElementById('dow').innerHTML = '';
@@ -508,7 +607,8 @@ const sc = () => document.getElementById('scroller');
 function draw(keepPos) {
   const s = sc(), a = keepPos ? anchor() : null;
   document.querySelectorAll('.seg button').forEach(b => b.classList.toggle('on', b.dataset.view === view));
-  s.className = view === 'week' ? 'week' : '';
+  s.className = view === 'month' ? '' : 'week';
+  s.style.setProperty('--days', span());
   if (view === 'month') drawMonth(); else drawWeek();
   foldBtn();
   if (a) restoreAnchor(a);
@@ -559,7 +659,7 @@ function title() {
   // 月表示：いちばん上に見えている週の、木曜あたりの月。週表示：左の日から7日
   const mk = view === 'month' ? addDays(k, 3) : k;
   const t = document.getElementById('ttl');
-  t.textContent = view === 'month' ? mk.slice(0, 4) + '年' + Number(mk.slice(5, 7)) + '月' : mk.slice(0, 4) + '年 ' + md(k) + '〜' + md(addDays(k, 6));
+  t.textContent = view === 'month' ? mk.slice(0, 4) + '年' + Number(mk.slice(5, 7)) + '月' : mk.slice(0, 4) + '年 ' + md(k) + '〜' + md(addDays(k, span() - 1));
 }
 function notes() {
   // 出勤の表がないときの知らせは、一度出したら出しっぱなし（出たり消えたりして、カレンダーの大きさが変わらないように）
@@ -599,7 +699,7 @@ function step(n) {
     if (!sc().querySelector(`.wk[data-w="${weekOf(first)}"]`)) return reset(first);
     scrollToDay(first, true);
   } else {
-    const t = addDays(k, 7 * n);
+    const t = addDays(k, span() * n);
     if (!sc().querySelector(`.col[data-d="${t}"]`)) return reset(t);
     scrollToDay(t, true);
   }
@@ -609,7 +709,7 @@ document.getElementById('next').onclick = () => step(1);
 document.getElementById('today').onclick = () => { if (!sc().querySelector(view === 'month' ? `.wk[data-w="${weekOf(TODAY)}"]` : `.col[data-d="${TODAY}"]`)) reset(TODAY); else scrollToDay(view === 'month' ? weekOf(TODAY) : weekOf(TODAY), true); };
 document.querySelectorAll('.seg button').forEach(b => b.onclick = () => {
   if (b.dataset.view === view) return;
-  const k = anchorDay(); view = b.dataset.view; save('calView', view); reset(view === 'week' ? (k <= TODAY && TODAY < addDays(k, 7 * 5) ? TODAY : k) : k);
+  const k = anchorDay(); view = b.dataset.view; save('calView', view); reset(view !== 'month' ? (k <= TODAY && TODAY < addDays(k, 7 * 5) ? TODAY : k) : k);
 });
 // ---- 見出しを押すと、小さなカレンダーを出す（選んだ日に飛ぶ） ----
 let miniM = '';                    // 小さなカレンダーで出している月の1日
@@ -619,7 +719,7 @@ function goDay(k) {
 }
 function miniDraw() {
   const m = document.getElementById('mini'), s0 = weekOf(miniM), a = anchorDay(), mon = miniM.slice(0, 7);
-  const inView = k => view === 'week' ? a <= k && k <= addDays(a, 6) : false;
+  const inView = k => view !== 'month' ? a <= k && k <= addDays(a, span() - 1) : false;
   const days = Array.from({ length: 42 }, (_, i) => addDays(s0, i));
   m.innerHTML = `<div class="mh"><button type="button" data-m="-1" aria-label="前の月">‹</button><span>${miniM.slice(0, 4)}年${Number(miniM.slice(5, 7))}月</span><button type="button" data-m="1" aria-label="次の月">›</button></div>
     <div class="g">${Array.from({ length: 7 }, (_, i) => { const d = (wdStart + i) % 7; return `<span class="w${d === 0 ? ' sun' : d === 6 ? ' sat' : ''}">${'日月火水木金土'[d]}</span>`; }).join('')}
@@ -652,6 +752,12 @@ document.body.addEventListener('click', ev => { if (document.body.classList.cont
 
 // ---- 内訳（チップ・見出しを押したとき）：取引先ごとの量と、計画の一覧 ----
 sc().addEventListener('click', ev => {
+  if (ev.target.closest('.ext')) { ev.preventDefault(); return; }   // のばすつまみ：計画の画面へは飛ばない
+  const pp = ev.target.closest('.ppl.edit'); if (pp) return askPeople(pp.dataset.ppl);
+  const an = ev.target.closest('[data-addnote]'); if (an) return askNote(an.dataset.addnote);
+  const nt = ev.target.closest('.cnote.del'); if (nt) return delNote(nt.dataset.note);
+  const sm = ev.target.closest('.sum');
+  if (sm) { const id = sm.dataset.sum; sumOpen.has(id) ? sumOpen.delete(id) : sumOpen.add(id); draw(true); return; }
   const c = ev.target.closest('.chip, .gh');
   if (!c) return;
   // 週表示の見出し：件数の所（◯件 ›）は内訳を出す。それ以外は、たたむ・ひらく
@@ -662,6 +768,51 @@ sc().addEventListener('click', ev => {
     return;
   }
   openPop(c.dataset.d, c.dataset.s);
+});
+// ---- 手直し：人数・メモ・日数（計画担当だけ。カレンダーの手直し.gs） ----
+const sendEdit = (o, ok) => calEditApi(o).then(() => toast(ok)).catch(e => toast(e.message, true));
+function askPeople(key) {
+  const i = key.indexOf('|'), k = key.slice(0, i), s = key.slice(i + 1), cur = manPeople[key];
+  const v = prompt(label(k) + '　' + s + ' に入れる人数（空にすると、作業からの目安にもどす）', cur == null ? '' : String(cur));
+  if (v === null) return;
+  const t = v.trim().normalize('NFKC');
+  if (t !== '' && !(Number(t) >= 0)) { toast('人数は数字で入れてください', true); return; }
+  sendEdit({ op: 'people', d: k, s, n: t }, t === '' ? '目安にもどしました' : label(k) + ' ' + s + '：' + t + '人にしました');
+}
+function askNote(k) {
+  const v = prompt(label(k) + ' のメモ（土づくり・廃棄・除草剤 など。60字まで）', '');
+  if (v === null || !v.trim()) return;
+  sendEdit({ op: 'note', d: k, text: v.trim() }, 'メモを書きました');
+}
+function delNote(id) {
+  const n = [...notesOf.values()].flat().find(x => x.id === id);
+  if (!confirm('このメモを消しますか？\n' + (n ? n.t : ''))) return;
+  sendEdit({ op: 'delnote', id }, 'メモを消しました');
+}
+// 日をのばす：行の右端のつまみ（⇔）を押したまま、右の日の列へ動かして離す。左へ戻すと縮む（予定日より前にはならない）
+let drag = null;
+sc().addEventListener('pointerdown', ev => {
+  const h = ev.target.closest('.ext');
+  if (!h) return;
+  ev.preventDefault(); ev.stopPropagation();
+  drag = { id: h.dataset.ext, s: h.dataset.s, d0: h.dataset.d0, of: Number(h.dataset.of) || 1, to: '' };
+  try { h.setPointerCapture(ev.pointerId); } catch (e) {}
+  const mark = () => document.querySelectorAll('.col').forEach(c => c.classList.toggle('drop', !!(drag && drag.to && c.dataset.d >= drag.d0 && c.dataset.d <= drag.to)));
+  h.onpointermove = e2 => {
+    const el = document.elementFromPoint(e2.clientX, e2.clientY), c = el && el.closest('.col');
+    if (!c || !drag) return;
+    const to = c.dataset.d < drag.d0 ? drag.d0 : c.dataset.d;
+    if (to !== drag.to) { drag.to = to; mark(); }
+  };
+  h.onpointerup = h.onpointercancel = () => {
+    h.onpointermove = h.onpointerup = h.onpointercancel = null;
+    const d = drag; drag = null; mark();
+    if (!d || !d.to) return;
+    const days = diff(d.d0, d.to) + 1;
+    if (days === d.of) return;
+    if (days > 14) { toast('のばせるのは14日までです', true); return; }
+    sendEdit({ op: 'span', id: d.id, s: d.s, days }, days > 1 ? md(d.d0) + 'から ' + days + '日にのばしました（量は日数で分けます）' : '1日にもどしました');
+  };
 });
 document.getElementById('fold').onclick = () => { foldAll = !foldAll; foldExc.clear(); save('calFold', foldAll ? '1' : ''); draw(true); };
 function openPop(k, s) {

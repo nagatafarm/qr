@@ -226,9 +226,11 @@
   .minus .mtitle { font-weight: bold; color: var(--red); font-size: 14px; margin-bottom: 6px; }
   .minus .mtitle small { font-weight: normal; color: var(--gray); font-size: 11px; }
   /* 完了にする数（鉢上げしたトレイ数など）。マイナスの欄と分けて、単位を後ろに出す */
-  .qline { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 14px; font-weight: bold; color: #222; }
+  .qline { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; font-size: 14px; font-weight: bold; color: #222; }
   .qline .ql { min-width: 7em; }
   .qu { font-size: 14px; color: #444; margin-left: 4px; }
+  .qref { flex-basis: 100%; width: 100%; font-size: 12px; color: #555; margin-top: 4px; }
+  .qref b { color: #222; }
   .minus .mq { display: flex; gap: 8px; align-items: center; }
   .minus .mb { padding: 9px 18px; font-size: 15px; font-weight: bold; border-radius: 8px; border: 1px solid #bbb; background: #fff; color: #444; cursor: pointer; font-family: inherit; }
   .minus .mb.on { background: var(--green); border-color: var(--green); color: #fff; }
@@ -370,6 +372,11 @@
   .tl li.done .box { background: var(--green-l); border-color: #cfe3d4; }
   .tl li.cur .box { border: 2px solid #ecc3a3; box-shadow: 0 2px 8px rgba(212, 131, 74, .10); }
   .tl li.todo .box { background: #fafafa; border-style: dashed; }
+  /* マイナスの解消待ち：記録はあるが、まだ完了にしない */
+  .tl li.hold .mark { background: #c62828; border-color: #c62828; }
+  .tl li.hold .box { background: #fdf1f1; border-color: #e9b4b4; }
+  .tl li.hold .t { color: #a32020; }
+  .task .holdtag { display: inline-block; font-size: 12px; font-weight: bold; color: #a32020; background: #fdecec; border: 1px solid #e9a8a8; border-radius: 8px; padding: 6px 8px; text-align: center; }
   .tl .t { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 17px; font-weight: bold; }
   .tl li.done .t { color: var(--green-d); }
   .tl li.todo .t { color: #777; }
@@ -414,7 +421,7 @@
   .chip button { border: none; background: none; font-size: 16px; color: var(--gray); cursor: pointer; padding: 0 4px; }
   .sub-btn { background: #fff; border: 1px solid var(--green); color: var(--green); border-radius: 8px; padding: 6px 12px; font-size: 14px; cursor: pointer; margin-top: 4px; }
   .picker { margin-top: 8px; border-top: 1px dashed #ddd; padding-top: 8px; max-height: 360px; overflow-y: auto; }
-  .picker input[type=search] { width: 100%; font-size: 16px; padding: 8px; border: 1px solid #ccc; border-radius: 8px; font-family: inherit; }
+  .picker input[type=search] { position: sticky; top: 0; z-index: 2; box-shadow: 0 0 0 6px #fff; width: 100%; font-size: 16px; padding: 8px; border: 1px solid #ccc; border-radius: 8px; font-family: inherit; }
   .prow2 { display: flex; gap: 8px; align-items: center; padding: 6px 2px; border-bottom: 1px solid #f0f0f0; font-size: 14px; }
   .prow2 input { width: 22px; height: 22px; flex: none; accent-color: var(--green); }
   .prow { border-top: 1px dashed #e5e5e5; padding: 8px 0; }
@@ -643,11 +650,13 @@ function nextFlowHtml(plan, nx) {
     return '<span class="' + (done ? 'fdone' : 'flater') + '">' + (done ? '✓' : '') + esc(taskName(s)) + '</span>';
   }).join('<span class="farrow">→</span>');
 }
-// 計画の名前：「0311 ﾐﾆﾄﾏﾄ ﾐﾆｷｬﾛﾙ」（播種予定日の月日 ＋ 品目 ＋ 品種）。播種予定日がなければ月日なし。
+// 計画の名前：「0415 ﾐﾆﾄﾏﾄ ﾐﾆｷｬﾛﾙ」（出荷日の月日 ＋ 品目 ＋ 品種。2026-11-23 近藤さんFBで播種日→出荷日に）。
+// 出荷日がなければ播種予定日、どちらもなければ月日なし。
 // 営利の表（品目・品種がない）は「注文NO 穂木×台木」、それもなければ商品名。Code.gs の planName_ と同じ形
 function planName(p) {
   const has = c => p.v[c] !== undefined && String(p.v[c]).trim() !== '';
-  const m = String((p.w && p.w['播種予定日']) || p.v['播種予定日'] || '').match(/(\d{1,2})\/(\d{1,2})(?!\d)/);
+  const dv = c => String((p.w && p.w[c]) || p.v[c] || '').match(/(\d{1,2})\/(\d{1,2})(?!\d)/);
+  const m = dv('出荷日') || dv('播種予定日');
   const md = m ? [m[1].padStart(2, '0') + m[2].padStart(2, '0')] : [];
   const a = ['品目', '品種'].filter(has).map(c => p.v[c]);
   if (a.length) return md.concat(a).join(' ');
@@ -783,12 +792,24 @@ function trayPlan(plan) {
 }
 function trayValue(plan, s) { return trayEdit[plan.id + '|' + s.key] || trayPlan(plan); }
 // 数量の入力欄。ふつうは数を1つ。「トレイと列」の工程は「〔 〕トレイ〔 〕列」。dq は data-qty に入れる文字（やること画面は QRID、計画画面は QRID|工程）
-function qtyInputHtml(plan, s, dq, label) {
+// noRef：計画の値（planRefHtml）を欄の後ろに出さない（やることの一覧は、計画名の下に出す）
+function qtyInputHtml(plan, s, dq, label, noRef) {
   if (!s.needQty) return '';
-  if (!s.trayMode) return `<input class="qty" type="number" inputmode="decimal" step="any" data-qty="${esc(dq)}" value="${esc(defaultQty(plan, s))}" aria-label="${esc(label)}">${s.unit ? `<span class="qu">${esc(s.unit)}</span>` : ''}`;
+  const ref = noRef ? '' : planRefHtml(plan, s);
+  if (!s.trayMode) return `<input class="qty" type="number" inputmode="decimal" step="any" data-qty="${esc(dq)}" value="${esc(defaultQty(plan, s))}" aria-label="${esc(label)}">${s.unit ? `<span class="qu">${esc(s.unit)}</span>` : ''}${ref}`;
   const k = esc(plan.id + '|' + s.key), v = trayValue(plan, s);
   return `<span class="trayin"><input class="qty" type="number" inputmode="numeric" min="0" step="1" data-tk="${k}" data-tl="tray" value="${esc(v.tray)}" aria-label="トレイの数">トレイ
-    <input class="qty" type="number" inputmode="numeric" min="0" step="1" data-tk="${k}" data-tl="line" value="${esc(v.line)}" aria-label="列の数">列</span>`;
+    <input class="qty" type="number" inputmode="numeric" min="0" step="1" data-tk="${k}" data-tl="line" value="${esc(v.line)}" aria-label="列の数">列</span>${ref}`;
+}
+// 欄の外に出す、元の計画の値と予定日（欄の数を消しても、正解が分かるように。2026-11-23 近藤さんFB）。鉢上げは出さない
+function planRefHtml(plan, s) {
+  if (s.major === '鉢上げ') return '';
+  let q = '';
+  if (s.trayMode) { const t = trayPlan(plan); if (t.tray !== '') q = t.tray + 'トレイ' + (Number(t.line) ? t.line + '列' : ''); }
+  else if (s.compare && plan.v[s.compare] !== undefined && String(plan.v[s.compare]) !== '') q = plan.v[s.compare] + (s.unit || '');
+  const dc = dateCol(s.major), d = dc ? (plan.w[dc] || plan.v[dc] || '') : '';
+  if (!q && !d) return '';
+  return `<div class="qref">計画 <b>${esc(q || '－')}</b>${d ? '　予定日 <b>' + esc(d) + '</b>' : ''}</div>`;
 }
 // 欄を直したら覚える（描き直しても消えない）
 document.addEventListener('input', e => {
@@ -858,7 +879,8 @@ function rebuild() {
     if (job.type !== 'record' || job.cancel) return;
     job.items.forEach(it => {
       const plan = state.plans.find(p => p.id === it.id);
-      if (plan) plan.status[it.major + '／' + it.minor] = { done: true, time: '送信中…', person: name, qty: it.qty, house: it.house, bench: it.bench, short: Number(it.short) > 0 ? Number(it.short) : 0, reason: it.reason || '', memo: it.memo || '', pending: true };
+      // マイナスが出た記録は、解消するまで完了にしない（窓口の readStatus_ と同じ。hold ＝ 解消待ち）
+      if (plan) plan.status[it.major + '／' + it.minor] = { done: !(Number(it.short) > 0), hold: Number(it.short) > 0, time: '送信中…', person: name, qty: it.qty, house: it.house, bench: it.bench, short: Number(it.short) > 0 ? Number(it.short) : 0, reason: it.reason || '', memo: it.memo || '', pending: true };
     });
   });
 }
@@ -1088,7 +1110,7 @@ function renderBizPick() {
   document.getElementById('app').innerHTML = headerHtml('', false) + `
     <main style="max-width:560px">
       <h2 class="bizh">何の作業をしますか</h2>
-      <div class="bizgrid">${bizList().map(btn).join('')}</div>
+      <div class="bizgrid">${bizButtons().map(b => b === '__spray' ? sprayBizBtn(last) : btn(b)).join('')}</div>
       ${isPlanner() ? '<button type="button" class="bizbtn plan" data-biz="__plan">計画担当の画面<small>全部の計画・履歴・マイナス・農薬</small></button>' : ''}
       <p class="muted" style="margin-top:14px">ボタンは、工程シートの「業務」の列から作っています。前に選んだ業務は、オレンジの枠です。</p>
     </main>`;
@@ -1098,6 +1120,15 @@ function renderBizPick() {
     bizSel = x.dataset.biz; if (bizSel !== '__plan') save('biz', bizSel);
     picked.clear(); tab = ''; toTop(); render();
   });
+}
+// 業務のボタンの並び：工程シートの「業務」の順。農薬散布が使えるときは「薬散」を鉢上げのすぐ後（なければ最後）に入れる（2026-11-23 近藤さんFB）
+function bizButtons() {
+  const l = bizList().slice();
+  if (pestOn()) { const i = l.indexOf('鉢上げ'); l.splice(i >= 0 ? i + 1 : l.length, 0, '__spray'); }
+  return l;
+}
+function sprayBizBtn(last) {
+  return `<button type="button" class="bizbtn${last === '__spray' ? ' last' : ''}" data-biz="__spray">薬散<small>農薬・葉面散布を記録する</small></button>`;
 }
 // 登録する工程がない人（総務だけ、など）の「作業を登録する」
 function renderNoMajor() {
@@ -1129,13 +1160,19 @@ function renderWorker() {
         <button type="button" class="selall" data-day="${esc(g.key)}">全部選ぶ</button></div>` +
         g.items.map(({ p, s }) => {
           const pv = state.steps.slice(0, state.steps.indexOf(s)).find(t => !isDone(p, t)), prev = pv ? fullTask(pv, '：') : '';
+          const hold = (p.status[s.key] || {}).hold;   // マイナスの解消待ち：完了のボタンを出さない
+          if (hold) return `<div class="task" data-row="${esc(p.id)}"><span></span>
+            <div class="body"><div class="nm"><a href="${esc(planUrl(p.id))}">${esc(planName(p))}</a> <span class="muted">${esc(p.id)}</span></div>
+              <div class="fs">${shortInfo(p.status[s.key], true)}</div></div>
+            <div class="act"><span class="holdtag">マイナスの<br>解消待ち</span></div></div>`;
           return `<div class="task${picked.has(p.id) ? ' picked' : ''}" data-row="${esc(p.id)}">
             <input type="checkbox" data-pick="${esc(p.id)}"${picked.has(p.id) ? ' checked' : ''} aria-label="選ぶ">
             <div class="body"><div class="nm"><a href="${esc(planUrl(p.id))}">${esc(planName(p))}</a> <span class="muted">${esc(p.id)}</span></div>
               <div class="fs">${fieldsHtml(p, m)}</div>
+              ${s.needQty ? planRefHtml(p, s) : ''}
               ${placeHtml(p, s)}${shortHtml(p, s)}
               ${prev ? `<div class="warn">※ 前の工程（${esc(prev)}）が未記録</div>` : ''}</div>
-            <div class="act">${qtyInputHtml(p, s, p.id, '数量')}
+            <div class="act">${qtyInputHtml(p, s, p.id, '数量', true)}
               <button type="button" class="done-btn" data-do="${esc(p.id)}">${ss.length > 1 ? esc(taskName(s)) + '<br>' : ''}完了</button></div>
           </div>`;
         }).join('');
@@ -1181,7 +1218,7 @@ function renderWorker() {
   document.getElementById('bulk-clear').onclick = () => { picked.clear(); render(); };
   document.getElementById('bulk-go').onclick = () => {
     const items = [];
-    for (const id of ids) { const x = list.find(y => y.p.id === id); const it = itemFor(x.p, x.s); if (!it) return; items.push(it); }
+    for (const id of ids) { const x = list.find(y => y.p.id === id); if ((x.p.status[x.s.key] || {}).hold) continue; const it = itemFor(x.p, x.s); if (!it) return; items.push(it); }
     picked.clear();
     complete(items, items.length + '件を完了にしました');
   };
@@ -1247,9 +1284,14 @@ function bindDelete() {
 // ---------- 画面：計画担当のホーム（一覧・履歴） ----------
 // 計画担当の一覧のカード（上の欄の文字でしぼる。名前・QRID・注文NO・品番・商品名・出荷先）
 let planText = '';
+let planBiz = '';                 // 計画担当の一覧：次の作業の業務で絞る（'' すべて、'__done' 全部済んだもの）。作業の順に並ぶ（2026-11-23 近藤さんFB）
 function plannerCardsHtml() {
   const q = nk(planText);
-  const list = state.plans.filter(p => !q || nk([planName(p), p.id, p.v['注文NO'], p.v['品番'], p.v['商品名'], p.v['出荷先']].join(' ')).includes(q));
+  const ord = p => { const nx = nextStep(p); return nx ? state.steps.indexOf(nx) : 999; };
+  const due = p => { const nx = nextStep(p); const c = nx ? bizDateCol(bizOf(nx)) : ''; return (c && p.d && p.d[c]) || '9999'; };
+  const list = state.plans.filter(p => !q || nk([planName(p), p.id, p.v['注文NO'], p.v['品番'], p.v['商品名'], p.v['出荷先']].join(' ')).includes(q))
+    .filter(p => { if (!planBiz) return true; const nx = nextStep(p); return planBiz === '__done' ? !nx : !!nx && bizOf(nx) === planBiz; })
+    .sort((a, b) => ord(a) - ord(b) || (due(a) < due(b) ? -1 : due(a) > due(b) ? 1 : 0) || (a.id < b.id ? -1 : 1));
   return list.map(p => {
       const nx = nextStep(p);
       const steps = state.steps.map(s => {
@@ -1273,7 +1315,8 @@ function renderPlanner() {
   if (tab === 'list') {
     // 上に「QR を読む」と、探す欄（作業を調べる画面と同じ）
     body = `<button type="button" class="scanbtn" id="planscan">QR を読む</button>
-      <label class="field" style="margin:10px 0 12px">名前・QRID・注文NO で探す<input id="planq" type="search" value="${esc(planText)}" placeholder="例：ミニトマト、26-00012"></label>
+      <label class="field" style="margin:10px 0 8px">名前・QRID・注文NO で探す<input id="planq" type="search" value="${esc(planText)}" placeholder="例：ミニトマト、26-00012"></label>
+      <div class="filter" style="margin-bottom:10px">次の作業：<button type="button" data-pb="" class="${!planBiz ? 'on' : ''}">すべて</button>${bizList().map(b => `<button type="button" data-pb="${esc(b)}" class="${planBiz === b ? 'on' : ''}">${esc(b)}</button>`).join('')}<button type="button" data-pb="__done" class="${planBiz === '__done' ? 'on' : ''}">全部済み</button></div>
       <div class="grid" id="plangrid">${plannerCardsHtml()}</div>`;
   } else if (tab === 'short') {
     body = shortTabHtml();
@@ -1301,6 +1344,7 @@ function renderPlanner() {
   document.getElementById('bulkbar').hidden = true;
   document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { tab = b.dataset.tab; render(); });
   document.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { logFilter = b.dataset.f; render(); });
+  document.querySelectorAll('[data-pb]').forEach(b => b.onclick = () => { planBiz = b.dataset.pb; render(); });
   bindDelete();
   if (tab === 'pest' && pestOn()) bindPlannerPest();
   if (tab === 'short') bindShortTab();
@@ -1439,7 +1483,7 @@ function renderPlan(plan) {
     const firstOpen = nextIn(plan, m);
     const items = majorSteps(m).map(s => {
       const r = plan.status[s.key] || {};
-      if (r.done) {
+      if (r.done || r.hold) {
         let info = esc(r.time) + (r.person ? '　' + esc(r.person) : '');
         if (r.qty !== '' && r.qty != null) info += '　' + qtyText(r, s) + diffText(plan, s, r.qty);
         if (placeText(r)) info += '　' + esc(placeText(r));
@@ -1447,6 +1491,9 @@ function renderPlan(plan) {
         const log = state.logs.find(l => l.id === plan.id && l.major === s.major && l.minor === s.minor && l.op === '完了');
         const del = log && log.canDelete && (isPlanner() || log.person === getName())
           ? `<button type="button" class="del" data-del="${esc(log.logId)}">まちがえた（消す）</button>` : '';
+        if (r.hold) return `<li class="hold"><span class="mark">!</span><div class="box">
+          <div class="t">${esc(taskName(s))}<span class="tag ng">マイナスの解消待ち</span></div><div class="info">${info}</div>
+          <div class="desc">マイナスが片づくまで、完了になりません。計画担当の「マイナス」で ③ 解消を書くと完了になります。</div>${del}</div></li>`;
         return `<li class="done"><span class="mark">✓</span><div class="box">
           <div class="t">${esc(taskName(s))}<span class="tag ok">完了</span></div><div class="info">${info}</div>${del}</div></li>`;
       }
@@ -1546,6 +1593,19 @@ function onScan(text) {
     if (!scan.seen[k1]) { scan.seen[k1] = true; scan.items.unshift({ ok: false, id: id1 || String(text).slice(0, 30), text: id1 ? 'この QR の計画が見つかりません' : '計画の QR ではありません' }); scanDraw(); }
     return;
   }
+  if (scan.mode === 'spray') {        // 薬散：一緒に散布したロットの QR を続けて読み、散布の対象に足す（2026-11-23 近藤さんFB）
+    const id2 = qrId(text), k2 = id2 || '?' + text;
+    if (scan.seen[k2]) return;
+    scan.seen[k2] = true;
+    const p2 = id2 && state.plans.find(q => q.id === id2);
+    if (p2 && typeof window.addSprayLot === 'function') {
+      const added = window.addSprayLot(id2);
+      scan.items.unshift({ ok: true, id: id2, text: planName(p2) + (added ? '（足しました）' : '（もう入っています）') });
+      try { if (navigator.vibrate) navigator.vibrate(60); } catch (e) {}
+    } else scan.items.unshift({ ok: false, id: id2 || String(text).slice(0, 30), text: id2 ? 'この QR の計画が見つかりません' : '計画の QR ではありません' });
+    scanDraw();
+    return;
+  }
   const id = qrId(text), key = id || '?' + text;
   if (scan.seen[key]) return;          // 同じ QR は1回だけ
   scan.seen[key] = true;
@@ -1573,7 +1633,7 @@ function loadScript(src) {
 async function startScan(mode) {
   if (scan) return;
   const el = document.getElementById('scan'), video = document.getElementById('scan-video');
-  const me = scan = { seen: {}, items: [], stream: null, timer: 0, busy: false, mode: ['badge', 'gate', 'one', 'find'].indexOf(mode) >= 0 ? mode : '', hold: false };
+  const me = scan = { seen: {}, items: [], stream: null, timer: 0, busy: false, mode: ['badge', 'gate', 'one', 'find', 'spray'].indexOf(mode) >= 0 ? mode : '', hold: false };
   el.hidden = false;
   document.getElementById('scan-end').onclick = stopScan;
   scanDraw('カメラを開いています…');
@@ -1614,7 +1674,7 @@ async function startScan(mode) {
     }
   }
   if (scan !== me) return;
-  scanDraw(me.mode === 'badge' || me.mode === 'gate' ? '自分の名札の QR にカメラを向けてください。' : me.mode ? '計画の QR にカメラを向けてください。' : 'QR にカメラを向けてください。続けて何枚でも読めます。');
+  scanDraw(me.mode === 'badge' || me.mode === 'gate' ? '自分の名札の QR にカメラを向けてください。' : me.mode === 'spray' ? '一緒に散布したロットの QR に、続けてカメラを向けてください。' : me.mode ? '計画の QR にカメラを向けてください。' : 'QR にカメラを向けてください。続けて何枚でも読めます。');
   const canvas = document.createElement('canvas');
   me.timer = setInterval(async () => {
     if (scan !== me || me.busy || video.readyState < 2 || !video.videoWidth) return;
@@ -2105,6 +2165,7 @@ function renderPlanView(plan) {
         if (shortInfo(r)) info += '<br>' + shortInfo(r, true);
         return `<li class="done"><span class="mark">✓</span><div class="box"><div class="t">${esc(taskName(s))}<span class="tag ok">完了</span></div><div class="info">${info}</div></div></li>`;
       }
+      if (r.hold) return `<li class="hold"><span class="mark">!</span><div class="box"><div class="t">${esc(taskName(s))}<span class="tag ng">マイナスの解消待ち</span></div><div class="info">${esc(r.time)}　${esc(r.person || '')}<br>${shortInfo(r, true)}</div></div></li>`;
       const isCur = nx && nx.key === s.key;
       return `<li class="${isCur ? 'cur' : 'todo'}"><span class="mark"></span><div class="box">
         <div class="t">${esc(taskName(s))}${isCur ? '<span class="tag now">次の作業</span>' : '<span class="tag ng">未完了</span>'}</div><div class="desc">${esc(s.note)}</div></div></li>`;
@@ -2194,6 +2255,7 @@ function renderBody() {
   }
   if (!isPlanner() && sprayMode()) return renderSpray();
   if (bizSel === '__plan' && isPlanner()) return renderPlanner();
+  if (bizSel === '__spray' && pestOn()) return renderSpray();   // 業務の「薬散」
   renderWorker();   // 業務を選んでいなければ、選ぶ画面
 }
 function showMessage(msg) {
@@ -2218,7 +2280,7 @@ fetchState()
   })
   .catch(e => showMessage(e.message));
 </script>
-<script src="spray.js?v=4"></script>
+<script src="spray.js?v=5"></script>
 <script src="feedback.js?v=2"></script>
 </body>
 </html>

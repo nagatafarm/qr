@@ -5,7 +5,9 @@
 // 回数の上限は、選んだときに画面で確かめ、記録するときにデータの窓口でもう一度確かめる。
 
 const SPRAY = '__spray__';          // 農薬散布担当
-const sprayForm = { products: [{ name: '', dilution: '' }], amount: '', equipment: '', area: '', regChecked: false, washed: false, memo: '' };
+const sprayForm = { products: [{ name: '', dilution: '' }], amount: '', equipment: '', area: '', regChecked: false, washed: false, memo: '', method: '散布' };
+// 使用方法のボタン（2026-11-23 近藤さんFB：葉面散布も選べるように）
+const SPRAY_METHODS = ['散布', '葉面散布'];
 let pickerOpen = false;
 let pestShipTo = '';                // 計画担当の「使用農薬履歴」の出荷先の絞り込み
 
@@ -21,6 +23,8 @@ function setSprayLots(ids) { save('sprayLots', JSON.stringify([...new Set(ids)])
 function pestReg(item, product) { return state.pest.regs.find(r => r.item === item && r.product === product); }
 function pestIngLimit(item, ing) { return state.pest.ings.find(r => r.item === item && r.ing === ing); }
 function pestProduct(name) { return state.pest.products.find(p => p.name === name); }
+// 葉面散布剤（農薬シートの「種類」に 葉面・液肥・肥料 とある薬剤）：農薬の適用登録の対象外なので、登録の確かめをしない
+function isFoliar(name) { const p = pestProduct(name); return !!(p && /葉面|液肥|肥料/.test(p.type || '')); }
 
 // 選んだロット×薬剤ごとに「今回で何回目か」を出す。ingN はロットごとの成分の回数（同じ散布で同じ成分が2剤あれば2回）
 function sprayCheck(lots, names) {
@@ -34,6 +38,7 @@ function sprayCheck(lots, names) {
       const o = out[k];
       const reg = pestReg(p.regItem, name);
       const n = (c.p[name] || 0) + 1;
+      if (isFoliar(name)) return;   // 葉面散布剤は回数・登録を数えない
       const g = o.groups[p.regItem] = o.groups[p.regItem] || { item: p.regItem, reg, lots: 0, nMin: n, nMax: n };
       g.lots++; g.nMin = Math.min(g.nMin, n); g.nMax = Math.max(g.nMax, n);
       if (!reg) { if (!o.noReg.includes(p.regItem)) o.noReg.push(p.regItem); }
@@ -195,6 +200,12 @@ function bindPhotoInputs() {
 // ---------- 画面：農薬散布担当 ----------
 
 // 散布の対象に選んであるロット（計画から消えたものは外す）
+// QR で読んだロットを散布の対象に足す（index.html の読み取りから呼ぶ）。足したら true、もう入っていれば false
+window.addSprayLot = function (id) {
+  if (sprayLots().includes(id)) return false;
+  setSprayLots(sprayLots().concat([id]));
+  return true;
+};
 function sprayLotList() {
   const lots = sprayLots().map(id => state.plans.find(p => p.id === id)).filter(Boolean);
   if (lots.length !== sprayLots().length) setSprayLots(lots.map(p => p.id));
@@ -210,13 +221,14 @@ function sprayFormHtml(lots, fixedId) {
     const overAll = chk.some(c => c.over.length);
     const needCheck = chk.some(c => c.noReg.length);
     const ready = lots.length && names.filter(Boolean).length && sprayForm.products.every(p => p.name && String(p.dilution).trim())
-      && Number(sprayForm.amount) > 0 && sprayForm.equipment && sprayForm.regChecked && !overAll;
+      && Number(sprayForm.amount) > 0 && sprayForm.equipment && (sprayForm.regChecked || names.filter(Boolean).every(isFoliar)) && !overAll;
     let ci = 0;
     body = `
       <div class="card sp">
         <h3>① 散布したロット <span class="muted">${lots.length}ロット</span></h3>
         <div class="chips">${lots.map(p => `<span class="chip">${esc(planName(p))} <small>${esc(p.id)}・${esc(p.regItem)}</small>${p.id === fixedId ? '&nbsp;' : `<button type="button" data-unlot="${esc(p.id)}" aria-label="外す">×</button>`}</span>`).join('') || '<span class="muted">まだ選んでいません。下の「ロットを選ぶ」か、ロットの QR を読んで「散布の対象に入れる」で足します。</span>'}</div>
         <button type="button" class="sub-btn" id="pick">${pickerOpen ? '選び終わった' : fixedId ? '＋ 一緒に散布したロットを足す' : '＋ ロットを選ぶ'}</button>
+        <button type="button" class="sub-btn" id="pickqr">QR を読んで足す</button>
         ${pickerOpen ? `<div class="picker">
           <input type="search" id="pq" placeholder="品種・品目・QRID で探す" autocomplete="off">
           <div id="plist"></div></div>` : ''}
@@ -241,6 +253,7 @@ function sprayFormHtml(lots, fixedId) {
       <div class="card sp">
         <h3>③ 使用量・機材・場所</h3>
         <label class="fl">使用量（L・散布した全体）<input type="number" inputmode="decimal" step="any" id="amount" value="${esc(sprayForm.amount)}" placeholder="例：10"></label>
+        <div class="fl">使用方法<div class="eq">${SPRAY_METHODS.map(m => `<button type="button" data-meth="${esc(m)}" class="${(sprayForm.method || '散布') === m ? 'on' : ''}">${esc(m)}</button>`).join('')}</div></div>
         <div class="fl">使用機材<div class="eq">${state.pest.equipment.map(e => `<button type="button" data-eq="${esc(e)}" class="${sprayForm.equipment === e ? 'on' : ''}">${esc(e)}</button>`).join('')}</div></div>
         <label class="fl">使用場所（圃場・ハウス・ベンチ）<input type="text" id="place" value="${esc(load('sprayPlace'))}" placeholder="例：1H A15" autocomplete="off"></label>
         <label class="fl">散布面積・散布場所の割合（なくてもよい）<input type="text" id="area" value="${esc(sprayForm.area)}" autocomplete="off"></label>
@@ -267,12 +280,14 @@ function renderSpray() {
   }
   document.getElementById('app').innerHTML = headerHtml('', false) + `
     <main style="max-width:640px">
+      ${typeof bizSel !== 'undefined' && bizSel === '__spray' ? '<div class="bizbar"><b>薬散</b><button type="button" id="bizchg">業務を変える</button></div>' : ''}
       <div class="tabs"><button type="button" data-tab="new" class="${tab === 'new' ? 'on' : ''}">散布を記録</button>
         <button type="button" data-tab="mine" class="${tab === 'mine' ? 'on' : ''}">記録した散布</button></div>
       ${body}
     </main>`;
   bindHeader();
   document.getElementById('bulkbar').hidden = true;
+  const bc = document.getElementById('bizchg'); if (bc) bc.onclick = () => { bizSel = ''; tab = ''; toTop(); render(); };
   document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { tab = b.dataset.tab; render(); });
   bindSprayDelete();
   if (tab === 'new') bindSprayForm(lots);
@@ -280,6 +295,7 @@ function renderSpray() {
 function bindSprayForm(lots) {
   document.querySelectorAll('[data-unlot]').forEach(b => b.onclick = () => { setSprayLots(sprayLots().filter(id => id !== b.dataset.unlot)); render(); });
   document.getElementById('pick').onclick = () => { pickerOpen = !pickerOpen; render(); };
+  document.getElementById('pickqr').onclick = () => startScan('spray');
   if (pickerOpen) {
     const q = document.getElementById('pq');
     q.oninput = () => drawPicker(q.value);
@@ -296,6 +312,7 @@ function bindSprayForm(lots) {
   document.querySelectorAll('[data-rmprod]').forEach(b => b.onclick = () => { sprayForm.products.splice(Number(b.dataset.rmprod), 1); render(); });
   const ap = document.getElementById('addprod'); if (ap) ap.onclick = () => { sprayForm.products.push({ name: '', dilution: '' }); render(); };
   document.querySelectorAll('[data-eq]').forEach(b => b.onclick = () => { sprayForm.equipment = b.dataset.eq; render(); });
+  document.querySelectorAll('[data-meth]').forEach(b => b.onclick = () => { sprayForm.method = b.dataset.meth; render(); });
   document.getElementById('amount').oninput = e => { sprayForm.amount = e.target.value; updateGo(); };
   document.getElementById('place').oninput = e => save('sprayPlace', e.target.value);
   document.getElementById('area').oninput = e => { sprayForm.area = e.target.value; };
@@ -311,7 +328,7 @@ function updateGo() {
   const names = sprayForm.products.map(p => p.name).filter(Boolean);
   const over = sprayCheck(lots.map(id => state.plans.find(p => p.id === id)).filter(Boolean), names).some(c => c.over.length);
   const ok = lots.length && names.length && sprayForm.products.every(p => p.name && String(p.dilution).trim())
-    && Number(sprayForm.amount) > 0 && sprayForm.equipment && sprayForm.regChecked && !over;
+    && Number(sprayForm.amount) > 0 && sprayForm.equipment && (sprayForm.regChecked || names.every(isFoliar)) && !over;
   const b = document.getElementById('spgo'); if (b) b.disabled = !ok;
 }
 
@@ -373,12 +390,12 @@ async function submitSpray() {
   popup('wait', '記録しています…', qrids.length + 'ロット × ' + products.length + '剤');
   try {
     const s = await postApi({ action: 'spray', qrids, products, amount: Number(sprayForm.amount), equipment: sprayForm.equipment,
-      place: load('sprayPlace'), area: sprayForm.area, regChecked: sprayForm.regChecked, washed: sprayForm.washed, memo: sprayForm.memo, person: getName() });
+      place: load('sprayPlace'), area: sprayForm.area, regChecked: sprayForm.regChecked, washed: sprayForm.washed, memo: sprayForm.memo, method: sprayForm.method || '散布', person: getName() });
     server = s; rebuild();
     const created = s.created || [];
     setSprayLots([]);
     sprayOpenId = '';
-    Object.assign(sprayForm, { products: [{ name: '', dilution: '' }], amount: '', area: '', regChecked: false, washed: false, memo: '' });
+    Object.assign(sprayForm, { products: [{ name: '', dilution: '' }], amount: '', area: '', regChecked: false, washed: false, memo: '', method: '散布' });
     pickerOpen = false;
     render();
     popup('ok', '散布を記録しました', qrids.length + 'ロット × ' + products.length + '剤', () => undoSpray(created));
