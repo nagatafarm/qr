@@ -180,6 +180,18 @@
 
   /* タブ */
   .tabs { display: flex; gap: 6px; margin-bottom: 12px; border-bottom: 2px solid var(--line); }
+  /* 業務を選ぶ画面（作業を登録する → 何の作業をするか） */
+  .bizh { font-size: 20px; margin: 18px 0 10px; }
+  .bizgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .bizbtn { display: block; width: 100%; text-align: left; background: #fff; border: 2px solid var(--line); border-radius: 14px; padding: 16px 14px; font-size: 19px; font-weight: bold; color: #222; cursor: pointer; font-family: inherit; }
+  .bizbtn:hover { border-color: var(--orange); }
+  .bizbtn small { display: block; font-size: 12px; font-weight: normal; color: var(--gray); margin-top: 4px; }
+  .bizbtn small .late { color: var(--red); font-weight: bold; }
+  .bizbtn.last { border-color: var(--orange); background: #fff7f0; }
+  .bizbtn.plan { margin-top: 14px; background: var(--green-l); border-color: #b9d6c0; font-size: 16px; }
+  .bizbar { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; }
+  .bizbar b { font-size: 20px; }
+  .bizbar button { background: #fff; border: 1px solid #bbb; border-radius: 999px; padding: 5px 14px; font-size: 13px; cursor: pointer; font-family: inherit; }
   .tabs button { background: none; border: none; padding: 8px 12px; font-size: 15px; font-weight: bold; color: var(--gray); cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; }
   .tabs button.on { color: var(--green-d); border-bottom-color: var(--green); }
   .tabs .n { font-size: 12px; background: var(--orange); color: #fff; border-radius: 999px; padding: 0 7px; margin-left: 4px; }
@@ -549,7 +561,29 @@ function roles() {
     ;   // 「農薬散布担当」は作らない。薬剤散布は、どの担当でも計画の画面の「薬剤散布」から記録する（spray.js）
 }
 function roleLabel() { if (isPart()) return 'パートさん'; return loggedIn() ? (caps().depts || []).join('・') || '部署なし' : ''; }
-function myMajors() { return isPlanner() || isPart() ? majors() : (caps().majors || []).filter(m => majors().includes(m)); }
+// 登録できる工程：だれでも全部（部署でしぼらない）。出勤希望の管理（総務）と、割り振りの手直し（計画）は、部署のまま
+function myMajors() { return majors(); }
+// ---------- 業務：作業を登録するときに選ぶボタン。工程シートの「業務」の列で工程を束ねる（空なら大項目） ----------
+function bizOf(s) { return s.biz || s.major; }
+function bizList() { const l = []; state.steps.forEach(s => { const b = bizOf(s); if (!l.includes(b)) l.push(b); }); return l; }
+function bizSteps(b) { return state.steps.filter(s => bizOf(s) === b); }
+let bizSel = '';      // この回に選んだ業務。メニュー・上の帯から「作業を登録する」を押すたびに選び直す。'__plan' ＝ 計画担当の画面
+function curBiz() { return bizList().includes(bizSel) ? bizSel : ''; }
+// 業務の予定日の列：その業務の工程の「色を付ける列」のうち「日」で終わる最初の列。なければ大項目の予定日の列
+function bizDateCol(b) {
+  const ss = bizSteps(b);
+  for (const t of ss) { const c = (t.colorCols || []).find(x => /日$/.test(x)); if (c) return c; }
+  return ss.length ? dateCol(ss[0].major) : '';
+}
+// 業務のやること：その業務の工程のうち、まだ終わっていない最初の工程。予定日の順
+function bizTodo(b) {
+  const ss = bizSteps(b), col = bizDateCol(b);
+  return state.plans.map(p => ({ p, s: ss.find(t => !isDone(p, t)) })).filter(x => x.s)
+    .map(x => Object.assign(x, { key: (x.p.w[col] || x.p.v[col] || ''), iso: (x.p.d && x.p.d[col]) || '' }))
+    .sort((a, b2) => a.key < b2.key ? -1 : a.key > b2.key ? 1 : a.p.id < b2.p.id ? -1 : 1);
+}
+// まだだれも完了を記録していない工程（足したばかりの工程）か。予定日を過ぎた作業のお知らせに入れない
+function unusedMajor(m) { const ss = majorSteps(m); return !state.plans.some(p => ss.some(t => isDone(p, t))); }
 // 農薬散布（spray.js）を読めたか。読めなかったとき（置き忘れなど）は農薬の部分だけ出さず、ほかの画面は動かす
 function hasSpray() { return typeof window.renderSpray === 'function'; }
 function pestOn() { return !!(state && state.pest && hasSpray()); }
@@ -970,7 +1004,7 @@ function navHtml() {
 }
 document.addEventListener('click', ev => {
   const b = ev.target.closest && ev.target.closest('[data-nav]');
-  if (b) { ev.preventDefault(); goPage(b.dataset.nav); }
+  if (b) { ev.preventDefault(); if (b.dataset.nav === 'reg') bizSel = ''; goPage(b.dataset.nav); }
   const m = ev.target.closest && ev.target.closest('[data-me]');
   if (m) { ev.preventDefault(); if (isPart()) nextPerson(); else renderSetup(); }
 });
@@ -1024,7 +1058,7 @@ function overdueList() {
   const today = todayIso(), out = [];
   myMajors().forEach(m => {
     const col = dateCol(m);
-    if (!col) return;
+    if (!col || unusedMajor(m)) return;
     state.plans.forEach(p => {
       const iso = p.d && p.d[col], s = iso && iso < today ? nextIn(p, m) : null;
       if (s) out.push({ p, m, s, iso, days: isoDays(iso, today) });
@@ -1044,6 +1078,27 @@ function noticeHtml() {
     <div class="nl">${ms.map(m => `<div class="nh">${esc(m)}　${list.filter(x => x.m === m).length}件</div>` + list.filter(x => x.m === m).map(row).join('')).join('')}</div></details>`;
 }
 function todayKey() { const d = new Date(); return String(d.getMonth() + 1).padStart(2, '0') + '/' + String(d.getDate()).padStart(2, '0'); }
+// 業務を選ぶ画面：「作業を登録する」を押したあとに出す。ボタン ＝ 工程シートの「業務」。計画担当には、計画担当の画面へのボタンも出す
+function renderBizPick() {
+  const last = load('biz'), today = todayIso();
+  const btn = b => {
+    const list = bizTodo(b), due = list.filter(x => x.iso && x.iso <= today).length;
+    return `<button type="button" class="bizbtn${b === last ? ' last' : ''}" data-biz="${esc(b)}">${esc(b)}<small>${due ? '<span class="late">今日までの分 ' + due + '件</span>' : 'やること ' + list.length + '件'}</small></button>`;
+  };
+  document.getElementById('app').innerHTML = headerHtml('', false) + `
+    <main style="max-width:560px">
+      <h2 class="bizh">何の作業をしますか</h2>
+      <div class="bizgrid">${bizList().map(btn).join('')}</div>
+      ${isPlanner() ? '<button type="button" class="bizbtn plan" data-biz="__plan">計画担当の画面<small>全部の計画・履歴・マイナス・農薬</small></button>' : ''}
+      <p class="muted" style="margin-top:14px">ボタンは、工程シートの「業務」の列から作っています。前に選んだ業務は、オレンジの枠です。</p>
+    </main>`;
+  document.getElementById('bulkbar').hidden = true;
+  bindHeader();
+  document.querySelectorAll('[data-biz]').forEach(x => x.onclick = () => {
+    bizSel = x.dataset.biz; if (bizSel !== '__plan') save('biz', bizSel);
+    picked.clear(); tab = ''; toTop(); render();
+  });
+}
 // 登録する工程がない人（総務だけ、など）の「作業を登録する」
 function renderNoMajor() {
   document.getElementById('app').innerHTML = headerHtml('', false) + `
@@ -1056,10 +1111,11 @@ function renderNoMajor() {
   bindHeader();
 }
 function renderWorker() {
-  const m = curMajor();
-  if (!m) return renderNoMajor();
-  const list = todoList(m);
-  const mineLogs = state.logs.filter(l => l.major === m && l.person === getName() && l.canDelete);
+  const b = curBiz();
+  if (!b) return bizList().length ? renderBizPick() : renderNoMajor();
+  const ss = bizSteps(b), m = ss[0].major;
+  const list = bizTodo(b);
+  const mineLogs = state.logs.filter(l => ss.some(t => t.major === l.major && t.minor === l.minor) && l.person === getName() && l.canDelete);
   if (!tab) tab = 'todo';
   let body = '';
   if (tab === 'todo') {
@@ -1067,12 +1123,12 @@ function renderWorker() {
     list.forEach(x => { const g = groups[groups.length - 1]; if (g && g.key === x.key) g.items.push(x); else groups.push({ key: x.key, items: [x] }); });
     const today = todayKey();
     body = (list.length ? '<button type="button" class="scanbtn" id="scanbtn">QR をまとめて読む</button><p class="muted" style="margin:0 0 6px">読んだ計画が選ばれます。そのあと下の「まとめて完了にする」で一度に記録できます。</p>' : '') + groups.map(g => {
-      const k = g.key.slice(0, 5), iso0 = g.items[0].p.d && g.items[0].p.d[dateCol(m)];
+      const k = g.key.slice(0, 5), iso0 = g.items[0].iso;
       const when = !k ? '' : (iso0 ? iso0 < todayIso() : k < today) ? '<span class="when late">予定日を過ぎています</span>' : (iso0 ? iso0 === todayIso() : k === today) ? '<span class="when today">今日</span>' : '';
       return `<div class="day"><h3>${esc(g.key || '予定日なし')}${when}<span class="muted">　${g.items.length}件</span></h3>
         <button type="button" class="selall" data-day="${esc(g.key)}">全部選ぶ</button></div>` +
         g.items.map(({ p, s }) => {
-          const prev = majors().slice(0, majors().indexOf(m)).find(mm => majorProgress(p, mm).done < majorProgress(p, mm).total);
+          const pv = state.steps.slice(0, state.steps.indexOf(s)).find(t => !isDone(p, t)), prev = pv ? fullTask(pv, '：') : '';
           return `<div class="task${picked.has(p.id) ? ' picked' : ''}" data-row="${esc(p.id)}">
             <input type="checkbox" data-pick="${esc(p.id)}"${picked.has(p.id) ? ' checked' : ''} aria-label="選ぶ">
             <div class="body"><div class="nm"><a href="${esc(planUrl(p.id))}">${esc(planName(p))}</a> <span class="muted">${esc(p.id)}</span></div>
@@ -1080,7 +1136,7 @@ function renderWorker() {
               ${placeHtml(p, s)}${shortHtml(p, s)}
               ${prev ? `<div class="warn">※ 前の工程（${esc(prev)}）が未記録</div>` : ''}</div>
             <div class="act">${qtyInputHtml(p, s, p.id, '数量')}
-              <button type="button" class="done-btn" data-do="${esc(p.id)}">${majorSteps(m).length > 1 ? esc(taskName(s)) + '<br>' : ''}完了</button></div>
+              <button type="button" class="done-btn" data-do="${esc(p.id)}">${ss.length > 1 ? esc(taskName(s)) + '<br>' : ''}完了</button></div>
           </div>`;
         }).join('');
     }).join('') || '<div class="empty">✓ やることはありません</div>';
@@ -1090,7 +1146,7 @@ function renderWorker() {
   }
   document.getElementById('app').innerHTML = headerHtml('', false) + `
     <main style="max-width:720px">
-      ${myMajors().length > 1 ? `<div class="names" style="margin:0 0 10px">${myMajors().map(x => `<button type="button" class="nmbtn${x === m ? ' sel' : ''}" data-major="${esc(x)}">${esc(x)}</button>`).join('')}</div>` : ''}
+      <div class="bizbar"><b>${esc(b)}</b><button type="button" id="bizchg">業務を変える</button></div>
       ${tab === 'todo' ? myAssignHtml() : ''}
       <div class="tabs"><button type="button" data-tab="todo" class="${tab === 'todo' ? 'on' : ''}">やること<span class="n">${list.length}</span></button>
         <button type="button" data-tab="mine" class="${tab === 'mine' ? 'on' : ''}">自分の記録（24時間）</button></div>
@@ -1098,8 +1154,8 @@ function renderWorker() {
       <p class="muted">最終更新 ${esc(state.updated)}。QRを読むと、その計画の画面が開きます。</p>
     </main>`;
   bindHeader();
-  document.querySelectorAll('[data-major]').forEach(b => b.onclick = () => { save('major', b.dataset.major); picked.clear(); render(); });
-  document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { tab = b.dataset.tab; render(); });
+  document.getElementById('bizchg').onclick = () => { bizSel = ''; picked.clear(); tab = ''; toTop(); render(); };
+  document.querySelectorAll('[data-tab]').forEach(x => x.onclick = () => { tab = x.dataset.tab; render(); });
   document.querySelectorAll('[data-pick]').forEach(c => c.onchange = () => { c.checked ? picked.add(c.dataset.pick) : picked.delete(c.dataset.pick); render(); });
   document.querySelectorAll('[data-day]').forEach(b => b.onclick = () => {
     const ids = list.filter(x => x.key === b.dataset.day).map(x => x.p.id);
@@ -1644,7 +1700,7 @@ function renderFront() {
   document.getElementById('bulkbar').hidden = true;
   const fl = document.getElementById('f-login'); if (fl) fl.onclick = () => { save('mode', ''); logout(); render(); };
   const nt = document.getElementById('notice'); if (nt) nt.ontoggle = () => { noticeOpen = nt.open; };
-  document.getElementById('f-reg').onclick = () => goPage('reg');
+  document.getElementById('f-reg').onclick = () => { bizSel = ''; goPage('reg'); };
   document.getElementById('f-find').onclick = () => goPage('find');
 }
 // ---------- 画面：スケジュール。?go=calendar はカレンダー（calendar.html）、?go=schedule は人の割り振り表（schedule.html）。
@@ -1835,7 +1891,7 @@ function partList() {
   return state.plans.map(p => ({ p, s: state.steps.find(s => s.key === partAllowed(p)[0]), key: '' })).filter(x => x.s);
 }
 // まとめ読みで選べる計画：社員は担当のやること、パートさんは終わっていない計画（割り振りの工程か、次の作業）
-function myTodo() { return isPart() ? partList() : todoList(curMajor()); }
+function myTodo() { return isPart() ? partList() : bizTodo(curBiz()); }
 // パートさんの登録の画面：今日の割り振り、QR を読む、読んだ計画の一覧
 function renderPart() {
   const all = partList();
@@ -2136,7 +2192,9 @@ function renderBody() {
     const plan = state.plans.find(p => p.id === ID);
     return plan ? renderPlan(plan) : planMissing();
   }
-  isPlanner() ? renderPlanner() : sprayMode() ? renderSpray() : renderWorker();
+  if (!isPlanner() && sprayMode()) return renderSpray();
+  if (bizSel === '__plan' && isPlanner()) return renderPlanner();
+  renderWorker();   // 業務を選んでいなければ、選ぶ画面
 }
 function showMessage(msg) {
   document.getElementById('app').innerHTML = `<header><h1>なえログ</h1></header><main><div class="card">${esc(msg)}</div></main>`;
@@ -2161,5 +2219,6 @@ fetchState()
   .catch(e => showMessage(e.message));
 </script>
 <script src="spray.js?v=4"></script>
+<script src="feedback.js?v=1"></script>
 </body>
 </html>
