@@ -178,8 +178,9 @@
   /* 計画ごとのまとめ（取引先＝メーカー・品目・ハウス）。押すと中の計画を出す */
   .grp .sum { display: flex; gap: 6px; align-items: center; padding: 4px 8px; border-top: 1px solid #eee; font-size: 12px; cursor: pointer; background: #fafcfa; white-space: nowrap; }
   .grp .sum b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-  .grp .sum .tw2 { font-size: 11px; width: 12px; flex: none; transition: transform .15s; }
-  .grp .sum.open .tw2 { transform: rotate(90deg); }
+  .grp .sum .tw2 { font-size: 19px; width: 15px; line-height: 1; flex: none; color: #555; transform: rotate(-90deg); transition: transform .15s; }
+  .grp .sum.open .tw2 { transform: none; }
+  .day .grp .sum .tw2 { font-size: 13px; width: 11px; }
   .grp.shut .sum { display: none; }
   .grp a.row.sub2 { padding-left: 22px; }
   .grp .nrow { display: block; padding: 4px 8px; border-top: 1px solid #eee; font-size: 12px; background: #fffbe6; }
@@ -574,7 +575,8 @@ function colHtml(k) {
 }
 // 工程のまとまり（週・2週・月で同じ見た目）：色の見出し（工程・量・人数・件数）＋ 取引先などでまとめた行
 function grpHtml(k, g) {
-  return `<div class="grp${isShut(k + '|' + g.s) ? ' shut' : ''}${g.dn === g.es.length ? ' alldone' : ''}" style="--c:${colorOf(g.s)}">
+  const sp = [...new Set(g.es.filter(e => e.of > 1).map(e => e.id + '@' + (e.d0 || '')))].join(' ');
+  return `<div class="grp${isShut(k + '|' + g.s) ? ' shut' : ''}${g.dn === g.es.length ? ' alldone' : ''}${sp ? ' spg' : ''}" style="--c:${colorOf(g.s)}" data-gs="${esc(g.s)}" data-sp="${esc(sp)}">
         <div class="gh" data-d="${k}" data-s="${esc(g.s)}" title="押すと、たたむ・ひらく"><span class="tg">▾</span><b>${esc(g.s)}</b>${esc(qtyText(g))}${pplHtml(k, g)}<small title="内訳を見る">${g.es.length}件 ›</small></div>
         ${rowsHtml(k, g)}</div>`;
 }
@@ -616,7 +618,7 @@ function rowsHtml(k, g) {
   es.forEach(e => { const key = groupKey(e); if (!m.has(key)) m.set(key, []); m.get(key).push(e); });
   return [...m.entries()].map(([key, list]) => {
     const q = list.reduce((n, e) => n + (Number(e.q) || 0), 0), dn = list.filter(e => e.done).length, id = k + '|' + g.s + '|' + key, open = sumOpen.has(id);
-    return `<div class="sum${open ? ' open' : ''}" data-sum="${esc(id)}" title="押すと、中の計画を出す"><span class="tw2">▶</span><b>${esc(key)}</b><span class="cnt">${list.length}件${dn ? '（済' + dn + '）' : ''}</span><span>${q ? num(q) + 'TR' : ''}</span></div>`
+    return `<div class="sum${open ? ' open' : ''}" data-sum="${esc(id)}" title="押すと、中の計画を出す"><span class="tw2">▾</span><b>${esc(key)}</b><span class="cnt">${list.length}件${dn ? '（済' + dn + '）' : ''}</span><span>${q ? num(q) + 'TR' : ''}</span></div>`
       + (open ? list.map(e => rowHtml(e, true)).join('') : '');
   }).join('');
 }
@@ -638,6 +640,35 @@ function drawWeek() {
   document.getElementById('scroller').innerHTML = '<div class="strip">' + cols.map(colHtml).join('') + '</div>';
 }
 
+// 何日かにのばした作業のまとまりは、となりの日と同じ高さにそろえる（2026-11-23 意見：段ちがいで切れて見える）。
+//   同じ行（週・2週の段・月の週）で、となりの日に同じ工程・同じ計画ののばした分があれば、つながったものとして、上の位置をいちばん下のものに合わせる（上に空きができる）
+function alignSpans() {
+  const s = sc();
+  s.querySelectorAll('.grp.spg').forEach(g => { g.style.marginTop = ''; });
+  const rows = view === 'month' ? [...s.querySelectorAll('.wk')] : [...s.querySelectorAll('.strip')];
+  rows.forEach(row => {
+    const cells = [...row.children];
+    // つながり：となりの日の、同じ工程で、同じ計画（同じのばし始め）をふくむまとまり
+    const chains = [], at = new Map();
+    cells.forEach((c, i) => c.querySelectorAll('.grp.spg').forEach(g => {
+      const ids = g.dataset.sp.split(' ');
+      const prev = i > 0 ? [...cells[i - 1].querySelectorAll('.grp.spg')].find(p => p.dataset.gs === g.dataset.gs && p.dataset.sp.split(' ').some(x => ids.includes(x))) : null;
+      const ch = prev && at.get(prev) ? at.get(prev) : [];
+      if (!ch.length) chains.push(ch);
+      ch.push(g); at.set(g, ch);
+    }));
+    // 上のものから順にそろえる（そろえると下のものがずれるので、1本ずつ測り直す）
+    // （上の余白は、前のまとまりの下の余白と重なって効きが減るので、合うまで何回か測り直す）
+    chains.filter(ch => ch.length > 1).sort((a, b) => a[0].getBoundingClientRect().top - b[0].getBoundingClientRect().top).forEach(ch => {
+      for (let t = 0; t < 4; t++) {
+        const tops = ch.map(g => g.getBoundingClientRect().top), max = Math.max(...tops);
+        if (max - Math.min(...tops) < 0.5) break;
+        ch.forEach((g, i) => { if (max - tops[i] > 0.5) g.style.marginTop = (parseFloat(g.style.marginTop) || 0) + (max - tops[i]) + 'px'; });
+      }
+    });
+  });
+}
+
 // ---- 描く・動かす ----
 const sc = () => document.getElementById('scroller');
 // keepPos：描き直しても、見ていた所（いちばん上の週・いちばん左の日）を動かさない
@@ -648,6 +679,7 @@ function draw(keepPos) {
   s.style.setProperty('--days', 7);
   if (view === 'month') drawMonth(); else if (view === 'week2') drawWeek2(); else drawWeek();
   foldBtn();
+  alignSpans();
   if (a) restoreAnchor(a);
   notes();
   title();
@@ -811,6 +843,7 @@ sc().addEventListener('click', ev => {
     const key = c.dataset.d + '|' + c.dataset.s;
     foldExc.has(key) ? foldExc.delete(key) : foldExc.add(key);
     c.parentElement.classList.toggle('shut', isShut(key));
+    alignSpans();
     return;
   }
   openPop(c.dataset.d, c.dataset.s);
