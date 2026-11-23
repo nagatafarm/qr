@@ -161,6 +161,7 @@
   #toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: #222; color: #fff; padding: 8px 14px; border-radius: 10px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 50; }
   #toast.show { opacity: 1; }
   @media (max-width: 700px) { .day { width: 86vw; } .legend { display: none; } }
+  .mg.lk { cursor: not-allowed; }
 </style>
 </head>
 <body>
@@ -202,6 +203,9 @@ const addDays = (k, n) => new Date(Date.parse(k + 'T00:00:00Z') + n * 86400000).
 function localToday() { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
 // 直せるか：計画担当でログインしている。見本・試験ではいつでも（保存はしない）
 let stale = false;   // 前に読んだ中身を出している間（読み直しが届くまで）は、直せない
+// パートさんの札を動かせるか（「部署」シートの「パート割り振り」。2026-11-24）。分からないとき（前のログイン）は動かせる。窓口でも確かめる
+function canPart() { if (TRY) return true; try { return canEdit() && authCaps().part !== false; } catch (e) { return false; } }
+const lockedN = n => { if (!canEdit() || canPart()) return false; const p = S.people.find(x => x.name === n), k = p ? p.kubun : ''; return !!k && !/社員|取締役/.test(k); };   // 窓口（partNames_）と同じ決め方
 function canEdit() { if (TRY) return true; if (stale) return false; try { return !!(authToken() && authCaps().planner); } catch (e) { return false; } }
 const kindOf = n => { const p = S.people.find(x => x.name === n); const k = p ? p.kubun : ''; return /社員|取締役/.test(k) ? 'staff' : /実習/.test(k) ? 'trainee' : ''; };
 const short = n => String(n).split(/[\s　]/)[0].slice(0, 4);   // 札は姓だけ（ホワイトボードと同じ）
@@ -307,9 +311,9 @@ let trayShut = (() => { try { return localStorage.getItem('qrdemo.wbTray') === '
 const openPl = new Set();   // 計画の一覧を開いている枠（日|枠ID）
 let sel = null;             // 押して選んだ札 { n, day, from }
 function mg(n, day, from) {
-  const k = kindOf(n), pc = placedCount(day, n), dup = pc > 1, placed = from === 'tray' && pc > 0;
+  const k = kindOf(n), pc = placedCount(day, n), dup = pc > 1, placed = from === 'tray' && pc > 0, lk = lockedN(n);
   // 社員は何か所にでも置ける（2026-11-23 意見）：置いたあとも「まだ置いていない人」の社員に出し（うすく・置いた数）、そこからほかの枠へも置ける
-  return `<span class="mg ${k}${dup ? ' dup' : ''}${placed ? ' placed' : ''}${sel && sel.n === n && sel.day === day && sel.from === from ? ' sel' : ''}" data-c="${pc}" ${canEdit() ? 'draggable="true"' : ''} data-n="${esc(n)}" data-day="${day}" data-from="${from}" title="${esc(n)}${placed ? '（もう ' + pc + ' か所に置いた。ここからほかの枠にも置ける）' : dup ? '（ほかの枠にもいる）' : ''}">${esc(short(n))}${canEdit() && from !== 'tray' ? '<span class="hdm" title="引っぱると、この人だけ途中からほかの業務へ"></span>' : ''}</span>`;
+  return `<span class="mg ${k}${dup ? ' dup' : ''}${placed ? ' placed' : ''}${sel && sel.n === n && sel.day === day && sel.from === from ? ' sel' : ''}${lk ? ' lk' : ''}" data-c="${pc}" ${canEdit() && !lk ? 'draggable="true"' : ''} data-n="${esc(n)}" data-day="${day}" data-from="${from}" title="${esc(n)}${placed ? '（もう ' + pc + ' か所に置いた。ここからほかの枠にも置ける）' : dup ? '（ほかの枠にもいる）' : ''}${lk ? '（パートさんの札は、パート割り振りの係だけが動かせる）' : ''}">${esc(short(n))}${canEdit() && !lk && from !== 'tray' ? '<span class="hdm" title="引っぱると、この人だけ途中からほかの業務へ"></span>' : ''}</span>`;
 }
 function workHtml(day, b) {
   if (String(b.major).startsWith('メモ:')) return `<div class="wk memo">${b.auto ? '<span class="auto">カレンダーのメモから　</span>' : '📝 カレンダーのメモ'}${b.auto && b.by ? '<span class="muted">（' + esc(b.by) + '）</span>' : ''}</div>`;
@@ -530,6 +534,7 @@ const board = document.getElementById('board');
 board.addEventListener('dragstart', ev => {
   if (!canEdit()) return;
   const m = ev.target.closest('.mg');
+  if (m && lockedN(m.dataset.n)) { ev.preventDefault(); return; }
   if (m) { ev.dataTransfer.setData('text/plain', JSON.stringify({ n: m.dataset.n, day: m.dataset.day, from: m.dataset.from })); return; }
   const h = ev.target.closest('[data-bh]');
   if (h) { ev.dataTransfer.setData('text/plain', JSON.stringify({ blk: h.dataset.bh, day: h.dataset.day })); h.closest('.blk').classList.add('dragging'); }
@@ -573,6 +578,7 @@ board.addEventListener('click', ev => {
   if (pl) { openPl.has(pl.dataset.pl) ? openPl.delete(pl.dataset.pl) : openPl.add(pl.dataset.pl); draw(); return; }
   if (!canEdit()) return;
   const m = ev.target.closest('.mg');
+  if (m && lockedN(m.dataset.n)) { toast('パートさんの札を動かせるのは、「パート割り振り」の係（部署シートで 〇）の人だけです'); return; }
   if (m) { sel = sel && sel.n === m.dataset.n && sel.from === m.dataset.from ? null : { n: m.dataset.n, day: m.dataset.day, from: m.dataset.from }; draw(); if (sel && sel.from !== 'tray') toast('札を選びました。置く先の枠を押すと動かす／Delete キーで外す（Esc でやめる）'); return; }
   const add = ev.target.closest('[data-add]');
   if (add) { openForm(add.dataset.add, null); return; }

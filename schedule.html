@@ -221,6 +221,10 @@ function save(k, v) { try { localStorage.setItem('qrdemo.' + k, v); } catch (e) 
 let stale = false;
 function saveLast(key, s) { try { localStorage.setItem('qrdemo.schedLast', JSON.stringify({ key: key, s: s })); } catch (e) {} }
 function loadLast(key) { try { const v = JSON.parse(localStorage.getItem('qrdemo.schedLast') || 'null'); return v && v.key === key && v.s && v.s.days ? v.s : null; } catch (e) { return null; } }
+// パートさんの割り振りを変えられるか（「部署」シートの「パート割り振り」。2026-11-24）。分からないとき（前のログイン）は変えられる。窓口でも確かめる
+const canPart = () => canEdit() && authCaps().part !== false;
+const isPartN = n => { const p = ((typeof sch !== 'undefined' && sch && sch.people) || []).find(x => x.name === n); const k = p ? p.kubun : ''; return !!k && !/社員|取締役/.test(k); };
+const lockedName = n => canEdit() && !canPart() && isPartN(n);
 const canEdit = () => !stale && load('role') === '__all__' && !!authToken();     // 手直しできるのは計画担当だけ（index.html の PLANNER と同じ）
 // 人の行の並び順と非表示（このブラウザに覚える。見え方の好みなので、だれでも変えられる）
 function loadList(k) { try { const v = JSON.parse(load(k) || '[]'); return Array.isArray(v) ? v.map(String) : []; } catch (e) { return []; } }
@@ -475,7 +479,7 @@ const dowOf = k => new Date(Date.parse(k + 'T00:00:00Z')).getUTCDay();
 function jobHtml(a) {
   const isSel = sel && sel.aid === a.aid;
   const grp = groupOf.get(a.id + '|' + a.key + '|' + a.date) || 1;
-  return `<div class="job${a.fixed ? ' fixed' : ''}${a.done ? ' done' : ''}${a.tmp ? ' tmp' : ''}${isSel ? ' sel' : ''}${multi.has(a.aid) ? ' msel' : ''}" style="--c:${colorOf(a.major)}" data-aid="${esc(a.aid)}"${canEdit() && !a.tmp ? ' draggable="true"' : ''}
+  return `<div class="job${a.fixed ? ' fixed' : ''}${a.done ? ' done' : ''}${a.tmp ? ' tmp' : ''}${isSel ? ' sel' : ''}${multi.has(a.aid) ? ' msel' : ''}" style="--c:${colorOf(a.major)}" data-aid="${esc(a.aid)}"${canEdit() && !a.tmp && !lockedName(a.name) ? ' draggable="true"' : ''}
     title="${esc(a.plan)}（${esc(a.id)}）／${esc(a.task)}／実際に入る ${esc(num(a.hours))} 時間${a.f && a.f !== 1 ? '・1人前に直すと ' + esc(num(a.std)) + ' 時間（掛ける数 ' + esc(num(a.f)) + '）' : ''}${grp > 1 ? '／この日 ' + grp + ' 人でやる' : ''}${a.fixed ? '／固定（自動の組み直しで動かない）' : ''}${a.tmp ? '／保存中' : ''}">
     <div class="tk"><span><b>${esc(a.task)}</b>${a.done ? '（済）' : ''}${a.fixed ? ' 📌' : ''}${grp > 1 ? `<small class="grp">👥${grp}</small>` : ''}${a.f && a.f !== 1 ? ` <small class="fx">×${esc(num(a.f))}</small>` : ''}</span><b>${esc(num(a.hours))}h</b></div>
     <div class="nm">${esc(a.plan)}</div></div>`;
@@ -533,7 +537,7 @@ function render() {
       ${stale ? '<span class="pill">前に開いたときの表です。最新を読み込んでいます…</span>' : canEdit() ? '' : '<span class="pill gray" title="手直しと組み直しは、一覧の画面で担当を「計画担当」にすると使えます">見るだけ</span>'}
       <span class="sp"></span>
       <span class="upd">最終更新 ${esc(sch.updated)}</span>
-      <button type="button" class="auto" id="auto"${canEdit() ? '' : ' disabled'}>自動で組み直す</button>
+      <button type="button" class="auto" id="auto"${canEdit() && canPart() ? '' : ' disabled'}${canEdit() && !canPart() ? ' title="組み直すとパートさんの割り振りも変わるので、パート割り振りの係だけが使えます"' : ''}>自動で組み直す</button>
       <span class="vsw"><a href="index.html?go=calendar">カレンダー</a><a href="index.html?go=whiteboard">ホワイトボード</a><a href="index.html?go=schedule" class="on">人の割り振り表</a></span>
     </div>
     <div class="body">
@@ -693,6 +697,7 @@ function bind() {
     el.oncontextmenu = ev => { ev.preventDefault(); ev.stopPropagation(); openJobMenu(el.dataset.aid, ev.clientX, ev.clientY); };
     if (!canEdit()) return;
     el.ondragstart = ev => {
+      if (lockedName((sch.assigns.find(a => a.aid === el.dataset.aid) || {}).name)) { ev.preventDefault(); return toast('パートさんの割り振りを変えられるのは、「パート割り振り」の係（部署シートで 〇）の人だけです', true); }
       dragAid = el.dataset.aid;
       if (multi.size && !multi.has(dragAid)) multi.clear();   // 選んでいないカードをつかんだら、その1枚だけ動かす
       try { ev.dataTransfer.setData('text/plain', dragAid); ev.dataTransfer.effectAllowed = 'copyMove'; } catch (e) {}

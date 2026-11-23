@@ -547,7 +547,7 @@ function syncCaps() {
   if (!me) { logout(); return; }
   const ds = state.login.depts.filter(d => me.depts.includes(d.name)), mj = [];
   ds.forEach(d => d.majors.forEach(m => { if (!mj.includes(m)) mj.push(m); }));
-  saveCaps({ depts: ds.map(d => d.name), planner: ds.some(d => d.planner), wish: ds.some(d => d.wish), majors: mj });
+  saveCaps({ depts: ds.map(d => d.name), planner: ds.some(d => d.planner), wish: ds.some(d => d.wish), part: ds.some(d => d.part !== undefined ? d.part : d.planner), majors: mj });
 }
 // 今、登録の画面で見ている工程（部署をまたぐ人は、複数の工程から選ぶ）
 function curMajor() { const mine = myMajors(), m = load('major'); return mine.includes(m) ? m : mine[0] || ''; }
@@ -1766,7 +1766,7 @@ function renderFront() {
 // ---------- 画面：スケジュール。?go=calendar はカレンダー（calendar.html）、?go=schedule は人の割り振り表（schedule.html）。
 // 中身は、上の帯の下にはめ込んで出す。自動の更新で描き直しても、はめ込んだ画面は作り直さない（作り直すと読み込みからやり直しになる）
 function renderSchedule() {
-  const src = page === 'calendar' ? 'calendar.html?embed=1&v=10' : page === 'whiteboard' ? 'whiteboard.html?embed=1&v=15' : 'schedule.html?embed=1&v=6';
+  const src = page === 'calendar' ? 'calendar.html?embed=1&v=10' : page === 'whiteboard' ? 'whiteboard.html?embed=1&v=16' : 'schedule.html?embed=1&v=7';
   const old = document.getElementById('schedframe');
   if (old && old.getAttribute('src') === src) {
     // はめ込んだ画面は作り直さず、右上の札だけ新しくする（窓口の状態が届くと、担当の名前が分かる）
