@@ -546,7 +546,7 @@ board.addEventListener('click', ev => {
   if (pl) { openPl.has(pl.dataset.pl) ? openPl.delete(pl.dataset.pl) : openPl.add(pl.dataset.pl); draw(); return; }
   if (!canEdit()) return;
   const m = ev.target.closest('.mg');
-  if (m) { sel = sel && sel.n === m.dataset.n && sel.from === m.dataset.from ? null : { n: m.dataset.n, day: m.dataset.day, from: m.dataset.from }; draw(); return; }
+  if (m) { sel = sel && sel.n === m.dataset.n && sel.from === m.dataset.from ? null : { n: m.dataset.n, day: m.dataset.day, from: m.dataset.from }; draw(); if (sel && sel.from !== 'tray') toast('札を選びました。置く先の枠を押すと動かす／Delete キーで外す（Esc でやめる）'); return; }
   const add = ev.target.closest('[data-add]');
   if (add) { openForm(add.dataset.add, null); return; }
   const ed = ev.target.closest('[data-edit]');
@@ -661,8 +661,22 @@ document.getElementById('cols').onclick = () => {
   if (S) { draw(); const el = keep && document.querySelector('.day[data-day="' + keep + '"]'); if (el) document.getElementById('board').scrollLeft = el.offsetLeft - 22; title(); }
 };
 // ---- 矢印を選んで Delete キーで消す（Esc でやめる） ----
+// 札を選んで Delete キー：その枠から外して「まだ置いていない人」へもどす（2026-11-23）
 document.addEventListener('keydown', e => {
-  if (!selArw || !document.getElementById('frm').hidden || /INPUT|SELECT|TEXTAREA/.test((e.target.tagName || ''))) return;
+  if (!sel || selArw || !document.getElementById('frm').hidden || /INPUT|SELECT|TEXTAREA/.test((e.target.tagName || ''))) return;
+  if (e.key === 'Escape') { sel = null; draw(); return; }
+  if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+  e.preventDefault();
+  const s = sel; sel = null;
+  if (s.from === 'tray') { draw(); return; }
+  const [bid, k] = s.from.split(':'), bl = S.boards[s.day] || [], b = bl.find(x => x.id === bid);
+  if (!b || !b[k]) { draw(); return; }
+  b[k] = b[k].filter(x => x !== s.n);
+  if (!b.lead.includes(s.n) && !b.mem.includes(s.n)) delete b.next[s.n];
+  changed(s.day); toast(short(s.n) + 'を外しました（まだ置いていない人へもどした）');
+});
+document.addEventListener('keydown', e => {
+  if (!selArw ||!document.getElementById('frm').hidden || /INPUT|SELECT|TEXTAREA/.test((e.target.tagName || ''))) return;
   if (e.key === 'Escape') { selArw = ''; draw(); return; }
   if (e.key !== 'Delete' && e.key !== 'Backspace') return;
   e.preventDefault();
