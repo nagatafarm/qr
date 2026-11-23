@@ -126,6 +126,11 @@
   .tray { border-top: 1px dashed #d4d7de; padding: 8px 10px 10px; background: rgba(245,246,248,.9); border-radius: 0 0 14px 14px; max-height: 34%; overflow-y: auto; flex: none; }
   .tray .tt { font-size: 10px; color: var(--gray); margin-bottom: 4px; cursor: pointer; user-select: none; display: flex; align-items: center; gap: 4px; }
   .tray .tt .tw { display: inline-block; font-size: 12px; transition: transform .15s; }
+  /* 区分の切り替え（社員・パート・実習生） */
+  .tray .kinds { display: flex; gap: 4px; margin: 2px 0 6px; }
+  .tray .kinds button { border: 1px solid #ccd0d8; background: #fff; border-radius: 999px; padding: 1px 10px; font-size: 11px; cursor: pointer; color: #444; font-family: inherit; }
+  .tray .kinds button.on { background: #4262ff; border-color: #4262ff; color: #fff; font-weight: bold; }
+  .tray.shut .kinds { display: none; }
   .tray.shut .tt { margin-bottom: 0; }
   .tray.shut .tt .tw { transform: rotate(-90deg); }
   .tray.shut .mem { display: none; }
@@ -269,6 +274,9 @@ function realize(day, id) {
 
 // ---- 描く ----
 // 「まだ置いていない人」をたたんでいるか（どの日も同じ。このブラウザに覚える）
+// 「まだ置いていない人」に出す区分（社員 staff ／ パート '' ／ 実習生 trainee）。どの日も同じ。このブラウザに覚える
+const KINDS = [['staff', '社員'], ['', 'パート'], ['trainee', '実習生']];
+let trayKind = (() => { try { const v = localStorage.getItem('qrdemo.wbKind'); return v === 'staff' || v === 'trainee' ? v : ''; } catch (e) { return ''; } })();
 let trayShut = (() => { try { return localStorage.getItem('qrdemo.wbTray') === '1'; } catch (e) { return false; } })();
 const openPl = new Set();   // 計画の一覧を開いている枠（日|枠ID）
 let sel = null;             // 押して選んだ札 { n, day, from }
@@ -308,7 +316,9 @@ function draw() {
         }).join('')}
         ${ed ? `<button type="button" class="add" data-add="${d.key}">＋ 枠を足す（場所・業務）</button>` : ''}
       </div>
-      <div class="tray${trayShut ? ' shut' : ''}" data-drop="tray" data-day="${d.key}"><div class="tt" data-tray="1" title="押すと、たたむ・ひらく"><span class="tw">▾</span>まだ置いていない人（その日に出勤）${rest.length}人</div><div class="mem">${rest.map(n => mg(n, d.key, 'tray')).join('') || '<span class="muted">全員置いた</span>'}</div></div>
+      <div class="tray${trayShut ? ' shut' : ''}" data-drop="tray" data-day="${d.key}"><div class="tt" data-tray="1" title="押すと、たたむ・ひらく"><span class="tw">▾</span>まだ置いていない人（その日に出勤）${rest.length}人</div>
+        <div class="kinds">${KINDS.map(([k, t]) => { const c = rest.filter(n => kindOf(n) === k).length; return `<button type="button" data-kind="${k}" class="${trayKind === k ? 'on' : ''}">${t} ${c}</button>`; }).join('')}</div>
+        <div class="mem">${rest.filter(n => kindOf(n) === trayKind).map(n => mg(n, d.key, 'tray')).join('') || '<span class="muted">この区分の人は、全員置いた</span>'}</div></div>
     </div>`;
   }).join('');
   el.scrollLeft = keepX;
@@ -474,6 +484,8 @@ board.addEventListener('click', ev => {
     return;
   }
   if (selArw) { selArw = ''; draw(); }
+  const kb = ev.target.closest('[data-kind]');
+  if (kb) { trayKind = kb.dataset.kind; try { localStorage.setItem('qrdemo.wbKind', trayKind); } catch (e) {} draw(); return; }
   if (ev.target.closest('[data-tray]')) { trayShut = !trayShut; try { localStorage.setItem('qrdemo.wbTray', trayShut ? '1' : ''); } catch (e) {} draw(); return; }
   const pl = ev.target.closest('[data-pl]');
   if (pl) { openPl.has(pl.dataset.pl) ? openPl.delete(pl.dataset.pl) : openPl.add(pl.dataset.pl); draw(); return; }
