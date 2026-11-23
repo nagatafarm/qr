@@ -19,6 +19,7 @@
 </script>
 <script src="config.js"></script>
 <script src="common.js"></script>
+<script src="viewsync.js"></script>
 <style>
   :root { --green: #4f9363; --green-d: #2f6b3a; --green-l: #f0f6f1; --orange: #d4834a; --line: #dfe5e0; --gray: #6b6b6b; --red: #c33; --bg: #f6f7f5; --board: #fff; --arrow: #4262ff; }
   * { box-sizing: border-box; }
@@ -163,7 +164,7 @@
 <header><h1>ホワイトボード</h1><a href="index.html?go=whiteboard">なえログで開く</a></header>
 <div class="bar">
   <button type="button" id="today">今日</button><button type="button" id="prev">‹</button><button type="button" id="next">›</button>
-  <span class="ttl" id="ttl"></span>
+  <span class="ttl vs-ttl" id="ttl" role="button" tabindex="0" title="押すと、日を選んで飛べます"></span><span id="vsbtn"></span>
   <span class="note" id="mode" hidden></span>
   <span class="sv" id="sv"></span>
   <span class="sp"></span>
@@ -634,6 +635,7 @@ function visibleDays() {
 }
 function title() {
   const v = visibleDays(), lab = k => (S.days.find(d => d.key === k) || {}).label || '';
+  if (v.length) viewSync.put(v[0]);   // ほかの画面と、見ている日をそろえる
   document.getElementById('ttl').textContent = v.length ? lab(v[0]) + ' 〜 ' + lab(v[1]) : '';
 }
 let extending = false;
@@ -673,8 +675,13 @@ function stepWeek(n) { const v = visibleDays(); if (!v.length) return; goDay(add
 document.getElementById('prev').onclick = () => stepWeek(-1);
 document.getElementById('next').onclick = () => stepWeek(1);
 document.getElementById('today').onclick = () => goDay(localToday());
-base = MOCK ? '' : addDays(localToday(), -1);
-load(base).then(() => { if (MOCK) base = S.days[0].key; draw(); scrollToDay(MOCK ? S.days[0].key : localToday()); title(); })
+// 見出しの日付を押すと小さなカレンダー。上の帯の「🔗 日付を連動」
+document.getElementById('vsbtn').outerHTML = viewSync.button();
+viewSync.bind(document.querySelector('[data-vsync]'), () => visibleDays()[0]);
+document.getElementById('ttl').onclick = () => { const v = visibleDays(); viewSync.mini(document.getElementById('ttl'), v[0], k => goDay(k), { start: 0, span: v.length ? (Date.parse(v[1]) - Date.parse(v[0])) / 86400000 + 1 : 1 }); };
+const startDay = MOCK ? '' : (viewSync.day() || localToday());   // 連動中は、ほかの画面で見ていた日から
+base = MOCK ? '' : addDays(startDay, -1);
+load(base).then(() => { if (MOCK) base = S.days[0].key; draw(); scrollToDay(MOCK ? S.days[0].key : startDay); title(); })
   .catch(e => { document.getElementById('board').innerHTML = '<p style="padding:16px">' + esc(e.message) + '</p>'; });
 // 1分ごとに、見えている所の塊を読み直す（ほかの人の手直しを取り込む。動かしている途中・保存待ちのときは待つ）
 setInterval(async () => {

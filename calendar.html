@@ -18,6 +18,7 @@
 </script>
 <script src="config.js"></script>
 <script src="common.js"></script>
+<script src="viewsync.js"></script>
 <style>
   :root { --green: #4f9363; --green-d: #2f6b3a; --green-l: #f0f6f1; --orange: #d4834a; --orange-l: #fdf5ee; --line: #dfe5e0; --gray: #6b6b6b; --red: #c33; --bg: #f6f7f5; --side: 250px; }
   * { box-sizing: border-box; }
@@ -253,6 +254,7 @@
   <span class="ttl" id="ttl" role="button" tabindex="0" title="押すと、日を選んで飛べます"></span>
   <span class="loading" id="loading" hidden>読み込んでいます…</span>
   <span class="fnote" id="fnote" hidden></span>
+  <span id="vsbtn"></span>
   <span class="sp"></span>
   <button type="button" id="fold" hidden>全部たたむ</button>
   <span class="seg"><button type="button" data-view="month">月</button><button type="button" data-view="week">週</button><button type="button" data-view="week2">2週</button></span>
@@ -699,6 +701,7 @@ function title() {
   // 月表示：いちばん上に見えている週の、木曜あたりの月。週表示：左の日から7日
   const mk = view === 'month' ? addDays(k, 3) : k;
   const t = document.getElementById('ttl');
+  viewSync.put(k);   // ほかの画面と、見ている日をそろえる
   t.textContent = view === 'month' ? mk.slice(0, 4) + '年' + Number(mk.slice(5, 7)) + '月' : mk.slice(0, 4) + '年 ' + md(k) + '〜' + md(addDays(k, span() - 1));
 }
 function notes() {
@@ -887,7 +890,9 @@ document.addEventListener('keydown', ev => { if (ev.key === 'Escape') document.g
 // ---- はじめ ----
 presetName = matchPreset();
 drawSide();
-reset(TODAY);
+document.getElementById('vsbtn').outerHTML = viewSync.button();
+viewSync.bind(document.querySelector('[data-vsync]'), () => anchorDay());
+reset(viewSync.day() || TODAY);   // 連動中は、ほかの画面で見ていた日から
 // 手元の試験用：?mock=1&pop=日|工程 で、読み込んだあと内訳を開く
 if (MOCK && /[?&]pop=/.test(location.search)) {
   const [pk, ps] = decodeURIComponent(location.search.match(/[?&]pop=([^&]*)/)[1]).split('|');

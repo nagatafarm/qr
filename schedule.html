@@ -16,6 +16,7 @@
 </script>
 <script src="config.js"></script>
 <script src="common.js"></script>
+<script src="viewsync.js"></script>
 <style>
   :root { --orange: #d4834a; --orange-d: #9a5320; --orange-l: #fdf5ee; --green: #4f9363; --green-d: #2f6b3a; --green-l: #f0f6f1; --line: #dfe5e0; --gray: #6b6b6b; --red: #c33; --bg: #f6f7f5; --side: 250px; --whow: 132px; }
   * { box-sizing: border-box; }
@@ -524,7 +525,7 @@ function render() {
       <button type="button" id="now">今週</button>
       <button type="button" class="nav" id="prev" aria-label="前の週">‹</button>
       <button type="button" class="nav" id="next" aria-label="次の週">›</button>
-      <span class="week">${esc(y)}年 ${esc(md(sch.days[0].key))}〜${esc(md(sch.days[6].key))}</span>
+      <span class="week vs-ttl" role="button" tabindex="0" title="押すと、日を選んで飛べます">${esc(y)}年 ${esc(md(sch.days[0].key))}〜${esc(md(sch.days[6].key))}</span>${viewSync.button()}
       ${stale ? '<span class="pill">前に開いたときの表です。最新を読み込んでいます…</span>' : canEdit() ? '' : '<span class="pill gray" title="手直しと組み直しは、一覧の画面で担当を「計画担当」にすると使えます">見るだけ</span>'}
       <span class="sp"></span>
       <span class="upd">最終更新 ${esc(sch.updated)}</span>
@@ -655,6 +656,11 @@ function bind() {
   document.getElementById('prev').onclick = () => move(shift(-7));
   document.getElementById('next').onclick = () => move(shift(7));
   document.getElementById('now').onclick = () => move('');
+  // 見出しの日付を押すと小さなカレンダー（選んだ日から7日間）。「🔗 日付を連動」
+  const wk = document.querySelector('.bar .week');
+  if (wk) wk.onclick = () => viewSync.mini(wk, sch.start, k => move(k), { start: 5, span: 7 });
+  viewSync.bind(document.querySelector('[data-vsync]'), () => sch.start);
+  viewSync.put(sch.start);   // ほかの画面と、見ている日をそろえる
   document.getElementById('f-area').onchange = e => { fArea = e.target.value; render(); };
   document.getElementById('f-kubun').onchange = e => { fKubun = e.target.value; render(); };
   const fh = document.getElementById('f-hidden'); if (fh) fh.onclick = () => { showHidden = !showHidden; render(); };
@@ -925,6 +931,7 @@ function showMessage(msg) {
   document.getElementById('app').innerHTML = `<header><h1>人の割り振り表</h1><a href="index.html">メニューへ戻る</a></header><div class="card">${esc(msg)}</div>`;
 }
 showMessage('読み込んでいます…');
+{ const d = viewSync.day(); if (d) from = d; }   // 連動中は、ほかの画面で見ていた日から7日間
 reload();
 setInterval(() => { if (!sel && !multi.size && !sending && !pending.length && !dragAid && document.getElementById('busy').hidden) reload(true); }, 60000);
 </script>
