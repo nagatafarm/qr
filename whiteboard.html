@@ -46,7 +46,12 @@
   #board { flex: 1; min-height: 0; overflow: auto; display: flex; align-items: stretch; background-color: #f5f6f8; background-image: radial-gradient(#c9ccd4 1px, transparent 1px); background-size: 18px 18px; padding: 22px; gap: 22px; }
   body.arrow #board { cursor: crosshair; }
   /* 1日 ＝ ホワイトボードの1列 */
-  .day { flex: none; width: 286px; background: rgba(255,255,255,.72); border: 1px solid #e3e5ea; border-radius: 14px; display: flex; flex-direction: column; box-shadow: 0 2px 10px rgba(30,40,60,.06); backdrop-filter: blur(2px); }
+  .day { flex: none; width: 286px; }
+  body.c2 .day { width: 440px; }
+  /* 2列：日の中に枠を2列に並べる */
+  body.c2 .day .body { display: grid; grid-template-columns: 1fr 1fr; align-items: start; gap: 14px 16px; }
+  body.c2 .day .body > .add { grid-column: 1 / -1; }
+  .day {  background: rgba(255,255,255,.72); border: 1px solid #e3e5ea; border-radius: 14px; display: flex; flex-direction: column; box-shadow: 0 2px 10px rgba(30,40,60,.06); backdrop-filter: blur(2px); }
   .day.today { border-color: #4262ff; box-shadow: 0 0 0 2px rgba(66,98,255,.18), 0 2px 10px rgba(30,40,60,.06); }
   .day.past { opacity: .75; }
   .day .dh { display: flex; align-items: baseline; gap: 8px; padding: 10px 12px 8px; border-bottom: 1px solid #eceef2; }
@@ -54,14 +59,21 @@
   .day .dh .w { background: #eef0f5; color: #555c6b; border-radius: 6px; padding: 1px 7px; font-weight: bold; font-size: 12px; }
   .day .dh .w.sun { background: #fdecec; color: #c44; } .day .dh .w.sat { background: #e8f0fb; color: #2f6fb7; }
   .day .dh .n { margin-left: auto; font-size: 11px; color: var(--gray); text-align: right; }
-  .day .body { flex: 1; overflow-y: auto; padding: 12px 46px 12px 12px; display: flex; flex-direction: column; gap: 14px; position: relative; }
+  .day .body { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 14px 22px; display: flex; flex-direction: column; gap: 14px; position: relative; }
   .day .body svg.arw { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; z-index: 2; }
-  .day .body svg.arw path.ln { fill: none; stroke: var(--arrow); stroke-width: 2.4; stroke-linecap: round; pointer-events: none; }
+  .day .body svg.arw path.ln { fill: none; stroke: var(--arrow); stroke-width: 2; stroke-linecap: round; pointer-events: none; }
+  .day .body svg.arw path.ln.pr { stroke-dasharray: 5 4; }
+  .day .body svg.arw path.ln.on { stroke: #e5252a !important; stroke-width: 3.4; stroke-dasharray: none; }
+  .day .body svg.arw g.tag { pointer-events: all; cursor: pointer; }
+  .day .body svg.arw g.tag rect { fill: #4262ff; }
+  .day .body svg.arw g.tag text { fill: #fff; font-size: 10px; font-weight: bold; }
+  .day .body svg.arw g.tag.bk rect { fill: #5b6170; }
+  .day .body svg.arw g.tag.on rect { fill: #e5252a; }
   .day .body svg.arw path.hit { fill: none; stroke: transparent; stroke-width: 14; pointer-events: stroke; cursor: pointer; }
-  .day .body svg.arw path.hit:hover + path.ln { stroke: var(--red); stroke-width: 3.2; }
+  .day .body svg.arw path.hit:hover + path.ln { stroke-width: 3.6; }
   .day .body svg.arw circle { fill: #fff; stroke: var(--arrow); stroke-width: 2; }
   /* 業務から業務への矢印（枠ごと次へ）：灰色の太い線 */
-  .day .body svg.arw path.ln.bk { stroke: #5b6170; stroke-width: 2.8; }
+  .day .body svg.arw path.ln.bk { stroke: #5b6170; stroke-width: 3.2; }
   .day .body svg.arw circle.bk { stroke: #5b6170; }
   /* 枠 ＝ 「1H 出荷」の見出しと、その下の札 */
   /* 枠：白いカード（Miro の付せん・カードの見え方） */
@@ -76,14 +88,15 @@
   .hd:hover { transform: scale(1.35); background: #4262ff; }
   .hd.t { top: -6px; left: calc(50% - 6px); } .hd.b { bottom: -6px; left: calc(50% - 6px); }
   .hd.l { left: -6px; top: calc(50% - 6px); } .hd.r { right: -6px; top: calc(50% - 6px); }
-  body.can .blk:not(.auto):hover > .hd, body.linking .blk > .hd { opacity: 1; }
+  body.can:not(.linking) .blk:not(.auto):hover > .hd { opacity: 1; }
   /* 名前の札のつまみ（その人だけ途中からこっちへ） */
   .mg { position: relative; }
   .mg .hdm { position: absolute; right: -5px; top: calc(50% - 5px); width: 9px; height: 9px; border-radius: 50%; background: #fff; border: 2px solid #4262ff; opacity: 0; cursor: crosshair; touch-action: none; z-index: 6; }
   .mg .hdm:hover { background: #4262ff; }
   body.can .mg:hover .hdm { opacity: 1; }
   @media (hover: none) { body.can .blk:not(.auto) > .hd { opacity: .55; } body.can .blk .mg .hdm { opacity: .55; } }
-  .blk.target { outline: 2px solid #4262ff; outline-offset: 2px; }
+  .blk.target { outline: 3px solid #4262ff; outline-offset: 2px; background: #eef2ff; }
+  .blk.target::after { content: 'ここへつなぐ'; position: absolute; right: 8px; bottom: 6px; font-size: 10px; color: #fff; background: #4262ff; border-radius: 6px; padding: 1px 6px; }
   #tmp { position: fixed; inset: 0; pointer-events: none; z-index: 40; width: 100vw; height: 100vh; }
   #tmp path { fill: none; stroke: #4262ff; stroke-width: 2.4; stroke-dasharray: 6 4; }
   .blk .bh.ed { cursor: pointer; }
@@ -149,6 +162,7 @@
   <span class="note" id="mode" hidden></span>
   <span class="sv" id="sv"></span>
   <span class="sp"></span>
+  <button type="button" id="cols" title="日の中の枠を2列に並べる・1列にもどす">枠を2列に</button>
   <button type="button" id="arrow" style="display:none" title="人の札（途中からこっち）か、枠の見出し（業務が終わったらこっち）をつかんで、行き先の枠へ落とす（スマホは札を押してから枠を押す）。矢印を押すと消せる">→ 矢印を引く</button>
   <span class="legend"><span class="mg staff">社員</span><span class="mg">パート</span><span class="mg trainee">実習生</span></span>
   <span class="vsw"><a href="index.html?go=calendar">カレンダー</a><a href="index.html?go=whiteboard" class="on">ホワイトボード</a><a href="index.html?go=schedule">人の割り振り表</a></span>
@@ -294,43 +308,59 @@ function elbow(pts, rad) {
   return d + ' L' + e[0] + ',' + e[1];
 }
 // 矢印：札から、行き先の枠の見出しへ。列の右の余白を回って下ろす（ホワイトボードの手書きの矢印と同じ見え方）
-// 曲線の道筋：始まり a（点と向き）から、終わり z（点と向き）へ。向きの方へ、きょりに合わせてふくらませる（Miro のつなぎ線）
-function curve(a, z) {
-  const d = Math.max(24, Math.min(80, Math.hypot(z.x - a.x, z.y - a.y) * 0.45));
-  return 'M' + a.x + ',' + a.y + ' C' + (a.x + a.dx * d) + ',' + (a.y + a.dy * d) + ' ' + (z.x + z.dx * d) + ',' + (z.y + z.dy * d) + ' ' + z.x + ',' + z.y;
+// 矢印の道筋（ゆるい曲線）。a・z は {x, y, dx, dy}（点と、出る・入る向き）。W は列の幅（線が外へ出ないようにおさえる）
+function curve(a, z, W) {
+  let d = Math.max(14, Math.min(40, Math.hypot(z.x - a.x, z.y - a.y) * 0.35));
+  const lim = (p, dir) => dir > 0 ? (W - 4 - p) / 0.75 : dir < 0 ? (p - 4) / 0.75 : 99;   // 横へふくらむとき、列の中におさまる長さ
+  const da = Math.max(6, Math.min(d, lim(a.x, a.dx))), dz = Math.max(6, Math.min(d, lim(z.x, z.dx)));
+  const c1 = { x: a.x + a.dx * da, y: a.y + a.dy * da }, c2 = { x: z.x + z.dx * dz, y: z.y + z.dy * dz };
+  return { d: 'M' + a.x + ',' + a.y + ' C' + c1.x + ',' + c1.y + ' ' + c2.x + ',' + c2.y + ' ' + z.x + ',' + z.y,
+    mid: { x: (a.x + 3 * c1.x + 3 * c2.x + z.x) / 8, y: (a.y + 3 * c1.y + 3 * c2.y + z.y) / 8 } };
 }
-// 2つの箱（rect）の、向き合う辺の真ん中どうし。下の箱へは 下の辺→上の辺。離れているとき・横に並ぶときは 右の辺→右の辺（右の余白を回る弧）
-function ends(A, B, fromMg) {
-  const gap = B.y - (A.y + A.h), gapUp = A.y - (B.y + B.h);
-  if (!fromMg && gap >= 0 && gap < 40) return [{ x: A.x + A.w / 2, y: A.y + A.h, dx: 0, dy: 1 }, { x: B.x + B.w / 2, y: B.y - 3, dx: 0, dy: -1 }];
-  if (!fromMg && gapUp >= 0 && gapUp < 40) return [{ x: A.x + A.w / 2, y: A.y, dx: 0, dy: -1 }, { x: B.x + B.w / 2, y: B.y + B.h + 3, dx: 0, dy: 1 }];
-  // 名前の札からは、札の下から出す（となりの札の上を通らない）
-  if (fromMg) {
-    // すぐ下の枠へは、札の下から枠の上の辺へ（まっすぐに近い弧）。離れた枠へは、札の右から右の余白を回る
-    if (B.y > A.y && B.y - (A.y + A.h) < 90) { const x = Math.max(B.x + 16, Math.min(B.x + B.w - 16, A.x + A.w / 2)); return [{ x: A.x + A.w / 2, y: A.y + A.h, dx: 0, dy: 1 }, { x, y: B.y - 3, dx: 0, dy: -1 }]; }
-    return [{ x: A.x + A.w, y: A.y + A.h / 2, dx: 1, dy: 0 }, { x: B.x + B.w + 3, y: B.y + Math.min(14, B.h / 2), dx: 1, dy: 0 }];
+// 2つの箱（A から B へ）の、つなぐ点。横に並ぶ（2列）ときは 右↔左。たてに並ぶときは 下↔上。
+// あいだにほかの枠がある（離れた）ときは、列の外側の辺を回る（左の列は左、右の列・1列は右）
+function ends(A, B, W, fromMg) {
+  const ax = A.x + A.w / 2, ay = A.y + A.h / 2, bx = B.x + B.w / 2, by = B.y + B.h / 2;
+  const side = (ax < W / 2 - 20 && W > 330) ? -1 : 1;   // 2列のときの左の列は左を回る
+  if (Math.abs(bx - ax) > Math.max(A.w, B.w) * 0.6 && Math.abs(by - ay) < Math.max(A.h, B.h)) {   // 横どうし
+    const s = bx > ax ? 1 : -1;
+    if (fromMg) return [{ x: ax, y: A.y, dx: 0, dy: -1 }, { x: s > 0 ? B.x - 3 : B.x + B.w + 3, y: Math.min(by, B.y + 16), dx: -s, dy: 0 }];   // 札からは上へ出る（となりの札の上を通らない）
+    return [{ x: s > 0 ? A.x + A.w : A.x, y: ay, dx: s, dy: 0 }, { x: s > 0 ? B.x - 3 : B.x + B.w + 3, y: Math.min(by, B.y + 16), dx: -s, dy: 0 }];
   }
-  return [{ x: A.x + A.w, y: A.y + A.h / 2, dx: 1, dy: 0 }, { x: B.x + B.w + 3, y: B.y + Math.min(14, B.h / 2), dx: 1, dy: 0 }];
+  const below = by > ay, gap = below ? B.y - (A.y + A.h) : A.y - (B.y + B.h);
+  if (gap < 60 || fromMg && below && gap < 90) {   // すぐ下・すぐ上
+    const x = Math.max(B.x + 16, Math.min(B.x + B.w - 16, ax));
+    return below ? [{ x: ax, y: A.y + A.h, dx: 0, dy: 1 }, { x, y: B.y - 3, dx: 0, dy: -1 }]
+                 : [{ x: ax, y: A.y, dx: 0, dy: -1 }, { x, y: B.y + B.h + 3, dx: 0, dy: 1 }];
+  }
+  return [{ x: side > 0 ? A.x + A.w : A.x, y: ay, dx: side, dy: 0 }, { x: side > 0 ? B.x + B.w + 3 : B.x - 3, y: Math.min(by, B.y + 16), dx: side, dy: 0 }];
 }
+let selArw = '';   // 選んでいる矢印（枠ID|名前）。Delete キーで消す
 function drawArrows() {
   document.querySelectorAll('.day .body').forEach(body => {
-    const day = body.dataset.day, bl = blocksOf(day), br = body.getBoundingClientRect();
+    const day = body.dataset.day, bl = blocksOf(day), br = body.getBoundingClientRect(), W = body.clientWidth;
     const pos = el => { const r = el.getBoundingClientRect(); return { x: r.left - br.left + body.scrollLeft, y: r.top - br.top + body.scrollTop, w: r.width, h: r.height }; };
-    let paths = '';
+    let paths = '', tags = '';
     bl.forEach(b => Object.keys(b.next).forEach(n => {
       const tb = body.querySelector(`.blk[data-b="${CSS.escape(b.next[n])}"]`);
-      const src = n === '*' ? body.querySelector(`.blk[data-b="${CSS.escape(b.id)}"]`) : body.querySelector(`.mg[data-n="${CSS.escape(n)}"][data-from^="${CSS.escape(b.id + ':')}"]`);
+      const bk = n === '*';
+      const src = bk ? body.querySelector(`.blk[data-b="${CSS.escape(b.id)}"]`) : body.querySelector(`.mg[data-n="${CSS.escape(n)}"][data-from^="${CSS.escape(b.id + ':')}"]`);
       if (!tb || !src) return;
-      const [a, z] = ends(pos(src), pos(tb), n !== '*');
-      const to = bl.find(x => x.id === b.next[n]) || {}, bk = n === '*';
-      const d = curve(a, z), key = esc(b.id) + '|' + esc(n);
-      const tip = (bk ? [b.place, b.biz].filter(Boolean).join(' ') + ' が終わったら ' : short(n) + '：途中から ') + [to.place, to.biz].filter(Boolean).join(' ') + ' へ' + (canEdit() ? '（押すと消す）' : '');
-      paths += `<path class="hit" data-arw="${key}" d="${d}"><title>${esc(tip)}</title></path><path class="ln${bk ? ' bk' : ''}" d="${d}" marker-end="url(#${bk ? 'ahb' : 'ah'})"/><circle class="${bk ? 'bk' : ''}" cx="${a.x}" cy="${a.y}" r="3.5"/>`;
+      const [a, z] = ends(pos(src), pos(tb), W, !bk);
+      const c = curve(a, z, W), key = b.id + '|' + n, on = selArw === key;
+      const to = bl.find(x => x.id === b.next[n]) || {};
+      const tip = (bk ? [b.place, b.biz].filter(Boolean).join(' ') + ' が終わったら、全員 ' : short(n) + ' だけ途中から ') + [to.place, to.biz].filter(Boolean).join(' ') + ' へ' + (canEdit() ? '（押して選び、Delete キーで消す）' : '');
+      paths += `<path class="hit" data-arw="${esc(key)}" d="${c.d}"><title>${esc(tip)}</title></path><path class="ln${bk ? ' bk' : ' pr'}${on ? ' on' : ''}" d="${c.d}" marker-end="url(#${on ? 'ahs' : bk ? 'ahb' : 'ah'})"/><circle class="${bk ? 'bk' : ''}" cx="${a.x}" cy="${a.y}" r="3"/>`;
+      // 線の真ん中の札：だれの矢印か（人 ＝ 名前、業務 ＝ 全員）
+      const label = bk ? '全員 →' : short(n) + ' →', lw = label.length * 10 + 10;
+      c.mid.x = Math.max(lw / 2 + 2, Math.min(W - lw / 2 - 2, c.mid.x));   // 札が列の外へ出ないように
+      tags += `<g class="tag${bk ? ' bk' : ''}${on ? ' on' : ''}" data-arw="${esc(key)}"><rect x="${c.mid.x - lw / 2}" y="${c.mid.y - 8}" width="${lw}" height="16" rx="8"/><text x="${c.mid.x}" y="${c.mid.y + 4}" text-anchor="middle">${esc(label)}</text><title>${esc(tip)}</title></g>`;
     }));
     if (!paths) return;
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('class', 'arw'); svg.setAttribute('width', body.scrollWidth); svg.setAttribute('height', body.scrollHeight);
-    svg.innerHTML = `<defs><marker id="ah" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,1 L11,6 L0,11 z" fill="#4262ff"/></marker><marker id="ahb" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,1 L11,6 L0,11 z" fill="#5b6170"/></marker></defs>` + paths;
+    const mk = (id, c) => `<marker id="${id}" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,1 L11,6 L0,11 z" fill="${c}"/></marker>`;
+    svg.innerHTML = '<defs>' + mk('ah', '#4262ff') + mk('ahb', '#5b6170') + mk('ahs', '#e5252a') + '</defs>' + paths + tags;
     body.appendChild(svg);
   });
 }
@@ -414,10 +444,11 @@ board.addEventListener('click', ev => {
   const ln = ev.target.closest('[data-arw]');
   if (ln) {
     if (!canEdit()) return;
-    const i = ln.dataset.arw.indexOf('|'), bid = ln.dataset.arw.slice(0, i), n = ln.dataset.arw.slice(i + 1), day = ln.closest('.body').dataset.day, b = S.boards[day].find(x => x.id === bid);
-    if (b && confirm((n === '*' ? '「' + [b.place, b.biz].filter(Boolean).join(' ') + '」からの' : short(n) + ' の') + '矢印を消しますか？')) { delete b.next[n]; changed(day); }
+    selArw = selArw === ln.dataset.arw ? '' : ln.dataset.arw; draw();
+    if (selArw) toast('矢印を選びました。Delete キーで消せます（Esc でやめる）');
     return;
   }
+  if (selArw) { selArw = ''; draw(); }
   if (ev.target.closest('[data-tray]')) { trayShut = !trayShut; try { localStorage.setItem('qrdemo.wbTray', trayShut ? '1' : ''); } catch (e) {} draw(); return; }
   const pl = ev.target.closest('[data-pl]');
   if (pl) { openPl.has(pl.dataset.pl) ? openPl.delete(pl.dataset.pl) : openPl.add(pl.dataset.pl); draw(); return; }
@@ -527,6 +558,24 @@ board.addEventListener('pointerdown', ev => {
 });
 // つまみからは、札・枠のつかみ（並べ替え・動かす）を始めない
 board.addEventListener('dragstart', ev => { if (link) { ev.preventDefault(); ev.stopImmediatePropagation(); } }, true);
+// ---- 枠を2列に（このブラウザに覚える） ----
+let cols2 = (() => { try { return localStorage.getItem('qrdemo.wbCols') === '2'; } catch (e) { return false; } })();
+function colsBtn() { document.body.classList.toggle('c2', cols2); const b = document.getElementById('cols'); b.textContent = cols2 ? '枠を1列に' : '枠を2列に'; b.classList.toggle('on', cols2); }
+colsBtn();
+document.getElementById('cols').onclick = () => { cols2 = !cols2; try { localStorage.setItem('qrdemo.wbCols', cols2 ? '2' : ''); } catch (e) {} colsBtn(); if (S) draw(); };
+// ---- 矢印を選んで Delete キーで消す（Esc でやめる） ----
+document.addEventListener('keydown', e => {
+  if (!selArw || !document.getElementById('frm').hidden || /INPUT|SELECT|TEXTAREA/.test((e.target.tagName || ''))) return;
+  if (e.key === 'Escape') { selArw = ''; draw(); return; }
+  if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+  e.preventDefault();
+  const i = selArw.indexOf('|'), bid = selArw.slice(0, i), n = selArw.slice(i + 1);
+  for (const d of Object.keys(S.boards)) {
+    const b = S.boards[d].find(x => x.id === bid);
+    if (b && b.next[n]) { delete b.next[n]; selArw = ''; changed(d); toast('矢印を消しました'); return; }
+  }
+  selArw = ''; draw();
+});
 document.getElementById('arrow').onclick = ev => { arrowMode = !arrowMode; ev.currentTarget.classList.toggle('on', arrowMode); document.body.classList.toggle('arrow', arrowMode); toast(arrowMode ? '人の札か枠の見出しをつかんで、行き先の枠へ落とす（もう一度押すと終わる）' : '矢印を引くのを終わりました'); };
 window.addEventListener('resize', () => { if (S) draw(); });
 async function go(k) {
