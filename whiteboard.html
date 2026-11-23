@@ -353,23 +353,26 @@ function curve(a, z, W) {
   return { d: 'M' + a.x + ',' + a.y + ' C' + c1.x + ',' + c1.y + ' ' + c2.x + ',' + c2.y + ' ' + z.x + ',' + z.y,
     mid: { x: (a.x + 3 * c1.x + 3 * c2.x + z.x) / 8, y: (a.y + 3 * c1.y + 3 * c2.y + z.y) / 8 } };
 }
-// 2つの箱（A から B へ）の、つなぐ点。横に並ぶ（2列）ときは 右↔左。たてに並ぶときは 下↔上。
-// あいだにほかの枠がある（離れた）ときは、列の外側の辺を回る（左の列は左、右の列・1列は右）
-function ends(A, B, W, fromMg) {
-  const ax = A.x + A.w / 2, ay = A.y + A.h / 2, bx = B.x + B.w / 2, by = B.y + B.h / 2;
-  const side = (ax < W / 2 - 20 && W > 330) ? -1 : 1;   // 2列のときの左の列は左を回る
-  if (Math.abs(bx - ax) > Math.max(A.w, B.w) * 0.6 && Math.abs(by - ay) < Math.max(A.h, B.h)) {   // 横どうし
-    const s = bx > ax ? 1 : -1;
-    if (fromMg) return [{ x: ax, y: A.y, dx: 0, dy: -1 }, { x: s > 0 ? B.x - 3 : B.x + B.w + 3, y: Math.min(by, B.y + 16), dx: -s, dy: 0 }];   // 札からは上へ出る（となりの札の上を通らない）
-    return [{ x: s > 0 ? A.x + A.w : A.x, y: ay, dx: s, dy: 0 }, { x: s > 0 ? B.x - 3 : B.x + B.w + 3, y: Math.min(by, B.y + 16), dx: -s, dy: 0 }];
-  }
-  const below = by > ay, gap = below ? B.y - (A.y + A.h) : A.y - (B.y + B.h);
-  if (gap < 60 || fromMg && below && gap < 90) {   // すぐ下・すぐ上
-    const x = Math.max(B.x + 16, Math.min(B.x + B.w - 16, ax));
-    return below ? [{ x: ax, y: A.y + A.h, dx: 0, dy: 1 }, { x, y: B.y - 3, dx: 0, dy: -1 }]
-                 : [{ x: ax, y: A.y, dx: 0, dy: -1 }, { x, y: B.y + B.h + 3, dx: 0, dy: 1 }];
-  }
-  return [{ x: side > 0 ? A.x + A.w : A.x, y: ay, dx: side, dy: 0 }, { x: side > 0 ? B.x + B.w + 3 : B.x - 3, y: Math.min(by, B.y + 16), dx: side, dy: 0 }];
+// 2つの箱（A から B へ）の、いちばん近い辺の真ん中どうしを結ぶ（2026-11-23 意見）。
+// 4辺 × 4辺のうち、向き合っている組（A の辺が B の方を向き、B の辺が A の方を向く）で、いちばん近いもの。なければ、ただいちばん近い組
+function sides(R, gap) {
+  return [
+    { x: R.x + R.w / 2, y: R.y - gap, dx: 0, dy: -1 },        // 上
+    { x: R.x + R.w + gap, y: R.y + R.h / 2, dx: 1, dy: 0 },   // 右
+    { x: R.x + R.w / 2, y: R.y + R.h + gap, dx: 0, dy: 1 },   // 下
+    { x: R.x - gap, y: R.y + R.h / 2, dx: -1, dy: 0 },        // 左
+  ];
+}
+function ends(A, B) {
+  let best = null, bestAny = null;
+  sides(A, 0).forEach(a => sides(B, 3).forEach(z => {
+    const dx = z.x - a.x, dy = z.y - a.y, d = Math.hypot(dx, dy);
+    const facing = dx * a.dx + dy * a.dy > 0 && -dx * z.dx - dy * z.dy > 0;
+    if (facing && (!best || d < best.d)) best = { a, z, d };
+    if (!bestAny || d < bestAny.d) bestAny = { a, z, d };
+  }));
+  const p = best || bestAny;
+  return [p.a, p.z];
 }
 let selArw = '';   // 選んでいる矢印（枠ID|名前）。Delete キーで消す
 function drawArrows() {
@@ -386,10 +389,11 @@ function drawArrows() {
       const [a, z] = ends(pos(src), pos(tb), W, !bk);
       const c = curve(a, z, W), key = b.id + '|' + n, on = selArw === key;
       const to = bl.find(x => x.id === b.next[n]) || {};
-      const tip = (bk ? [b.place, b.biz].filter(Boolean).join(' ') + ' が終わったら、全員 ' : short(n) + ' だけ途中から ') + [to.place, to.biz].filter(Boolean).join(' ') + ' へ' + (canEdit() ? '（押して選び、Delete キーで消す）' : '');
+      const tip = (bk ? [b.place, b.biz].filter(Boolean).join(' ') + ' が終わったら ' : short(n) + ' だけ途中から ') + [to.place, to.biz].filter(Boolean).join(' ') + ' へ' + (canEdit() ? '（押して選び、Delete キーで消す）' : '');
       paths += `<path class="hit" data-arw="${esc(key)}" d="${c.d}"><title>${esc(tip)}</title></path><path class="ln${bk ? ' bk' : ' pr'}${on ? ' on' : ''}" d="${c.d}" marker-end="url(#${on ? 'ahs' : bk ? 'ahb' : 'ah'})"/><circle class="${bk ? 'bk' : ''}" cx="${a.x}" cy="${a.y}" r="3"/>`;
-      // 線の真ん中の札：だれの矢印か（人 ＝ 名前、業務 ＝ 全員）
-      const label = bk ? '全員 →' : short(n) + ' →', lw = label.length * 10 + 10;
+      // 線の真ん中の札：人の矢印だけ、だれの矢印か（名前）。業務から業務への矢印には札を付けない
+      if (bk) return;
+      const label = short(n) + ' →', lw = label.length * 10 + 10;
       c.mid.x = Math.max(lw / 2 + 2, Math.min(W - lw / 2 - 2, c.mid.x));   // 札が列の外へ出ないように
       const hit = (x, y) => placed.some(p => Math.abs(p.x - x) < (p.w + lw) / 2 + 3 && Math.abs(p.y - y) < 18);
       for (let t = 1, x0 = c.mid.x; hit(c.mid.x, c.mid.y) && t < 12; t++) {   // 右・左へ交互にずらす。列の中に入らなければ下へ
