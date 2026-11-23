@@ -172,6 +172,7 @@
   .grp:not(.spg) .gx::before, .grp .gx.l::before { height: 12px; width: 2px; border-right: none; }
   /* 引っぱっている間の、のびる先の見本（点線の帯） */
   #ghost { position: fixed; z-index: 30; pointer-events: none; border: 2px dashed var(--c, #1a73e8); border-radius: 8px; background: color-mix(in srgb, var(--c, #1a73e8) 14%, transparent); display: flex; align-items: flex-start; justify-content: flex-end; }
+  #ghost[hidden], #ghost b[hidden] { display: none; }   /* 離したら消す（display:flex が hidden に勝って、残っていた） */
   #ghost b { background: var(--c, #1a73e8); color: #fff; font-size: 12px; padding: 2px 8px; border-radius: 0 6px 0 6px; white-space: nowrap; }
   .grp .gh .tg { font-size: 23px; width: 18px; line-height: 1; flex: none; transition: transform .15s; }
   .grp.shut .gh .tg { transform: rotate(-90deg); }
@@ -397,12 +398,13 @@ async function fetchRange(from, to) {
     for (let i = 0; i < n; i++) ev.push(Object.assign({}, e, { o: e.d, d: addDays(st, i), q: e.q === '' ? '' : Math.round(e.q / n * 10) / 10, h: e.h == null ? null : e.h / n, part: i + 1, of: n, d0: st }));
   });
   return Object.assign({}, all, { from, to, events: ev.filter(e => e.d >= from && e.d <= to), days: all.days.filter(d => d.d >= from && d.d <= to),
-    notes: mockEdits.notes.filter(x => x.d >= from && x.d <= to), people: Object.assign({}, mockEdits.people) });
+    notes: mockEdits.notes.flatMap(x => Array.from({ length: x.n || 1 }, (_, i) => ({ id: x.id, t: x.t, by: x.by, d: addDays(x.d, i), part: i + 1, of: x.n || 1, d0: x.d }))).filter(x => x.d >= from && x.d <= to), people: Object.assign({}, mockEdits.people) });
 }
 // 手直しを窓口に送る。送ったら、読み込んだ分を古い扱いにして読み直す
 async function calEditApi(o) {
   if (MOCK) {
-    if (o.op === 'note') mockEdits.notes.push({ id: String(Date.now()), d: o.d, t: o.text, by: 'ためし' });
+    if (o.op === 'note') mockEdits.notes.push({ id: String(Date.now()), d: o.d, t: o.text, by: 'ためし', n: 1 });
+    if (o.op === 'notespan') o.items.forEach(x => { const n = mockEdits.notes.find(y => y.id === x.id); if (n) { n.d = x.d; n.n = x.n; } });
     if (o.op === 'delnote') mockEdits.notes = mockEdits.notes.filter(n => n.id !== o.id);
     if (o.op === 'people') { if (o.n === '') delete mockEdits.people[o.d + '|' + o.s]; else mockEdits.people[o.d + '|' + o.s] = Number(o.n); }
     if (o.op === 'span') { if (o.days > 1) mockEdits.spans[o.id + '|' + o.s] = o.days; else delete mockEdits.spans[o.id + '|' + o.s]; }
@@ -632,10 +634,10 @@ function grpHtml(k, g) {
         ${rowsHtml(k, g)}${xs.length ? gripHtml(xs, g.s, k, 1) : ''}</div>`;
 }
 // 枠の左右のつまみ：右へ引っぱると先の日まで、左へ引っぱると前の日からにのばす（戻すと縮む）。2026-11-24
-function gripHtml(es, s, d0, of) {
+function gripHtml(es, s, d0, of, kind) {
   const it = esc(JSON.stringify(es.map(e => ({ id: e.id, o: e.o || e.d0 || d0 }))));
-  const at = `data-items="${it}" data-s="${esc(s)}" data-d0="${d0}" data-of="${of}"`;
-  return `<span class="ext gx l" data-side="l" ${at} title="左へ引っぱると、前の日からにのばせます（右へ戻すと縮む）"></span><span class="ext gx r" data-side="r" ${at} title="右へ引っぱると、先の日までのばせます（左へ戻すと縮む）"></span>`;
+  const at = `data-items="${it}" data-s="${esc(s)}" data-d0="${d0}" data-of="${of}"${kind ? ' data-kind="' + kind + '"' : ''}`;
+  return `<span class="ext gx l" data-side="l" ${at} title="引っぱると、前の日・先の日へのばせます（戻すと縮む）"></span><span class="ext gx r" data-side="r" ${at} title="引っぱると、先の日・前の日へのばせます（戻すと縮む）"></span>`;
 }
 const byPlan = (a, b) => (a.done - b.done) || (custOf(plans[a.id] || {}) > custOf(plans[b.id] || {}) ? 1 : -1);
 // 必要人数：残りの作業の時間 ÷ 1人の出勤の時間（その日の出勤の合計 ÷ 人数。分からなければ 8 時間）を、0.5 人きざみで切り上げ。
@@ -655,12 +657,22 @@ function pplHtml(k, g) {
 // その日のメモ（計画にない作業）。計画担当は「＋メモ」で足し、押すと消せる
 // 週の列のメモ：工程（播種など）と同じ形のまとまりで、作業の並びの先頭に出す（2026-11-23 意見）
 function noteGroupHtml(k) {
-  const ns = notesOf.get(k) || [], ed = canEdit();
-  if (!ns.length) return '';
+  const all = notesOf.get(k) || [], ed = canEdit();
+  if (!all.length) return '';
+  const nrow = n => `<div class="row nrow${ed ? ' del' : ''}" data-note="${esc(n.id)}" title="${ed ? '押すと消す' : ''}"><div class="nm">📝 ${esc(n.t)}</div><div class="sub"><span>${esc(n.by)}</span></div></div>`;
+  // 何日かにのばしたメモ：作業と同じく、日の縦線をまたぐ1本の帯（2026-11-24）
+  const bands = all.filter(n => n.of > 1).map(n => {
+    const d0 = n.d0 || k, fk = d0 + '|メモ|' + n.id, d1 = addDays(d0, n.of - 1);
+    return `<div class="grp spg memo${ed ? ' ed' : ''}${isShut(fk) ? ' shut' : ''}" style="--c:#b08900" data-gs="メモ" data-sp="${esc('n:' + n.id + '@' + d0)}" data-k="${k}">
+      <div class="gh" data-d="${k}" data-s="メモ" data-fk="${esc(fk)}" title="押すと、たたむ・ひらく"><span class="tg">▾</span><b>メモ</b><span class="spd">${esc(md(d0))}〜${esc(md(d1))}（${n.of}日）</span></div>
+      ${nrow(n)}${ed ? gripHtml([{ id: n.id, o: d0 }], 'メモ', d0, n.of, 'note') : ''}</div>`;
+  }).join('');
+  const ns = all.filter(n => !(n.of > 1));
+  if (!ns.length) return bands;
   const key = k + '|メモ';
-  return `<div class="grp memo${isShut(key) ? ' shut' : ''}" style="--c:#b08900">
+  return bands + `<div class="grp memo${ed ? ' ed' : ''}${isShut(key) ? ' shut' : ''}" style="--c:#b08900">
     <div class="gh" data-d="${k}" data-s="メモ" title="押すと、たたむ・ひらく"><span class="tg">▾</span><b>メモ</b><small>${ns.length}件</small></div>
-    ${ns.map(n => `<div class="row nrow${ed ? ' del' : ''}" data-note="${esc(n.id)}" title="${ed ? '押すと消す' : ''}"><div class="nm">📝 ${esc(n.t)}</div><div class="sub"><span>${esc(n.by)}</span></div></div>`).join('')}</div>`;
+    ${ns.map(nrow).join('')}${ed ? gripHtml(ns.map(n => ({ id: n.id, o: k })), 'メモ', k, 1, 'note') : ''}</div>`;
 }
 // onlyAdd：「＋メモ」だけ（週の列の見出し。メモそのものは本文に出す）
 function notesHtml(k, onlyAdd) {
@@ -940,7 +952,7 @@ sc().addEventListener('pointerdown', ev => {
   const d0 = h.dataset.d0, of = Number(h.dataset.of) || 1, end = addDays(d0, of - 1), side = h.dataset.side || 'r';
   // 行の ⇔（1つの計画）は data-ext、枠のつまみは data-items（中の計画を全部）
   const items = h.dataset.items ? JSON.parse(h.dataset.items) : [{ id: h.dataset.ext, o: h.dataset.o || d0 }];
-  drag = { items, s: h.dataset.s, d0, of, end, side, a: '', b: '' };
+  drag = { items, s: h.dataset.s, d0, of, end, side, kind: h.dataset.kind || '', a: '', b: '' };
   try { h.setPointerCapture(ev.pointerId); } catch (e) {}
   h.classList.add('on');
   const src = h.closest('.grp') || h.closest('a.row'), strip = h.closest('.strip, .wk'), grp = h.closest('.grp');
@@ -950,10 +962,10 @@ sc().addEventListener('pointerdown', ev => {
   const cellOf = k => document.querySelector('.col[data-d="' + k + '"], .day[data-d="' + k + '"]');
   const ghost = () => {
     // 同じ段（週・2週の段・月の週）の中だけ、点線の見本を出す。段をまたぐときは、日の色だけ
-    const c = cellOf(side === 'r' ? drag.b : drag.a);
-    if (!drag.a || !c || c.parentElement !== strip) { gh.hidden = true; return; }
-    const r0 = src.getBoundingClientRect(), r = c.getBoundingClientRect();
-    const left = side === 'r' ? r0.left : r.left + 3, right = side === 'r' ? r.right - 3 : r0.right;
+    const ca = cellOf(drag.a), cb = cellOf(drag.b), ia = !!ca && ca.parentElement === strip, ib = !!cb && cb.parentElement === strip;
+    if (!drag.a || (!ia && !ib)) { gh.hidden = true; return; }
+    const r0 = src.getBoundingClientRect();
+    const left = ia ? ca.getBoundingClientRect().left + 3 : r0.left, right = ib ? cb.getBoundingClientRect().right - 3 : r0.right;
     gh.hidden = false;
     gh.style.left = left + 'px'; gh.style.top = r0.top + 'px'; gh.style.height = r0.height + 'px'; gh.style.width = Math.max(30, right - left) + 'px';
     const n = diff(drag.a, drag.b) + 1;
@@ -964,8 +976,9 @@ sc().addEventListener('pointerdown', ev => {
   h.onpointermove = e2 => {
     const el = document.elementFromPoint(e2.clientX, e2.clientY), c = el && el.closest('.col, .day');
     if (!c || !drag) return;
-    const t = c.dataset.d;
-    const na = side === 'r' ? drag.d0 : (t > drag.end ? drag.end : t), nb = side === 'r' ? (t < drag.d0 ? drag.d0 : t) : drag.end;
+    // つかんだのと反対の端を止めて、その端から引っぱった日まで（右の端を前の日へ引っぱると、前の日からにもなる）
+    const t = c.dataset.d, fix = side === 'r' ? drag.d0 : drag.end;
+    const na = t < fix ? t : fix, nb = t < fix ? fix : t;
     if (na !== drag.a || nb !== drag.b) { drag.a = na; drag.b = nb; mark(); ghost(); }
   };
   h.onpointerup = h.onpointercancel = () => {
@@ -976,11 +989,30 @@ sc().addEventListener('pointerdown', ev => {
     const days = diff(d.a, d.b) + 1;
     if (d.a === d.d0 && days === d.of) return;
     if (days > 14) { toast('のばせるのは14日までです', true); return; }
+    preview(d, days);
+    if (d.kind === 'note') { sendEdit({ op: 'notespan', items: d.items.map(it => ({ id: it.id, d: d.a, n: days })) }, days > 1 ? 'メモを ' + md(d.a) + '〜' + md(d.b) + 'の ' + days + '日にしました' : 'メモを ' + md(d.a) + 'の1日にしました'); return; }
     const list = d.items.map(it => ({ id: it.id, s: d.s, days, start: d.a === it.o ? '' : d.a }));
     const what = d.items.length > 1 ? d.items.length + '件を' : '';
     sendEdit({ op: 'spans', items: list }, days > 1 ? what + md(d.a) + '〜' + md(d.b) + 'の ' + days + '日にのばしました（量は日数で分けます）' : what + md(d.a) + 'の1日にしました');
   };
 });
+// のばした結果を、手元の読み込んだ分に先に当てて描き直す（窓口から返ってきたら、その中身で描き直す）
+function preview(d, days) {
+  const ids = new Set(d.items.map(it => it.id)), r1 = v => Math.round(v * 10) / 10;
+  if (d.kind === 'note') {
+    const base = new Map();
+    blocks.forEach(x => { x.notes = (x.notes || []).filter(n => { if (!ids.has(n.id)) return true; if (!base.has(n.id)) base.set(n.id, n); return false; }); });
+    base.forEach(n => { for (let i = 0; i < days; i++) { const di = addDays(d.a, i), x = blocks.get(blockOf(di)); if (x) x.notes.push(Object.assign({}, n, { d: di, part: i + 1, of: days, d0: d.a })); } });
+  } else {
+    const base = new Map();
+    blocks.forEach(x => { x.events = x.events.filter(e => { if (!(ids.has(e.id) && e.s === d.s)) return true; if (!base.has(e.id)) base.set(e.id, e); return false; }); });
+    base.forEach(e => {
+      const of = e.of || 1, q = e.q === '' ? '' : (Number(e.q) || 0) * of, h = e.h == null ? null : e.h * of;
+      for (let i = 0; i < days; i++) { const di = addDays(d.a, i), x = blocks.get(blockOf(di)); if (x) x.events.push(Object.assign({}, e, { d: di, q: q === '' ? '' : r1(q / days), h: h == null ? null : h / days, part: i + 1, of: days, d0: d.a })); }
+    });
+  }
+  reindex(); draw(true);
+}
 document.getElementById('fold').onclick = () => { foldAll = !foldAll; foldExc.clear(); save('calFold', foldAll ? '1' : ''); draw(true); };
 function openPop(k, s) {
   const es = eventsOn(k).filter(e => e.s === s);
