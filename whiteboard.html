@@ -48,9 +48,9 @@
   body.arrow #board { cursor: crosshair; }
   /* 1日 ＝ ホワイトボードの1列 */
   .day { flex: none; width: 286px; }
-  body.c2 .day { width: 420px; }
+  body.c2 .day { width: 470px; }
   /* 2列：日の中に枠を2列に並べる */
-  body.c2 .day .body { display: grid; grid-template-columns: 1fr 1fr; align-items: start; gap: 14px 16px; }
+  body.c2 .day .body { display: grid; grid-template-columns: 1fr 1fr; align-items: start; gap: 34px 48px; }
   body.c2 .day .body > .add { grid-column: 1 / -1; }
   .day {  background: rgba(255,255,255,.72); border: 1px solid #e3e5ea; border-radius: 14px; display: flex; flex-direction: column; box-shadow: 0 2px 10px rgba(30,40,60,.06); backdrop-filter: blur(2px); }
   .day.today { border-color: #4262ff; box-shadow: 0 0 0 2px rgba(66,98,255,.18), 0 2px 10px rgba(30,40,60,.06); }
@@ -60,7 +60,7 @@
   .day .dh .w { background: #eef0f5; color: #555c6b; border-radius: 6px; padding: 1px 7px; font-weight: bold; font-size: 12px; }
   .day .dh .w.sun { background: #fdecec; color: #c44; } .day .dh .w.sat { background: #e8f0fb; color: #2f6fb7; }
   .day .dh .n { margin-left: auto; font-size: 11px; color: var(--gray); text-align: right; }
-  .day .body { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 14px 22px; display: flex; flex-direction: column; gap: 14px; position: relative; }
+  .day .body { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 14px 22px; display: flex; flex-direction: column; gap: 26px; position: relative; }
   .day .body svg.arw { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; z-index: 2; }
   .day .body svg.arw path.ln { fill: none; stroke: var(--arrow); stroke-width: 2; stroke-linecap: round; pointer-events: none; }
   .day .body svg.arw path.ln.pr { stroke-dasharray: 5 4; }
@@ -375,33 +375,76 @@ function ends(A, B) {
   return [p.a, p.z];
 }
 let selArw = '';   // 選んでいる矢印（枠ID|名前）。Delete キーで消す
+// 矢印の道すじ（2026-11-23 意見：枠の上を通らない・重ならない）。
+//   横どうし（同じ段・となりの列）・すぐ下（同じ列・あいだに枠がない）は、まっすぐ結ぶ。
+//   それ以外は、枠のあいだの通り道（2列の真ん中の縦の通り道。1列は右の余白）を通る：枠の通り道側の辺から出て、通り道を上下に動き、行き先の枠の通り道側の辺へ入る。
+//   同じ通り道を通る矢印は、1本ずつ横にずらす（lane）。角は丸める
+function route(A, B, lay, lane, fromMg) {
+  const cx = R => R.x + R.w / 2;
+  const colOf = R => lay.two ? (cx(R) < lay.mid ? 0 : 1) : 0;
+  const ca = colOf(A), cb = colOf(B), y = R => R.y + Math.min(16, R.h / 2);
+  const sameRow = Math.abs(A.y - B.y) < 12 && !fromMg;
+  if (lay.two && ca !== cb && (sameRow || (fromMg && Math.abs((A.y + A.h / 2) - (B.y + 16)) < 30))) {   // 横どうし
+    const yy = sameRow ? Math.max(A.y, B.y) + 16 : B.y + 16;
+    return ca === 0 ? [[A.x + A.w, fromMg ? A.y + A.h / 2 : yy], [lay.gx, fromMg ? A.y + A.h / 2 : yy], [lay.gx, yy], [B.x - 3, yy]]
+                    : [[A.x, fromMg ? A.y + A.h / 2 : yy], [lay.gx, fromMg ? A.y + A.h / 2 : yy], [lay.gx, yy], [B.x + B.w + 3, yy]];
+  }
+  if (ca === cb && B.y > A.y && !lay.boxes.some(R => R !== A && R !== B && colOf(R) === ca && R.y > A.y + 2 && R.y < B.y - 2 && !fromMg)) {   // すぐ下
+    const x = fromMg ? Math.max(B.x + 14, Math.min(B.x + B.w - 14, cx(A))) : cx(B);
+    return [[fromMg ? cx(A) : x, A.y + A.h], [x, B.y - 3]];
+  }
+  // 通り道を通る
+  const gx = lay.gx + lane;
+  const out = (R, c) => (!lay.two || c === 0) ? R.x + R.w : R.x;          // 通り道側の辺（左の列・1列は右、右の列は左）
+  const inn = (R, c) => (!lay.two || c === 0) ? R.x + R.w + 3 : R.x - 3;
+  const ya = A.y + A.h / 2, yb = y(B);
+  return [[out(A, ca), ya], [gx, ya], [gx, yb], [inn(B, cb), yb]];
+}
 function drawArrows() {
   document.querySelectorAll('.day .body').forEach(body => {
     const day = body.dataset.day, bl = blocksOf(day), br = body.getBoundingClientRect(), W = body.clientWidth;
     const pos = el => { const r = el.getBoundingClientRect(); return { x: r.left - br.left + body.scrollLeft, y: r.top - br.top + body.scrollTop, w: r.width, h: r.height }; };
-    let paths = '', tags = '';
-    const placed = [];   // 置いた札の場所（重ならないように、ぶつかったら横へずらす）
+    // 並び：枠の箱と、通り道の x（2列なら左の列の右端と右の列の左端のまん中、1列なら右の余白）
+    const boxes = [...body.querySelectorAll('.blk')].map(pos);
+    const two = document.body.classList.contains('c2') && boxes.length > 1;
+    const mid = W / 2;
+    const L = boxes.filter(R => R.x + R.w / 2 < mid), Rr = boxes.filter(R => R.x + R.w / 2 >= mid);
+    const gx = two && L.length && Rr.length ? (Math.max(...L.map(R => R.x + R.w)) + Math.min(...Rr.map(R => R.x))) / 2
+      : two && L.length ? Math.max(...L.map(R => R.x + R.w)) + 22 : boxes.length ? Math.max(...boxes.map(R => R.x + R.w)) + 11 : W - 11;
+    const lay = { two, mid, gx, boxes };
+    let paths = '', tags = '', lane = 0;
+    const placed = [];
     bl.forEach(b => Object.keys(b.next).forEach(n => {
-      const tb = body.querySelector(`.blk[data-b="${CSS.escape(b.next[n])}"]`);
+      const tbEl = body.querySelector(`.blk[data-b="${CSS.escape(b.next[n])}"]`);
       const bk = n === '*';
-      const src = bk ? body.querySelector(`.blk[data-b="${CSS.escape(b.id)}"]`) : body.querySelector(`.mg[data-n="${CSS.escape(n)}"][data-from^="${CSS.escape(b.id + ':')}"]`);
-      if (!tb || !src) return;
-      const [a, z] = ends(pos(src), pos(tb), W, !bk);
-      const c = curve(a, z, W), key = b.id + '|' + n, on = selArw === key;
+      const srcEl = bk ? body.querySelector(`.blk[data-b="${CSS.escape(b.id)}"]`) : body.querySelector(`.mg[data-n="${CSS.escape(n)}"][data-from^="${CSS.escape(b.id + ':')}"]`);
+      if (!tbEl || !srcEl) return;
+      const B = pos(tbEl), A0 = pos(srcEl);
+      // 人の矢印は、札のある枠の箱を基準に道すじを決め、札から出す
+      const boxA = bk ? A0 : pos(srcEl.closest('.blk'));
+      const off = (lane % 2 ? 1 : -1) * Math.ceil(lane / 2) * 6; lane++;   // 通り道の中で1本ずつずらす（0, -6, +6, -12, …）
+      let pts = route(boxA, B, lay, off, false);
+      if (!bk) {   // 札から：札の横（通り道の側）か下から出て、枠の道すじにつなぐ
+        const p0 = pts[0];
+        if (pts.length === 2) pts = [[A0.x + A0.w / 2, A0.y + A0.h], [A0.x + A0.w / 2, A0.y + A0.h + 6], [pts[1][0], A0.y + A0.h + 6], pts[1]].filter((p, i, a) => i === 0 || p[0] !== a[i - 1][0] || p[1] !== a[i - 1][1]);
+        else { const right = p0[0] >= A0.x + A0.w / 2; pts = [[right ? A0.x + A0.w : A0.x, A0.y + A0.h / 2], [pts[1][0], A0.y + A0.h / 2]].concat(pts.slice(2)); }
+      }
+      const d = elbow(pts, 10), key = b.id + '|' + n, on = selArw === key;
+      const a = { x: pts[0][0], y: pts[0][1] };
       const to = bl.find(x => x.id === b.next[n]) || {};
       const tip = (bk ? [b.place, b.biz].filter(Boolean).join(' ') + ' が終わったら ' : short(n) + ' だけ途中から ') + [to.place, to.biz].filter(Boolean).join(' ') + ' へ' + (canEdit() ? '（押して選び、Delete キーで消す）' : '');
-      paths += `<path class="hit" data-arw="${esc(key)}" d="${c.d}"><title>${esc(tip)}</title></path><path class="ln${bk ? ' bk' : ' pr'}${on ? ' on' : ''}" d="${c.d}" marker-end="url(#${on ? 'ahs' : bk ? 'ahb' : 'ah'})"/><circle class="${bk ? 'bk' : ''}" cx="${a.x}" cy="${a.y}" r="3"/>`;
-      // 線の真ん中の札：人の矢印だけ、だれの矢印か（名前）。業務から業務への矢印には札を付けない
-      if (bk) return;
+      paths += `<path class="hit" data-arw="${esc(key)}" d="${d}"><title>${esc(tip)}</title></path><path class="ln${bk ? ' bk' : ' pr'}${on ? ' on' : ''}" d="${d}" marker-end="url(#${on ? 'ahs' : bk ? 'ahb' : 'ah'})"/><circle class="${bk ? 'bk' : ''}" cx="${a.x}" cy="${a.y}" r="3"/>`;
+      if (bk) return;   // 業務から業務への矢印には札を付けない
+      // 人の矢印の札：いちばん長い区間の真ん中（ぶつかるときは、ずらす）
+      let li = 0, ll = -1;
+      for (let i = 1; i < pts.length; i++) { const l = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); if (l > ll) { ll = l; li = i; } }
+      const c = { x: (pts[li][0] + pts[li - 1][0]) / 2, y: (pts[li][1] + pts[li - 1][1]) / 2 };
       const label = short(n) + ' →', lw = label.length * 10 + 10;
-      c.mid.x = Math.max(lw / 2 + 2, Math.min(W - lw / 2 - 2, c.mid.x));   // 札が列の外へ出ないように
+      c.x = Math.max(lw / 2 + 2, Math.min(W - lw / 2 - 2, c.x));
       const hit = (x, y) => placed.some(p => Math.abs(p.x - x) < (p.w + lw) / 2 + 3 && Math.abs(p.y - y) < 18);
-      for (let t = 1, x0 = c.mid.x; hit(c.mid.x, c.mid.y) && t < 12; t++) {   // 右・左へ交互にずらす。列の中に入らなければ下へ
-        const nx = x0 + (t % 2 ? 1 : -1) * Math.ceil(t / 2) * (lw / 2 + 30);
-        if (nx - lw / 2 >= 2 && nx + lw / 2 <= W - 2) c.mid.x = nx; else c.mid.y += 18;
-      }
-      placed.push({ x: c.mid.x, y: c.mid.y, w: lw });
-      tags += `<g class="tag${bk ? ' bk' : ''}${on ? ' on' : ''}" data-arw="${esc(key)}"><rect x="${c.mid.x - lw / 2}" y="${c.mid.y - 8}" width="${lw}" height="16" rx="8"/><text x="${c.mid.x}" y="${c.mid.y + 4}" text-anchor="middle">${esc(label)}</text><title>${esc(tip)}</title></g>`;
+      for (let t = 1; hit(c.x, c.y) && t < 12; t++) c.y += 18;
+      placed.push({ x: c.x, y: c.y, w: lw });
+      tags += `<g class="tag${on ? ' on' : ''}" data-arw="${esc(key)}"><rect x="${c.x - lw / 2}" y="${c.y - 8}" width="${lw}" height="16" rx="8"/><text x="${c.x}" y="${c.y + 4}" text-anchor="middle">${esc(label)}</text><title>${esc(tip)}</title></g>`;
     }));
     if (!paths) return;
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -612,7 +655,11 @@ board.addEventListener('dragstart', ev => { if (link) { ev.preventDefault(); ev.
 let cols2 = (() => { try { return localStorage.getItem('qrdemo.wbCols1') !== '1'; } catch (e) { return true; } })();
 function colsBtn() { document.body.classList.toggle('c2', cols2); const b = document.getElementById('cols'); b.textContent = cols2 ? '枠を1列に' : '枠を2列に'; b.classList.toggle('on', cols2); }
 colsBtn();
-document.getElementById('cols').onclick = () => { cols2 = !cols2; try { localStorage.setItem('qrdemo.wbCols1', cols2 ? '' : '1'); } catch (e) {} colsBtn(); if (S) draw(); };
+document.getElementById('cols').onclick = () => {
+  const keep = S ? visibleDays()[0] : '';   // 切り替えると列の幅が変わるので、見ていた日へもどす
+  cols2 = !cols2; try { localStorage.setItem('qrdemo.wbCols1', cols2 ? '' : '1'); } catch (e) {} colsBtn();
+  if (S) { draw(); const el = keep && document.querySelector('.day[data-day="' + keep + '"]'); if (el) document.getElementById('board').scrollLeft = el.offsetLeft - 22; title(); }
+};
 // ---- 矢印を選んで Delete キーで消す（Esc でやめる） ----
 document.addEventListener('keydown', e => {
   if (!selArw || !document.getElementById('frm').hidden || /INPUT|SELECT|TEXTAREA/.test((e.target.tagName || ''))) return;
