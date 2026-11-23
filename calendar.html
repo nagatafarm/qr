@@ -130,11 +130,12 @@
   #scroller.week { overflow: auto; }
   /* 2週：1列をせまくする（PC で14日が1画面に入る）。字は少し小さく */
   /* 2週：2段（上に1週目、下に2週目）。列の幅は週と同じ（7日で横いっぱい）。上下に動かす（2026-11-23 意見） */
-  #scroller.w2 { overflow-x: hidden; overflow-y: auto; }
+  /* せまい画面（スマホ）では列がつぶれないよう、1列 140px より細くしない（横にも動かせる）。2026-11-23 意見 */
+  #scroller.w2 { overflow: auto; }
   #scroller.w2 .w2row { border-bottom: 3px solid #d5dbd5; }
-  #scroller.w2 .strip { display: flex; width: 100%; }
-  #scroller.w2 .col { width: calc(100% / 7); min-width: 0; }
-  #scroller.w2 .col .ch { position: static; }
+  #scroller.w2 .strip { display: flex; width: max-content; min-width: 100%; }
+  #scroller.w2 .col { width: max(140px, calc((100vw - var(--side) - 18px) / 7)); }
+  #scroller.w2 .col .ch { position: relative; z-index: auto; }
   /* 列を横に並べる箱。高さは「画面の高さ」か「いちばん長い列」の大きいほうで、どの列もその高さにそろう（区切り線が途中で切れない） */
   #scroller.week .strip { display: flex; align-items: stretch; width: max-content; min-height: 100%; }
   /* 列の頭に吸い付くのはスマホ（指で送る）だけ。PC で付けると、ホイールで少し動かしても元の列へ引き戻される */
@@ -178,7 +179,7 @@
   .day .addnote { align-self: flex-start; }
   /* マウスのある画面では、「＋メモ」はその日に乗ったときだけ出す（並ぶとうるさい） */
   /* スマホ（マウスを乗せられない）の月：「＋メモ」の枠はやめて、日のマスの右上に小さな「＋」だけ（2026-11-23 意見） */
-  @media (hover: none) { .day { position: relative; } .day .addnote { position: absolute; top: 1px; right: 1px; margin: 0; border: none; padding: 3px 5px; font-size: 0; line-height: 1; } .day .addnote::before { content: '＋'; font-size: 13px; color: #b39a3a; } }
+  @media (hover: none) { .day { position: relative; } .day .addnote, .col .ch .addnote { position: absolute; top: 1px; right: 1px; margin: 0; border: none; padding: 3px 5px; font-size: 0; line-height: 1; } .day .addnote::before, .col .ch .addnote::before { content: '＋'; font-size: 15px; color: #b39a3a; } }
   @media (hover: hover) { .addnote { opacity: 0; } .col:hover .addnote, .day:hover .addnote, .addnote:focus { opacity: 1; } }
   /* 計画ごとのまとめ（取引先＝メーカー・品目・ハウス）。押すと中の計画を出す */
   .grp .sum { display: flex; gap: 6px; align-items: center; padding: 4px 8px; border-top: 1px solid #eee; font-size: 12px; cursor: pointer; background: #fafcfa; white-space: nowrap; }
