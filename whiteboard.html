@@ -47,7 +47,7 @@
   body.arrow #board { cursor: crosshair; }
   /* 1日 ＝ ホワイトボードの1列 */
   .day { flex: none; width: 286px; }
-  body.c2 .day { width: 440px; }
+  body.c2 .day { width: 420px; }
   /* 2列：日の中に枠を2列に並べる */
   body.c2 .day .body { display: grid; grid-template-columns: 1fr 1fr; align-items: start; gap: 14px 16px; }
   body.c2 .day .body > .add { grid-column: 1 / -1; }
@@ -376,6 +376,7 @@ function drawArrows() {
     const day = body.dataset.day, bl = blocksOf(day), br = body.getBoundingClientRect(), W = body.clientWidth;
     const pos = el => { const r = el.getBoundingClientRect(); return { x: r.left - br.left + body.scrollLeft, y: r.top - br.top + body.scrollTop, w: r.width, h: r.height }; };
     let paths = '', tags = '';
+    const placed = [];   // 置いた札の場所（重ならないように、ぶつかったら横へずらす）
     bl.forEach(b => Object.keys(b.next).forEach(n => {
       const tb = body.querySelector(`.blk[data-b="${CSS.escape(b.next[n])}"]`);
       const bk = n === '*';
@@ -389,6 +390,12 @@ function drawArrows() {
       // 線の真ん中の札：だれの矢印か（人 ＝ 名前、業務 ＝ 全員）
       const label = bk ? '全員 →' : short(n) + ' →', lw = label.length * 10 + 10;
       c.mid.x = Math.max(lw / 2 + 2, Math.min(W - lw / 2 - 2, c.mid.x));   // 札が列の外へ出ないように
+      const hit = (x, y) => placed.some(p => Math.abs(p.x - x) < (p.w + lw) / 2 + 3 && Math.abs(p.y - y) < 18);
+      for (let t = 1, x0 = c.mid.x; hit(c.mid.x, c.mid.y) && t < 12; t++) {   // 右・左へ交互にずらす。列の中に入らなければ下へ
+        const nx = x0 + (t % 2 ? 1 : -1) * Math.ceil(t / 2) * (lw / 2 + 30);
+        if (nx - lw / 2 >= 2 && nx + lw / 2 <= W - 2) c.mid.x = nx; else c.mid.y += 18;
+      }
+      placed.push({ x: c.mid.x, y: c.mid.y, w: lw });
       tags += `<g class="tag${bk ? ' bk' : ''}${on ? ' on' : ''}" data-arw="${esc(key)}"><rect x="${c.mid.x - lw / 2}" y="${c.mid.y - 8}" width="${lw}" height="16" rx="8"/><text x="${c.mid.x}" y="${c.mid.y + 4}" text-anchor="middle">${esc(label)}</text><title>${esc(tip)}</title></g>`;
     }));
     if (!paths) return;
@@ -596,10 +603,11 @@ board.addEventListener('pointerdown', ev => {
 // つまみからは、札・枠のつかみ（並べ替え・動かす）を始めない
 board.addEventListener('dragstart', ev => { if (link) { ev.preventDefault(); ev.stopImmediatePropagation(); } }, true);
 // ---- 枠を2列に（このブラウザに覚える） ----
-let cols2 = (() => { try { return localStorage.getItem('qrdemo.wbCols') === '2'; } catch (e) { return false; } })();
+// はじめは2列（2026-11-23）。「枠を1列に」を押したら1列を覚える
+let cols2 = (() => { try { return localStorage.getItem('qrdemo.wbCols1') !== '1'; } catch (e) { return true; } })();
 function colsBtn() { document.body.classList.toggle('c2', cols2); const b = document.getElementById('cols'); b.textContent = cols2 ? '枠を1列に' : '枠を2列に'; b.classList.toggle('on', cols2); }
 colsBtn();
-document.getElementById('cols').onclick = () => { cols2 = !cols2; try { localStorage.setItem('qrdemo.wbCols', cols2 ? '2' : ''); } catch (e) {} colsBtn(); if (S) draw(); };
+document.getElementById('cols').onclick = () => { cols2 = !cols2; try { localStorage.setItem('qrdemo.wbCols1', cols2 ? '' : '1'); } catch (e) {} colsBtn(); if (S) draw(); };
 // ---- 矢印を選んで Delete キーで消す（Esc でやめる） ----
 document.addEventListener('keydown', e => {
   if (!selArw || !document.getElementById('frm').hidden || /INPUT|SELECT|TEXTAREA/.test((e.target.tagName || ''))) return;
