@@ -87,6 +87,7 @@
   .sumline { font-size: 11px; color: var(--gray); }
   .sumline.std { color: #9a9a9a; font-size: 10px; }
   .sumline.over { color: var(--red); font-weight: bold; }
+  .dh .memo { margin-top: 3px; font-size: 11px; font-weight: normal; background: #fff6cc; border: 1px solid #e3c95a; color: #6b5300; border-radius: 6px; padding: 1px 5px; text-align: left; white-space: normal; }
   .lack { display: inline-block; margin-top: 2px; font-size: 11px; font-weight: bold; color: #fff; background: var(--red); border-radius: 999px; padding: 0 7px; }
   .lack small { font-weight: normal; }
   tbody th.who { font-size: 14px; font-weight: bold; }
@@ -497,7 +498,8 @@ function render() {
       <div class="d"><b>${d.key.slice(8) === '01' ? Number(d.key.slice(5, 7)) + '/' : ''}${Number(d.key.slice(8))}</b></div>
       <div class="sumline${used > capSum + 1e-9 ? ' over' : ''}" title="割り振り ／ 出勤（実際の時間）">${esc(num(used))} ／ ${esc(num(capSum))}h</div>
       <div class="sumline std" title="1人前に直すと">1人前 ${esc(num(usedStd))} ／ ${esc(num(capStd))}</div>
-      ${lack > 0 ? `<span class="lack" title="まだだれにも割り振られていない時間（1人前で）">人手不足 ${esc(num(lack))}h</span>` : ''}</th>`;
+      ${lack > 0 ? `<span class="lack" title="まだだれにも割り振られていない時間（1人前で）">人手不足 ${esc(num(lack))}h</span>` : ''}
+      ${(sch.notes || []).filter(n => n.d === d.key).map(n => `<div class="memo" title="カレンダーのメモ${n.by ? '（' + esc(n.by) + '）' : ''}。時間がないので、割り振りには入らない">📝 ${esc(n.t)}</div>`).join('')}</th>`;
   }).join('');
   const rows = people.map(p => `<tr${hiddenWho.has(p.name) ? ' class="hid"' : ''}><th class="who${pickedWho.has(p.name) ? ' pick' : ''}" data-who="${esc(p.name)}" draggable="true" title="つかんで上下へ動かすと並び替え。右クリックで非表示（Shift を押しながら押すと何人でも選べる）">${esc(p.name)}${p.top ? `<span class="rank${p.top === 'A' ? '' : ' b'}">${esc(p.top)}</span>` : ''}${hiddenWho.has(p.name) ? '<span class="hidtag">非表示</span>' : ''}
       <small>${esc([p.kubun, p.area].filter(String).join('・'))}${(p.jobs || []).length ? '<br>' + esc(p.jobs.slice(0, 6).join(' ')) + (p.jobs.length > 6 ? ' …' : '') : ''}</small></th>` +

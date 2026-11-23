@@ -108,6 +108,7 @@
   .blk .wk { font-size: 10px; color: #555c6b; background: #f3f5f9; border-radius: 6px; padding: 2px 6px; margin: 3px 0; cursor: pointer; }
   .blk .wk b { color: #222; }
   .blk .wk .auto { color: var(--orange); font-weight: bold; }
+  .blk .wk.memo { background: #fff6cc; color: #6b5300; cursor: default; }
   .blk .pls { font-size: 11px; margin: 2px 0 4px; border-left: 3px solid #cfe0d2; padding-left: 6px; }
   .blk .pls div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .blk .pls .done { color: #999; text-decoration: line-through; }
@@ -232,7 +233,7 @@ async function fetchChunk(from) {
 }
 // 読んだ塊を、今の S に足す（手直しして保存を待っている日は、上書きしない）
 function merge(x, keepDays) {
-  if (!S) S = { days: [], people: x.people, cap: {}, boards: {}, work: {} };
+  if (!S) S = { days: [], people: x.people, cap: {}, boards: {}, work: {}, notes: {} };
   S.people = x.people;
   x.people.forEach(p => { S.cap[p.name] = Object.assign(S.cap[p.name] || {}, (x.cap || {})[p.name] || {}); });
   x.days.forEach(d => {
@@ -240,6 +241,7 @@ function merge(x, keepDays) {
     if (i >= 0) S.days[i] = d; else S.days.push(d);
     if (!(keepDays && keepDays.has(d.key))) S.boards[d.key] = x.boards[d.key] || [];
     S.work[d.key] = (x.work || {})[d.key] || [];
+    S.notes[d.key] = (x.notes || []).filter(n => n.d === d.key);   // カレンダーのメモ
   });
   S.days.sort((a, b) => a.key < b.key ? -1 : 1);
 }
@@ -263,12 +265,18 @@ const needOf = (day, w) => w && w.h > 0 ? Math.ceil(w.h / perPerson(day) * 2) / 
 function blocksOf(day) {
   const bl = S.boards[day] || [], ws = S.work[day] || [];
   const auto = ws.filter(w => !bl.some(b => b.major === w.s)).map(w => ({ id: 'auto:' + w.s, auto: true, place: '', biz: w.s, major: w.s, note: '', lead: [], mem: [], next: {} }));
-  return bl.concat(auto);
+  // カレンダーで足したメモ（計画にない作業）も、点線の「カレンダーのメモから」の枠で出す（2026-11-23）。工程の欄に「メモ:ID」を入れて、どのメモの枠かを覚える
+  const memo = (S.notes[day] || []).filter(n => !bl.some(b => b.major === 'メモ:' + n.id)).map(n => {
+    const t = String(n.t).trim();
+    return { id: 'auto:メモ:' + n.id, auto: true, memo: true, place: '', biz: t.slice(0, 20), major: 'メモ:' + n.id, note: t.slice(20, 80), by: n.by || '', lead: [], mem: [], next: {} };
+  });
+  return bl.concat(memo, auto);
 }
 // 点線の枠に人を置いたら、本物の枠にする
 function realize(day, id) {
   if (!id.startsWith('auto:')) return S.boards[day].find(x => x.id === id);
-  const major = id.slice(5), b = { id: newId(), place: '', biz: major, major, note: '', lead: [], mem: [], next: {} };
+  const a = blocksOf(day).find(x => x.id === id);
+  const major = id.slice(5), b = { id: newId(), place: '', biz: a ? a.biz : major, major, note: a ? a.note : '', lead: [], mem: [], next: {} };
   S.boards[day].push(b);
   return b;
 }
@@ -286,6 +294,7 @@ function mg(n, day, from) {
   return `<span class="mg ${k}${dup ? ' dup' : ''}${sel && sel.n === n && sel.day === day && sel.from === from ? ' sel' : ''}" ${canEdit() ? 'draggable="true"' : ''} data-n="${esc(n)}" data-day="${day}" data-from="${from}" title="${esc(n)}${dup ? '（ほかの枠にもいる）' : ''}">${esc(short(n))}${canEdit() && from !== 'tray' ? '<span class="hdm" title="引っぱると、この人だけ途中からほかの業務へ"></span>' : ''}</span>`;
 }
 function workHtml(day, b) {
+  if (String(b.major).startsWith('メモ:')) return `<div class="wk memo">${b.auto ? '<span class="auto">カレンダーのメモから　</span>' : '📝 カレンダーのメモ'}${b.auto && b.by ? '<span class="muted">（' + esc(b.by) + '）</span>' : ''}</div>`;
   const w = (S.work[day] || []).find(x => x.s === b.major);
   if (!w) return '';
   const need = needOf(day, w), key = day + '|' + b.id, open = openPl.has(key);
@@ -608,7 +617,7 @@ document.getElementById('frmf').onsubmit = e => {
   if (!place) { err.textContent = '場所を入れてください（例：1H）'; document.getElementById('fpl').focus(); return; }
   if (!biz) { err.textContent = '業務を選んでください'; return; }
   const day = frmDay, w = (S.work[day] || []).find(x => x.s === biz);
-  if (frmBlk) Object.assign(frmBlk, { place, biz, note, major: w ? w.s : (frmBlk.major === biz ? frmBlk.major : '') });
+  if (frmBlk) Object.assign(frmBlk, { place, biz, note, major: w ? w.s : String(frmBlk.major).startsWith('メモ:') ? frmBlk.major : (frmBlk.major === biz ? frmBlk.major : '') });
   else S.boards[day].push({ id: newId(), place, biz, note, major: w ? w.s : '', lead: [], mem: [], next: {} });
   closeForm(); changed(day);
 };
