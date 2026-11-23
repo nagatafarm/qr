@@ -18,7 +18,7 @@ async function callApi(options) {
   const query = typeof options === 'string' ? options : '';
   if (query) options = null;
   try {
-    res = await fetch(options ? API_URL : API_URL + '?' + (query || 'api=state'),
+    res = await fetch(options ? API_URL : API_URL + '?' + (query || 'api=state&slim=1'),
       Object.assign({ credentials: 'omit', cache: 'no-store', redirect: 'follow' }, options || {}));
   } catch (e) {
     throw new Error('通信できませんでした。電波の状態を確認してください');
@@ -31,7 +31,20 @@ async function callApi(options) {
     throw new Error('データの窓口から正しい返事がありません。config.js のURLと、Apps Script のデプロイを確認してください');
   }
   if (!data.ok) throw new Error(data.error || '失敗しました');
-  return data.state;
+  return unslim(data.state);
+}
+
+// 窓口が空の欄を省いて送った状態（slim）を、元の形（どの欄もある）に戻す。並びも元のまま（2026-11-23 速さ.gs）
+function unslim(st) {
+  if (!st || !st.slim || !Array.isArray(st.plans)) return st;
+  const fill = (o, keys) => { const n = {}; keys.forEach(k => { n[k] = k in o ? o[k] : ''; }); Object.keys(o).forEach(k => { if (!(k in n)) n[k] = o[k]; }); return n; };
+  st.plans.forEach(p => {
+    p.v = fill(p.v || {}, st.slim.v);
+    Object.keys(p.status || {}).forEach(k => { p.status[k] = fill(p.status[k] || {}, st.slim.st); });
+  });
+  if (Array.isArray(st.logs)) st.logs = st.logs.map(l => fill(l, st.slim.log));
+  delete st.slim;
+  return st;
 }
 
 function fetchState() { return callApi(); }
@@ -46,4 +59,4 @@ function postRecord(rec) { return postApi(Object.assign({ action: 'record' }, re
 function authToken() { try { return localStorage.getItem('qrdemo.token') || ''; } catch (e) { return ''; } }
 // ログインした人のできること：{ depts[], planner, wish, majors[] }（index.html がログインのときと、窓口の状態が届くたびに覚え直す）
 function authCaps() { try { return JSON.parse(localStorage.getItem('qrdemo.caps') || '{}') || {}; } catch (e) { return {}; } }
-function postApi(body) { return callApi({ method: 'POST', body: JSON.stringify(Object.assign({ token: authToken() }, body)) }); }
+function postApi(body) { return callApi({ method: 'POST', body: JSON.stringify(Object.assign({ token: authToken(), slim: true }, body)) }); }

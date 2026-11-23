@@ -1766,7 +1766,7 @@ function renderFront() {
 // ---------- 画面：スケジュール。?go=calendar はカレンダー（calendar.html）、?go=schedule は人の割り振り表（schedule.html）。
 // 中身は、上の帯の下にはめ込んで出す。自動の更新で描き直しても、はめ込んだ画面は作り直さない（作り直すと読み込みからやり直しになる）
 function renderSchedule() {
-  const src = page === 'calendar' ? 'calendar.html?embed=1&v=9' : page === 'whiteboard' ? 'whiteboard.html?embed=1&v=14' : 'schedule.html?embed=1&v=5';
+  const src = page === 'calendar' ? 'calendar.html?embed=1&v=9' : page === 'whiteboard' ? 'whiteboard.html?embed=1&v=15' : 'schedule.html?embed=1&v=6';
   const old = document.getElementById('schedframe');
   if (old && old.getAttribute('src') === src) {
     // はめ込んだ画面は作り直さず、右上の札だけ新しくする（窓口の状態が届くと、担当の名前が分かる）
@@ -2262,8 +2262,20 @@ function showMessage(msg) {
   document.getElementById('app').innerHTML = `<header><h1>なえログ</h1></header><main><div class="card">${esc(msg)}</div></main>`;
 }
 if ((page === 'schedule' || page === 'calendar' || page === 'whiteboard') && !needLogin()) renderSchedule(); else showMessage('読み込んでいます…');
+// 前に開いたときの状態をすぐ出し、裏で読み直す（2026-11-23 速さ）。届いたら描き直す
+let started = false;
+function loadLastState() { try { const v = JSON.parse(localStorage.getItem('qrdemo.stateLast') || 'null'); return v && Array.isArray(v.plans) ? v : null; } catch (e) { return null; } }
+function saveLastState(s) { try { localStorage.setItem('qrdemo.stateLast', JSON.stringify(s)); } catch (e) { try { localStorage.removeItem('qrdemo.stateLast'); } catch (e2) {} } }
+{ const last = loadLastState(); if (last) start(last); }
 fetchState()
   .then(s => {
+    saveLastState(s);
+    if (started) { server = s; if (!server.logs) server.logs = []; rebuild(); syncCaps(); render(); return; }
+    start(s);
+  })
+  .catch(e => { if (!started) showMessage(e.message); });
+function start(s) {
+    started = true;
     server = s; if (!server.logs) server.logs = []; rebuild(); syncCaps();
     partAt = Number(load('partAt')) || 0;
     if (isPart() && getName() && partExpired()) save('person', '');   // 前の人のまま時間がたっていたら、名札の読み取りから
@@ -2277,8 +2289,7 @@ fetchState()
     render();
     if (askName) askWho(askName);
     setInterval(refresh, 15000);
-  })
-  .catch(e => showMessage(e.message));
+}
 </script>
 <script src="spray.js?v=5"></script>
 <script src="feedback.js?v=2"></script>

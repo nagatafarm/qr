@@ -380,7 +380,7 @@ async function reload(force) {
     if (want !== key) return;                       // 待っている間に別の週へ移った
     if ((shown || force) && !stale && busyHere()) return;     // 裏の読み直し：さわっている最中なら描き直さない
     stale = false; sch = s; dropGone(); render(); prefetchAround();
-    if (!from) saveLast(key, s);                    // 取っておくのは、開いたときに出す週（今週）だけ
+    saveLast(key, s);                               // 次に同じ日から開いたとき、すぐ出す（日付の連動で、今週以外から開くことも多い）
   } catch (e) { if (want !== key) return; if (!sch) showMessage(e.message); else { toast(e.message, true); if (!shown) render(); } }
 }
 // 手直しを窓口へ送り、返ってきた状態で描き直す
