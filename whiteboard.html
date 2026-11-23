@@ -259,7 +259,8 @@ const present = day => S.people.filter(p => (S.cap[p.name] || {})[day] > 0).map(
 const placedCount = (day, n) => (S.boards[day] || []).reduce((c, b) => c + (b.lead.includes(n) ? 1 : 0) + (b.mem.includes(n) ? 1 : 0), 0);
 // 1人の出勤の時間（その日の出勤の合計 ÷ 人数。分からなければ 8）
 function perPerson(day) { const ps = present(day); if (!ps.length) return 8; return ps.reduce((n, x) => n + (S.cap[x][day] || 0), 0) / ps.length || 8; }
-const needOf = (day, w) => w && w.h > 0 ? Math.ceil(w.h / perPerson(day) * 2) / 2 : 0;
+// 接木は、計画に書いてある「接木人数」（w.ppl）を足す。2026-11-23
+const needOf = (day, w) => !w ? 0 : w.h > 0 ? Math.ceil((w.h / perPerson(day) + (w.ppl || 0)) * 2 - 1e-9) / 2 : w.ppl > 0 ? Math.round(w.ppl * 10) / 10 : 0;
 
 // その日の枠：置いた枠 ＋ まだ枠がない工程の作業（点線の「計画から」の枠）
 function blocksOf(day) {
@@ -299,7 +300,7 @@ function workHtml(day, b) {
   if (!w) return '';
   const need = needOf(day, w), key = day + '|' + b.id, open = openPl.has(key);
   return `<div class="wk" data-pl="${esc(key)}" title="押すと計画の一覧">${b.auto ? '<span class="auto">計画から　</span>' : ''}<b>${w.q ? num(w.q) + (w.u || 'TR') : w.n + '件'}</b>・${w.n}件${w.dn ? '（済' + w.dn + '）' : ''}${w.h ? '・残り ' + num(w.h) + 'h' : ''}${need ? '・必要 ' + need + '人' : ''} ${open ? '▾' : '▸'}</div>`
-    + (open ? `<div class="pls">${w.plans.map(p => `<div class="${p.done ? 'done' : ''}">${esc(p.n)}　<span class="muted">${esc(p.c)}${p.hs ? '・' + esc(p.hs) : ''}${p.q !== '' ? '・' + esc(num(p.q)) + 'TR' : ''}</span></div>`).join('')}</div>` : '');
+    + (open ? `<div class="pls">${w.plans.map(p => `<div class="${p.done ? 'done' : ''}">${esc(p.n)}　<span class="muted">${esc(p.c)}${p.hs ? '・' + esc(p.hs) : ''}${p.q !== '' ? '・' + esc(num(p.q)) + esc(w.u || 'TR') : ''}</span></div>`).join('')}</div>` : '');
 }
 function draw() {
   const ed = canEdit();

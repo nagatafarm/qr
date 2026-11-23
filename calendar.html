@@ -174,6 +174,8 @@
   .addnote { border: 1px dashed #c9b25a; background: none; color: #8a7420; border-radius: 5px; font-size: 11px; padding: 0 6px; cursor: pointer; margin-top: 2px; font-family: inherit; }
   .day .addnote { align-self: flex-start; }
   /* マウスのある画面では、「＋メモ」はその日に乗ったときだけ出す（並ぶとうるさい） */
+  /* スマホ（マウスを乗せられない）の月：「＋メモ」の枠はやめて、日のマスの右上に小さな「＋」だけ（2026-11-23 意見） */
+  @media (hover: none) { .day { position: relative; } .day .addnote { position: absolute; top: 1px; right: 1px; margin: 0; border: none; padding: 3px 5px; font-size: 0; line-height: 1; } .day .addnote::before { content: '＋'; font-size: 13px; color: #b39a3a; } }
   @media (hover: hover) { .addnote { opacity: 0; } .col:hover .addnote, .day:hover .addnote, .addnote:focus { opacity: 1; } }
   /* 計画ごとのまとめ（取引先＝メーカー・品目・ハウス）。押すと中の計画を出す */
   .grp .sum { display: flex; gap: 6px; align-items: center; padding: 4px 8px; border-top: 1px solid #eee; font-size: 12px; cursor: pointer; background: #fafcfa; white-space: nowrap; }
@@ -531,7 +533,8 @@ function stepGroups(list) {
     return { s, es, q, dn };
   });
 }
-function qtyText(g) { return g.q > 0 ? num(g.q) + 'TR' : g.es.length + '件'; }
+const unitOf = es => (es.find(e => e.u) || {}).u || 'TR';   // 量の単位（接木は「本」）
+function qtyText(g) { return g.q > 0 ? num(g.q) + unitOf(g.es) : g.es.length + '件'; }
 function loadHtml(k) {
   if (k < TODAY || !byDay.has(k) && !capOf.has(k)) return '';
   const h = (byDay.get(k) || []).filter(e => !e.done && e.h != null).reduce((n, e) => n + e.h, 0), cap = capOf.get(k) || 0;
@@ -587,10 +590,12 @@ function pplHtml(k, g) {
   const h = g.es.filter(e => !e.done && e.h != null).reduce((n, e) => n + e.h, 0);
   const man = manPeople[k + '|' + g.s];
   const per = capN.get(k) ? (capOf.get(k) || 0) / capN.get(k) : 8;
-  const need = h > 0 ? Math.ceil(h / (per || 8) * 2) / 2 : 0;
+  // 接木は、計画に書いてある「接木人数」を足す（時間の代わり）。2026-11-23
+  const pn = g.es.filter(e => !e.done && e.n > 0).reduce((n, e) => n + e.n, 0);
+  const need = h > 0 ? Math.ceil((h / (per || 8) + pn) * 2 - 1e-9) / 2 : pn > 0 ? Math.round(pn * 10) / 10 : 0;   // 接木だけなら、計画の人数そのまま（0.6人 など）
   const ed = canEdit() && k >= TODAY;
   if (man == null && !need) return ed ? `<span class="ppl edit" data-ppl="${k}|${esc(g.s)}" title="この日に入れる人数を決める">人数</span>` : '';
-  const tip = man != null ? '手で決めた人数（作業からの目安は ' + need + ' 人）' : '残りの作業 ' + num(h) + 'h ÷ 1人の出勤 ' + num(per) + 'h';
+  const tip = man != null ? '手で決めた人数（作業からの目安は ' + need + ' 人）' : (pn > 0 ? '計画の接木人数の合計 ' + num(pn) + ' 人' + (h > 0 ? '＋' : '') : '') + (h > 0 ? '残りの作業 ' + num(h) + 'h ÷ 1人の出勤 ' + num(per) + 'h' : '');
   return `<span class="ppl${man != null ? ' man' : ''}${ed ? ' edit' : ''}" data-ppl="${k}|${esc(g.s)}" title="${esc(tip)}${ed ? '（押すと人数を決める）' : ''}">${man != null ? num(man) + '人' : need + '人'}</span>`;
 }
 // その日のメモ（計画にない作業）。計画担当は「＋メモ」で足し、押すと消せる
@@ -618,7 +623,7 @@ function rowsHtml(k, g) {
   es.forEach(e => { const key = groupKey(e); if (!m.has(key)) m.set(key, []); m.get(key).push(e); });
   return [...m.entries()].map(([key, list]) => {
     const q = list.reduce((n, e) => n + (Number(e.q) || 0), 0), dn = list.filter(e => e.done).length, id = k + '|' + g.s + '|' + key, open = sumOpen.has(id);
-    return `<div class="sum${open ? ' open' : ''}" data-sum="${esc(id)}" title="押すと、中の計画を出す"><span class="tw2">▾</span><b>${esc(key)}</b><span class="cnt">${list.length}件${dn ? '（済' + dn + '）' : ''}</span><span>${q ? num(q) + 'TR' : ''}</span></div>`
+    return `<div class="sum${open ? ' open' : ''}" data-sum="${esc(id)}" title="押すと、中の計画を出す"><span class="tw2">▾</span><b>${esc(key)}</b><span class="cnt">${list.length}件${dn ? '（済' + dn + '）' : ''}</span><span>${q ? num(q) + unitOf(list) : ''}</span></div>`
       + (open ? list.map(e => rowHtml(e, true)).join('') : '');
   }).join('');
 }
