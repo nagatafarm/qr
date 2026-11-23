@@ -157,14 +157,19 @@
   .grp.tail { visibility: hidden; }
   .grp .gh .spd { font-size: 11px; opacity: .9; margin-left: 2px; }
   /* のばした作業の帯：右の端ぜんぶが「つまみ」。横に引っぱってのばす・縮める（2026-11-24 意見：もっと横にのばせそうな見た目に） */
-  .grp.spg { position: relative; }
+  .grp.ed { position: relative; }
   .grp.spg.ed .gh, .grp.spg.ed a.row { padding-right: 18px; }
-  .grp.spg .gx { position: absolute; right: 0; top: 0; bottom: 0; width: 12px; cursor: ew-resize; touch-action: none; z-index: 2;
+  .grp .gx.l { left: 0; right: auto; border-left: none; border-right: 1px solid color-mix(in srgb, var(--c) 40%, #fff); }
+  .grp .gx.l::after { content: '‹'; }
+  .grp:not(.spg) .gx, .grp.spg .gx.l { width: 9px; }
+  @media (hover: hover) { .grp:not(.spg) .gx, .grp.spg .gx.l { opacity: 0; transition: opacity .1s; } .grp:hover .gx, .grp .gx.on { opacity: 1; } }
+  .grp .gx { position: absolute; right: 0; top: 0; bottom: 0; width: 12px; cursor: ew-resize; touch-action: none; z-index: 2;
     background: color-mix(in srgb, var(--c) 22%, #fff); border-left: 1px solid color-mix(in srgb, var(--c) 40%, #fff); display: flex; align-items: center; justify-content: center; }
-  .grp.spg .gx::before { content: ''; width: 4px; height: 16px; border-left: 2px dotted var(--c); border-right: 2px dotted var(--c); }
-  .grp.spg .gx::after { content: '›'; position: absolute; top: 1px; left: 0; right: 0; text-align: center; color: #fff; font-weight: bold; font-size: 13px; line-height: 18px; }
-  .grp.spg .gx:hover, .grp.spg .gx.on { background: var(--c); }
-  .grp.spg .gx:hover::before, .grp.spg .gx.on::before { border-color: #fff; }
+  .grp .gx::before { content: ''; width: 4px; height: 16px; border-left: 2px dotted var(--c); border-right: 2px dotted var(--c); }
+  .grp .gx::after { content: '›'; position: absolute; top: 1px; left: 0; right: 0; text-align: center; color: #fff; font-weight: bold; font-size: 13px; line-height: 18px; }
+  .grp .gx:hover, .grp .gx.on { background: var(--c); }
+  .grp .gx:hover::before, .grp .gx.on::before { border-color: #fff; }
+  .grp:not(.spg) .gx::before, .grp .gx.l::before { height: 12px; width: 2px; border-right: none; }
   /* 引っぱっている間の、のびる先の見本（点線の帯） */
   #ghost { position: fixed; z-index: 30; pointer-events: none; border: 2px dashed var(--c, #1a73e8); border-radius: 8px; background: color-mix(in srgb, var(--c, #1a73e8) 14%, transparent); display: flex; align-items: flex-start; justify-content: flex-end; }
   #ghost b { background: var(--c, #1a73e8); color: #fff; font-size: 12px; padding: 2px 8px; border-radius: 0 6px 0 6px; white-space: nowrap; }
@@ -224,7 +229,7 @@
   .grp a.row .spn { color: var(--c); font-weight: bold; font-size: 11px; margin-right: 3px; }
   .col.drop, .day.drop { background: #e8f1ff !important; }
   .day .grp.spg.ed .gh, .day .grp.spg.ed a.row { padding-right: 14px; }
-  .day .grp.spg .gx { width: 10px; }
+  .day .grp.spg .gx.r { width: 10px; }
 
   /* 内訳（チップを押したとき） */
   #pop { position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,.25); display: flex; align-items: center; justify-content: center; padding: 16px; }
@@ -388,8 +393,8 @@ async function fetchRange(from, to) {
   await new Promise(r => setTimeout(r, 400));
   const ev = [];
   all.events.forEach(e => {
-    const n = mockEdits.spans[e.id + '|' + e.s] || 1;
-    for (let i = 0; i < n; i++) ev.push(Object.assign({}, e, { d: addDays(e.d, i), q: e.q === '' ? '' : Math.round(e.q / n * 10) / 10, h: e.h == null ? null : e.h / n, part: i + 1, of: n, d0: e.d }));
+    const sp = mockEdits.spans[e.id + '|' + e.s], n = sp ? (sp.n || sp) : 1, st = (sp && sp.st) || e.d;
+    for (let i = 0; i < n; i++) ev.push(Object.assign({}, e, { o: e.d, d: addDays(st, i), q: e.q === '' ? '' : Math.round(e.q / n * 10) / 10, h: e.h == null ? null : e.h / n, part: i + 1, of: n, d0: st }));
   });
   return Object.assign({}, all, { from, to, events: ev.filter(e => e.d >= from && e.d <= to), days: all.days.filter(d => d.d >= from && d.d <= to),
     notes: mockEdits.notes.filter(x => x.d >= from && x.d <= to), people: Object.assign({}, mockEdits.people) });
@@ -401,6 +406,7 @@ async function calEditApi(o) {
     if (o.op === 'delnote') mockEdits.notes = mockEdits.notes.filter(n => n.id !== o.id);
     if (o.op === 'people') { if (o.n === '') delete mockEdits.people[o.d + '|' + o.s]; else mockEdits.people[o.d + '|' + o.s] = Number(o.n); }
     if (o.op === 'span') { if (o.days > 1) mockEdits.spans[o.id + '|' + o.s] = o.days; else delete mockEdits.spans[o.id + '|' + o.s]; }
+    if (o.op === 'spans') o.items.forEach(x => { const key = x.id + '|' + x.s; if (x.days > 1 || x.start) mockEdits.spans[key] = { n: x.days, st: x.start }; else delete mockEdits.spans[key]; });
   } else {
     await postApi(Object.assign({ action: 'calEdit', from: TODAY, to: TODAY }, o));
   }
@@ -618,11 +624,18 @@ function grpHtml(k, g) {
     const gx = canEdit();   // 月でも帯はのばせる
     return `<div class="grp spg${gx ? ' ed' : ''}${isShut(fk) ? ' shut' : ''}${e.done ? ' alldone' : ''}" style="--c:${colorOf(g.s)}" data-gs="${esc(g.s)}" data-sp="${esc(sp)}" data-k="${k}">
         <div class="gh" data-d="${k}" data-s="${esc(g.s)}" data-fk="${esc(fk)}" title="押すと、たたむ・ひらく"><span class="tg">▾</span><b>${esc(g.s)}</b>${tot ? esc(num(tot) + (e.u || 'TR')) : ''}<span class="spd">${esc(md(e.d0 || k))}〜${esc(md(d1))}（${e.of}日）</span>${pplHtml(k, g)}</div>
-        ${rowHtml(Object.assign({}, e, { q: tot || e.q }), false, true)}${gx ? `<span class="ext gx" data-ext="${esc(e.id)}" data-s="${esc(e.s)}" data-d0="${e.d0 || k}" data-of="${e.of}" title="右へ引っぱると、もっと先の日までのばせます（左へ戻すと縮む）"></span>` : ''}</div>`;
+        ${rowHtml(Object.assign({}, e, { q: tot || e.q }), false, true)}${gx ? gripHtml([e], g.s, e.d0 || k, e.of) : ''}</div>`;
   }
-  return `<div class="grp${isShut(k + '|' + g.s) ? ' shut' : ''}${g.dn === g.es.length ? ' alldone' : ''}" style="--c:${colorOf(g.s)}">
+  const xs = canEdit() ? g.es.filter(e => e.of >= 1) : [];   // のばせるのは工程の分だけ（出荷・接木は計画の列の日のまま）
+  return `<div class="grp${xs.length ? ' ed' : ''}${isShut(k + '|' + g.s) ? ' shut' : ''}${g.dn === g.es.length ? ' alldone' : ''}" style="--c:${colorOf(g.s)}">
         <div class="gh" data-d="${k}" data-s="${esc(g.s)}" title="押すと、たたむ・ひらく"><span class="tg">▾</span><b>${esc(g.s)}</b>${esc(qtyText(g))}${pplHtml(k, g)}<small title="内訳を見る">${g.es.length}件 ›</small></div>
-        ${rowsHtml(k, g)}</div>`;
+        ${rowsHtml(k, g)}${xs.length ? gripHtml(xs, g.s, k, 1) : ''}</div>`;
+}
+// 枠の左右のつまみ：右へ引っぱると先の日まで、左へ引っぱると前の日からにのばす（戻すと縮む）。2026-11-24
+function gripHtml(es, s, d0, of) {
+  const it = esc(JSON.stringify(es.map(e => ({ id: e.id, o: e.o || e.d0 || d0 }))));
+  const at = `data-items="${it}" data-s="${esc(s)}" data-d0="${d0}" data-of="${of}"`;
+  return `<span class="ext gx l" data-side="l" ${at} title="左へ引っぱると、前の日からにのばせます（右へ戻すと縮む）"></span><span class="ext gx r" data-side="r" ${at} title="右へ引っぱると、先の日までのばせます（左へ戻すと縮む）"></span>`;
 }
 const byPlan = (a, b) => (a.done - b.done) || (custOf(plans[a.id] || {}) > custOf(plans[b.id] || {}) ? 1 : -1);
 // 必要人数：残りの作業の時間 ÷ 1人の出勤の時間（その日の出勤の合計 ÷ 人数。分からなければ 8 時間）を、0.5 人きざみで切り上げ。
@@ -672,7 +685,7 @@ function rowHtml(e, nested, band) {
   const p = plans[e.id] || { n: e.id };
   const ex = canEdit() && view !== 'month' && !band;
   return `<a class="row${e.done ? ' done' : ''}${nested ? ' sub2' : ''}${ex ? ' ex' : ''}" draggable="false" href="index.html?id=${encodeURIComponent(e.id)}&view=1"><div class="nm">${e.of > 1 && !band ? `<span class="spn">${e.part}/${e.of}日</span>` : ''}${esc(p.n)}</div>
-    <div class="sub"><span>${esc(p.c || '')}</span><span>${esc(p.k || '')}・${esc(p.f || '')}</span><b>${e.q !== '' ? esc(num(e.q)) + esc(e.u) : ''}</b></div>${ex ? `<span class="ext" data-ext="${esc(e.id)}" data-s="${esc(e.s)}" data-d0="${e.d0 || e.d}" data-of="${e.of || 1}" title="右の日へ引っぱると、何日かにのばせます（左へ戻すと縮む）">⇔</span>` : ''}</a>`;
+    <div class="sub"><span>${esc(p.c || '')}</span><span>${esc(p.k || '')}・${esc(p.f || '')}</span><b>${e.q !== '' ? esc(num(e.q)) + esc(e.u) : ''}</b></div>${ex ? `<span class="ext" data-ext="${esc(e.id)}" data-s="${esc(e.s)}" data-d0="${e.d0 || e.d}" data-of="${e.of || 1}" data-o="${e.o || e.d0 || e.d}" title="右の日へ引っぱると、何日かにのばせます（左へ戻すと縮む）">⇔</span>` : ''}</a>`;
 }
 // 2週：a2（週の始まり）から2週ぶんを、2段に並べる
 let a2 = '';
@@ -924,37 +937,48 @@ sc().addEventListener('pointerdown', ev => {
   const h = ev.target.closest('.ext');
   if (!h) return;
   ev.preventDefault(); ev.stopPropagation();
-  drag = { id: h.dataset.ext, s: h.dataset.s, d0: h.dataset.d0, of: Number(h.dataset.of) || 1, to: '' };
+  const d0 = h.dataset.d0, of = Number(h.dataset.of) || 1, end = addDays(d0, of - 1), side = h.dataset.side || 'r';
+  // 行の ⇔（1つの計画）は data-ext、枠のつまみは data-items（中の計画を全部）
+  const items = h.dataset.items ? JSON.parse(h.dataset.items) : [{ id: h.dataset.ext, o: h.dataset.o || d0 }];
+  drag = { items, s: h.dataset.s, d0, of, end, side, a: '', b: '' };
   try { h.setPointerCapture(ev.pointerId); } catch (e) {}
   h.classList.add('on');
-  const src = h.closest('.grp.spg') || h.closest('a.row'), strip = h.closest('.strip, .wk'), grp = h.closest('.grp');
+  const src = h.closest('.grp') || h.closest('a.row'), strip = h.closest('.strip, .wk'), grp = h.closest('.grp');
   let gh = document.getElementById('ghost');
   if (!gh) { gh = document.createElement('div'); gh.id = 'ghost'; gh.innerHTML = '<b></b>'; document.body.appendChild(gh); }
   if (grp) gh.style.setProperty('--c', grp.style.getPropertyValue('--c'));
-  const ghost = c => {
-    // 同じ段（週・2週の段）の列だけ見本を出す。段をまたぐときは、列の色だけ
-    if (!drag || !drag.to || !c || c.parentElement !== strip) { gh.hidden = true; return; }
-    const a = src.getBoundingClientRect(), r = c.getBoundingClientRect();
+  const cellOf = k => document.querySelector('.col[data-d="' + k + '"], .day[data-d="' + k + '"]');
+  const ghost = () => {
+    // 同じ段（週・2週の段・月の週）の中だけ、点線の見本を出す。段をまたぐときは、日の色だけ
+    const c = cellOf(side === 'r' ? drag.b : drag.a);
+    if (!drag.a || !c || c.parentElement !== strip) { gh.hidden = true; return; }
+    const r0 = src.getBoundingClientRect(), r = c.getBoundingClientRect();
+    const left = side === 'r' ? r0.left : r.left + 3, right = side === 'r' ? r.right - 3 : r0.right;
     gh.hidden = false;
-    gh.style.left = a.left + 'px'; gh.style.top = a.top + 'px'; gh.style.height = a.height + 'px'; gh.style.width = Math.max(30, r.right - a.left - 4) + 'px';
-    gh.firstChild.textContent = md(drag.d0) + '〜' + md(drag.to) + '（' + (diff(drag.d0, drag.to) + 1) + '日）';
+    gh.style.left = left + 'px'; gh.style.top = r0.top + 'px'; gh.style.height = r0.height + 'px'; gh.style.width = Math.max(30, right - left) + 'px';
+    const n = diff(drag.a, drag.b) + 1;
+    gh.firstChild.hidden = n < 2;   // 1日なら日付は出さない（ほかの1日の枠と同じ）
+    gh.firstChild.textContent = md(drag.a) + '〜' + md(drag.b) + '（' + n + '日）';
   };
-  const mark = () => document.querySelectorAll('.col, .day').forEach(c => c.classList.toggle('drop', !!(drag && drag.to && c.dataset.d >= drag.d0 && c.dataset.d <= drag.to)));
+  const mark = () => document.querySelectorAll('.col, .day').forEach(c => c.classList.toggle('drop', !!(drag && drag.a && c.dataset.d >= drag.a && c.dataset.d <= drag.b)));
   h.onpointermove = e2 => {
     const el = document.elementFromPoint(e2.clientX, e2.clientY), c = el && el.closest('.col, .day');
     if (!c || !drag) return;
-    const to = c.dataset.d < drag.d0 ? drag.d0 : c.dataset.d;
-    if (to !== drag.to) { drag.to = to; mark(); ghost(c.dataset.d === to ? c : document.querySelector('.col[data-d="' + to + '"], .day[data-d="' + to + '"]')); }
+    const t = c.dataset.d;
+    const na = side === 'r' ? drag.d0 : (t > drag.end ? drag.end : t), nb = side === 'r' ? (t < drag.d0 ? drag.d0 : t) : drag.end;
+    if (na !== drag.a || nb !== drag.b) { drag.a = na; drag.b = nb; mark(); ghost(); }
   };
   h.onpointerup = h.onpointercancel = () => {
     h.onpointermove = h.onpointerup = h.onpointercancel = null;
     h.classList.remove('on'); gh.hidden = true;
     const d = drag; drag = null; mark();
-    if (!d || !d.to) return;
-    const days = diff(d.d0, d.to) + 1;
-    if (days === d.of) return;
+    if (!d || !d.a) return;
+    const days = diff(d.a, d.b) + 1;
+    if (d.a === d.d0 && days === d.of) return;
     if (days > 14) { toast('のばせるのは14日までです', true); return; }
-    sendEdit({ op: 'span', id: d.id, s: d.s, days }, days > 1 ? md(d.d0) + 'から ' + days + '日にのばしました（量は日数で分けます）' : '1日にもどしました');
+    const list = d.items.map(it => ({ id: it.id, s: d.s, days, start: d.a === it.o ? '' : d.a }));
+    const what = d.items.length > 1 ? d.items.length + '件を' : '';
+    sendEdit({ op: 'spans', items: list }, days > 1 ? what + md(d.a) + '〜' + md(d.b) + 'の ' + days + '日にのばしました（量は日数で分けます）' : what + md(d.a) + 'の1日にしました');
   };
 });
 document.getElementById('fold').onclick = () => { foldAll = !foldAll; foldExc.clear(); save('calFold', foldAll ? '1' : ''); draw(true); };
