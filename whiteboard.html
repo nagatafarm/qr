@@ -43,45 +43,50 @@
   .bar .vsw a.on { background: var(--green-l); color: var(--green-d); font-weight: bold; }
   .legend { font-size: 12px; color: var(--gray); display: flex; gap: 6px; align-items: center; }
   /* キャンバス（Miro のような点の方眼） */
-  #board { flex: 1; min-height: 0; overflow: auto; display: flex; align-items: stretch; background-color: #f5f6f8; background-image: radial-gradient(#c9ccd4 1px, transparent 1px); background-size: 18px 18px; padding: 16px; gap: 16px; }
+  #board { flex: 1; min-height: 0; overflow: auto; display: flex; align-items: stretch; background-color: #f5f6f8; background-image: radial-gradient(#c9ccd4 1px, transparent 1px); background-size: 18px 18px; padding: 22px; gap: 22px; }
   body.arrow #board { cursor: crosshair; }
   /* 1日 ＝ ホワイトボードの1列 */
-  .day { flex: none; width: 310px; background: rgba(255,255,255,.72); border: 1px solid #e3e5ea; border-radius: 14px; display: flex; flex-direction: column; box-shadow: 0 2px 10px rgba(30,40,60,.06); backdrop-filter: blur(2px); }
+  .day { flex: none; width: 262px; background: rgba(255,255,255,.72); border: 1px solid #e3e5ea; border-radius: 14px; display: flex; flex-direction: column; box-shadow: 0 2px 10px rgba(30,40,60,.06); backdrop-filter: blur(2px); }
   .day.today { border-color: #4262ff; box-shadow: 0 0 0 2px rgba(66,98,255,.18), 0 2px 10px rgba(30,40,60,.06); }
   .day.past { opacity: .75; }
   .day .dh { display: flex; align-items: baseline; gap: 8px; padding: 10px 12px 8px; border-bottom: 1px solid #eceef2; }
-  .day .dh .d { font-size: 24px; font-weight: bold; line-height: 1; color: #1f2430; }
+  .day .dh .d { font-size: 20px; font-weight: bold; line-height: 1; color: #1f2430; }
   .day .dh .w { background: #eef0f5; color: #555c6b; border-radius: 6px; padding: 1px 7px; font-weight: bold; font-size: 12px; }
   .day .dh .w.sun { background: #fdecec; color: #c44; } .day .dh .w.sat { background: #e8f0fb; color: #2f6fb7; }
   .day .dh .n { margin-left: auto; font-size: 11px; color: var(--gray); text-align: right; }
-  .day .body { flex: 1; overflow-y: auto; padding: 8px 22px 8px 8px; display: flex; flex-direction: column; gap: 10px; position: relative; }
+  .day .body { flex: 1; overflow-y: auto; padding: 12px 26px 12px 12px; display: flex; flex-direction: column; gap: 14px; position: relative; }
   .day .body svg.arw { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; z-index: 2; }
   .day .body svg.arw path.ln { fill: none; stroke: var(--arrow); stroke-width: 2; stroke-linejoin: round; pointer-events: stroke; cursor: pointer; }
   .day .body svg.arw path.ln:hover { stroke: var(--red); stroke-width: 3; }
   .day .body svg.arw circle { fill: #fff; stroke: var(--arrow); stroke-width: 2; }
+  /* 業務から業務への矢印（枠ごと次へ）：灰色の太い線 */
+  .day .body svg.arw path.ln.bk { stroke: #5b6170; stroke-width: 2.6; }
+  .day .body svg.arw circle.bk { stroke: #5b6170; }
   /* 枠 ＝ 「1H 出荷」の見出しと、その下の札 */
   /* 枠：白いカード（Miro の付せん・カードの見え方） */
-  .blk { border-radius: 10px; padding: 8px 8px 8px; position: relative; z-index: 1; background: #fff; border: 1px solid #e3e5ea; box-shadow: 0 1px 4px rgba(30,40,60,.08); }
+  .blk { border-radius: 9px; padding: 6px 7px 7px; position: relative; z-index: 1; background: #fff; border: 1px solid #e3e5ea; box-shadow: 0 1px 4px rgba(30,40,60,.08); }
   .blk.auto { border: 1.5px dashed #c7cbd4; background: rgba(255,255,255,.55); box-shadow: none; }
   .blk.drop, .tray.drop { background: #e8f1ff; outline: 2px dashed #6c9bd8; }
-  .blk .bh { display: flex; align-items: baseline; gap: 6px; font-size: 15px; font-weight: bold; color: #1f2430; }
+  .blk .bh { display: flex; align-items: baseline; gap: 5px; font-size: 13px; font-weight: bold; color: #1f2430; }
+  .blk .bh .grip { color: #b5bac5; font-size: 11px; cursor: grab; letter-spacing: -2px; }
+  .blk.dragging { opacity: .4; }
   .blk .bh.ed { cursor: pointer; }
   .blk .bh .pl { color: var(--green-d); }
   .blk .bh .nt { font-size: 11px; color: var(--gray); font-weight: normal; }
   .blk .bh .x { margin-left: auto; font-size: 11px; color: #999; font-weight: normal; white-space: nowrap; }
   .blk .bh .x.short { color: var(--red); font-weight: bold; }
-  .blk .wk { font-size: 11px; color: #555c6b; background: #f3f5f9; border-radius: 6px; padding: 3px 7px; margin: 4px 0; cursor: pointer; }
+  .blk .wk { font-size: 10px; color: #555c6b; background: #f3f5f9; border-radius: 6px; padding: 2px 6px; margin: 3px 0; cursor: pointer; }
   .blk .wk b { color: #222; }
   .blk .wk .auto { color: var(--orange); font-weight: bold; }
   .blk .pls { font-size: 11px; margin: 2px 0 4px; border-left: 3px solid #cfe0d2; padding-left: 6px; }
   .blk .pls div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .blk .pls .done { color: #999; text-decoration: line-through; }
-  .blk .lead { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; min-height: 28px; font-size: 11px; color: var(--gray); margin: 2px 0; }
+  .blk .lead { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; min-height: 22px; font-size: 10px; color: var(--gray); margin: 2px 0; }
   .blk .lead > span.lb { margin-right: 2px; }
-  .blk .mem { display: flex; flex-wrap: wrap; gap: 3px; min-height: 30px; }
-  .blk .mem:empty::before { content: '名前の札をここへ'; color: #bbb; font-size: 11px; align-self: center; }
+  .blk .mem { display: flex; flex-wrap: wrap; gap: 3px; min-height: 24px; }
+  .blk .mem:empty::before { content: '名前の札をここへ'; color: #bbb; font-size: 10px; align-self: center; }
   /* 名前の札（マグネット）。社員は緑の枠、実習生は青い字 */
-  .mg { display: inline-flex; align-items: center; height: 28px; padding: 0 9px; background: #fff; border: 1.5px solid #d9dce3; border-radius: 7px; font-size: 14px; font-weight: bold; color: #b0322b; user-select: none; letter-spacing: .06em; box-shadow: 0 1px 2px rgba(30,40,60,.10); white-space: nowrap; }
+  .mg { display: inline-flex; align-items: center; height: 22px; padding: 0 6px; background: #fff; border: 1.5px solid #d9dce3; border-radius: 6px; font-size: 12px; font-weight: bold; color: #b0322b; user-select: none; letter-spacing: .06em; box-shadow: 0 1px 2px rgba(30,40,60,.10); white-space: nowrap; }
   body.can .mg { cursor: grab; }
   .mg.staff { border-color: #7cc456; color: #1f3d8a; background: #f3f9ee; }
   .mg.trainee { color: #1a5fb4; border-color: #8fb4e6; }
@@ -90,13 +95,31 @@
   .add { border: 1px dashed #aaa; background: none; color: #777; border-radius: 6px; padding: 4px; cursor: pointer; font-size: 12px; }
   /* まだ置いていない人（その日に出勤する人） */
   .tray { border-top: 1px dashed #d4d7de; padding: 8px 10px 10px; background: rgba(245,246,248,.9); border-radius: 0 0 14px 14px; max-height: 34%; overflow-y: auto; flex: none; }
-  .tray .tt { font-size: 11px; color: var(--gray); margin-bottom: 4px; cursor: pointer; user-select: none; display: flex; align-items: center; gap: 4px; }
+  .tray .tt { font-size: 10px; color: var(--gray); margin-bottom: 4px; cursor: pointer; user-select: none; display: flex; align-items: center; gap: 4px; }
   .tray .tt .tw { display: inline-block; font-size: 12px; transition: transform .15s; }
   .tray.shut .tt { margin-bottom: 0; }
   .tray.shut .tt .tw { transform: rotate(-90deg); }
   .tray.shut .mem { display: none; }
   .tray .mem { display: flex; flex-wrap: wrap; gap: 3px; }
   .muted { color: var(--gray); font-size: 12px; }
+  /* 入力の画面（場所・業務・メモ） */
+  #frm { position: fixed; inset: 0; z-index: 60; background: rgba(20,24,34,.35); display: flex; align-items: center; justify-content: center; padding: 16px; }
+  #frm[hidden], #frm [hidden] { display: none !important; }
+  #frm .lt { display: flex; align-items: center; }
+  #frm .box { background: #fff; border-radius: 14px; width: min(380px, 100%); padding: 18px 18px 14px; box-shadow: 0 12px 40px rgba(0,0,0,.25); display: flex; flex-direction: column; gap: 10px; }
+  #frm h3 { margin: 0 0 2px; font-size: 16px; }
+  #frm label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #444; font-weight: bold; }
+  #frm .req { color: #fff; background: var(--red); border-radius: 4px; font-size: 10px; padding: 0 5px; margin-left: 6px; font-weight: normal; display: inline-block; }
+  #frm label { position: relative; }
+  #frm .opt { color: var(--gray); font-weight: normal; font-size: 10px; margin-left: 6px; }
+  #frm input, #frm select { font-size: 15px; padding: 8px 10px; border: 1px solid #ccd0d8; border-radius: 8px; font-weight: normal; }
+  #frm input:focus, #frm select:focus { outline: 2px solid #4262ff; border-color: #4262ff; }
+  #frm .err { color: var(--red); font-size: 12px; margin: 0; min-height: 1em; }
+  #frm .btns { display: flex; gap: 8px; align-items: center; }
+  #frm .btns .sp { flex: 1; }
+  #frm .btns button { border: 1px solid #ccd0d8; background: #fff; border-radius: 8px; padding: 7px 14px; font-size: 14px; cursor: pointer; }
+  #frm .btns .ok { background: #4262ff; border-color: #4262ff; color: #fff; font-weight: bold; }
+  #frm .btns .del { color: var(--red); border-color: #f0b4b4; }
   #toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: #222; color: #fff; padding: 8px 14px; border-radius: 10px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 50; }
   #toast.show { opacity: 1; }
   @media (max-width: 700px) { .day { width: 86vw; } .legend { display: none; } }
@@ -110,11 +133,21 @@
   <span class="note" id="mode" hidden></span>
   <span class="sv" id="sv"></span>
   <span class="sp"></span>
-  <button type="button" id="arrow" hidden title="札をつかんで、終わったあとに行く枠へ落とす（スマホは札を押してから枠を押す）。矢印を押すと消せる">→ 矢印を引く</button>
+  <button type="button" id="arrow" hidden title="人の札（途中からこっち）か、枠の見出し（業務が終わったらこっち）をつかんで、行き先の枠へ落とす（スマホは札を押してから枠を押す）。矢印を押すと消せる">→ 矢印を引く</button>
   <span class="legend"><span class="mg staff">社員</span><span class="mg">パート</span><span class="mg trainee">実習生</span></span>
   <span class="vsw"><a href="index.html?go=calendar">カレンダー</a><a href="index.html?go=whiteboard" class="on">ホワイトボード</a><a href="index.html?go=schedule">人の割り振り表</a></span>
 </div>
 <div id="board"></div>
+<div id="frm" hidden><form class="box" id="frmf" autocomplete="off">
+  <h3 id="frmt">枠を足す</h3>
+  <label><span class="lt">場所<span class="req">必須</span></span><input id="fpl" list="plist" placeholder="例：1H、12H、F12、PV"></label>
+  <datalist id="plist"></datalist>
+  <label><span class="lt">業務<span class="req">必須</span></span><select id="fbz"></select></label>
+  <label id="fbx" hidden>業務の名前<input id="fbz2" placeholder="例：床そうじ"></label>
+  <label><span class="lt">メモ<span class="opt">なくてもよい</span></span><input id="fnt" placeholder="例：AM、種とり"></label>
+  <p class="err" id="ferr"></p>
+  <div class="btns"><button type="button" class="del" id="fdel" hidden>この枠を消す</button><span class="sp"></span><button type="button" id="fcancel">やめる</button><button type="submit" class="ok">決める</button></div>
+</form></div>
 <div id="toast"></div>
 <script>
 const Q = location.search;
@@ -209,7 +242,7 @@ function draw() {
         ${bl.map(b => {
           const w = (S.work[d.key] || []).find(x => x.s === b.major), need = needOf(d.key, w), cnt = b.lead.length + b.mem.length;
           return `<div class="blk${b.auto ? ' auto' : ''}" data-day="${d.key}" data-b="${esc(b.id)}">
-          <div class="bh${ed && !b.auto ? ' ed' : ''}" ${ed && !b.auto ? `data-edit="${esc(b.id)}" title="押すと場所・業務・メモを直す"` : ''}><span class="pl">${esc(b.place)}</span><span>${esc(b.biz)}</span><span class="nt">${esc(b.note)}</span><span class="x${need && cnt < need ? ' short' : ''}">${cnt}人${need ? '／必要 ' + need : ''}</span></div>
+          <div class="bh${ed && !b.auto ? ' ed' : ''}" ${ed ? 'draggable="true"' : ''} data-bh="${esc(b.id)}" data-day="${d.key}" ${ed && !b.auto ? `data-edit="${esc(b.id)}" title="押すと場所・業務・メモを直す。つかんで動かすと並べ替え（「→ 矢印を引く」中は、ほかの枠へ矢印）"` : ''}>${ed ? '<span class="grip">⋮⋮</span>' : ''}<span class="pl">${esc(b.place)}</span><span>${esc(b.biz)}</span><span class="nt">${esc(b.note)}</span><span class="x${need && cnt < need ? ' short' : ''}">${cnt}人${need ? '／必要 ' + need : ''}</span></div>
           ${workHtml(d.key, b)}
           <div class="lead" data-drop="lead" data-b="${esc(b.id)}" data-day="${d.key}"><span class="lb">担当</span>${b.lead.map(n => mg(n, d.key, b.id + ':lead')).join('') || '<span class="muted">社員の札をここへ</span>'}</div>
           <div class="mem" data-drop="mem" data-b="${esc(b.id)}" data-day="${d.key}">${b.mem.map(n => mg(n, d.key, b.id + ':mem')).join('')}</div>
@@ -249,6 +282,16 @@ function drawArrows() {
     const pos = r => ({ x: r.left - br.left + body.scrollLeft, y: r.top - br.top + body.scrollTop, w: r.width, h: r.height });
     let paths = '', k = 0;
     bl.forEach(b => Object.keys(b.next).forEach(n => {
+      if (n === '*') {   // 業務から業務へ：枠の下から出て、行き先の枠の見出しへ
+        const fb = body.querySelector(`.blk[data-b="${CSS.escape(b.id)}"]`), t = body.querySelector(`.blk[data-b="${CSS.escape(b.next[n])}"] .bh`);
+        if (!fb || !t) return;
+        const a = pos(fb.getBoundingClientRect()), z = pos(t.getBoundingClientRect());
+        const x1 = a.x + a.w - 18, y1 = a.y + a.h, x2 = z.x + z.w + 2, y2 = z.y + 8;
+        const xr = body.clientWidth - 6 - (k % 3) * 5, yo = y1 + 8 + (k++ % 3) * 4;
+        const to = (bl.find(x => x.id === b.next[n]) || {});
+        paths += `<circle class="bk" cx="${x1}" cy="${y1}" r="3.5"/><path class="ln bk" data-arw="${esc(b.id)}|*" d="${elbow([[x1, y1], [x1, yo], [xr, yo], [xr, y2], [Math.min(x2 + 12, xr - 10), y2]], 8)}" marker-end="url(#ahb)"><title>${esc([b.place, b.biz].filter(Boolean).join(' '))} が終わったら ${esc([to.place, to.biz].filter(Boolean).join(' '))} へ${canEdit() ? '（押すと消す）' : ''}</title></path>`;
+        return;
+      }
       const m = body.querySelector(`.mg[data-n="${CSS.escape(n)}"][data-from^="${CSS.escape(b.id + ':')}"]`);
       const t = body.querySelector(`.blk[data-b="${CSS.escape(b.next[n])}"] .bh`);
       if (!m || !t) return;
@@ -262,7 +305,7 @@ function drawArrows() {
     if (!paths) return;
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('class', 'arw'); svg.setAttribute('width', body.scrollWidth); svg.setAttribute('height', body.scrollHeight);
-    svg.innerHTML = `<defs><marker id="ah" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,1 L9,5 L0,9 z" fill="#4262ff"/></marker></defs>` + paths;
+    svg.innerHTML = `<defs><marker id="ah" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,1 L9,5 L0,9 z" fill="#4262ff"/></marker><marker id="ahb" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,1 L9,5 L0,9 z" fill="#5b6170"/></marker></defs>` + paths;
     body.appendChild(svg);
   });
 }
@@ -312,21 +355,42 @@ function act(src, dropEl, copy) {
   changed(day);
 }
 const board = document.getElementById('board');
-board.addEventListener('dragstart', ev => { const m = ev.target.closest('.mg'); if (!m || !canEdit()) return; ev.dataTransfer.setData('text/plain', JSON.stringify({ n: m.dataset.n, day: m.dataset.day, from: m.dataset.from })); });
+board.addEventListener('dragstart', ev => {
+  if (!canEdit()) return;
+  const m = ev.target.closest('.mg');
+  if (m) { ev.dataTransfer.setData('text/plain', JSON.stringify({ n: m.dataset.n, day: m.dataset.day, from: m.dataset.from })); return; }
+  const h = ev.target.closest('[data-bh]');
+  if (h) { ev.dataTransfer.setData('text/plain', JSON.stringify({ blk: h.dataset.bh, day: h.dataset.day })); h.closest('.blk').classList.add('dragging'); }
+});
+board.addEventListener('dragend', () => document.querySelectorAll('.dragging').forEach(x => x.classList.remove('dragging')));
+// 枠を落としたとき：並べ替え（落とした枠の前へ）か、「→ 矢印を引く」中なら業務から業務への矢印
+function actBlock(src, dropEl) {
+  const tb = dropEl.closest('.blk');
+  if (!tb) return;
+  const day = tb.dataset.day;
+  if (src.day !== day) { toast('ほかの日へは動かせません'); return; }
+  const from = realize(day, src.blk), to = realize(day, tb.dataset.b);
+  if (from === to) return;
+  if (arrowMode) { from.next['*'] = to.id; toast('「' + [from.place, from.biz].filter(Boolean).join(' ') + '」が終わったら「' + [to.place, to.biz].filter(Boolean).join(' ') + '」へ'); changed(day); return; }
+  const list = S.boards[day];
+  list.splice(list.indexOf(from), 1);
+  list.splice(list.indexOf(to), 0, from);
+  changed(day);
+}
 board.addEventListener('dragover', ev => { const t = ev.target.closest('[data-drop]') || ev.target.closest('.blk'); if (!t) return; ev.preventDefault(); document.querySelectorAll('.drop').forEach(x => x.classList.remove('drop')); (t.closest('.blk') || t).classList.add('drop'); });
 board.addEventListener('dragleave', ev => { if (!ev.relatedTarget || !board.contains(ev.relatedTarget)) document.querySelectorAll('.drop').forEach(x => x.classList.remove('drop')); });
 board.addEventListener('drop', ev => {
   document.querySelectorAll('.drop').forEach(x => x.classList.remove('drop'));
   let t = ev.target.closest('[data-drop]'); if (!t) { const b = ev.target.closest('.blk'); if (b) t = b.querySelector('[data-drop="mem"]'); }
   if (!t) return; ev.preventDefault();
-  try { act(JSON.parse(ev.dataTransfer.getData('text/plain')), t, ev.ctrlKey); } catch (e) {}
+  try { const src = JSON.parse(ev.dataTransfer.getData('text/plain')); if (src.blk) actBlock(src, t); else act(src, t, ev.ctrlKey); } catch (e) {}
 });
 board.addEventListener('click', ev => {
   const ln = ev.target.closest('[data-arw]');
   if (ln) {
     if (!canEdit()) return;
     const i = ln.dataset.arw.indexOf('|'), bid = ln.dataset.arw.slice(0, i), n = ln.dataset.arw.slice(i + 1), day = ln.closest('.body').dataset.day, b = S.boards[day].find(x => x.id === bid);
-    if (b && confirm(short(n) + ' の矢印を消しますか？')) { delete b.next[n]; changed(day); }
+    if (b && confirm((n === '*' ? '「' + [b.place, b.biz].filter(Boolean).join(' ') + '」からの' : short(n) + ' の') + '矢印を消しますか？')) { delete b.next[n]; changed(day); }
     return;
   }
   if (ev.target.closest('[data-tray]')) { trayShut = !trayShut; try { localStorage.setItem('qrdemo.wbTray', trayShut ? '1' : ''); } catch (e) {} draw(); return; }
@@ -336,28 +400,71 @@ board.addEventListener('click', ev => {
   const m = ev.target.closest('.mg');
   if (m) { sel = sel && sel.n === m.dataset.n && sel.from === m.dataset.from ? null : { n: m.dataset.n, day: m.dataset.day, from: m.dataset.from }; draw(); return; }
   const add = ev.target.closest('[data-add]');
-  if (add) {
-    const v = prompt('場所と業務（例：1H 出荷 ／ 3H 寄せ植え ／ 接ぎ木）\n業務：' + BIZ.join('・'), ''); if (!v || !v.trim()) return;
-    const p = v.trim().split(/\s+/), day = add.dataset.add;
-    const b = p.length === 1 ? { place: '', biz: p[0], note: '' } : { place: p[0], biz: p[1], note: p.slice(2).join(' ') };
-    const w = (S.work[day] || []).find(x => x.s === b.biz);
-    S.boards[day].push(Object.assign({ id: newId(), major: w ? w.s : '', lead: [], mem: [], next: {} }, b));
-    changed(day); return;
-  }
+  if (add) { openForm(add.dataset.add, null); return; }
   const ed = ev.target.closest('[data-edit]');
-  if (ed && !sel) {
+  if (ed && !sel && !ev.target.closest('.grip')) {
     const day = ed.closest('.blk').dataset.day, b = S.boards[day].find(x => x.id === ed.dataset.edit);
-    const v = prompt('場所・業務・メモ（例：16H 出荷 AM）。空にすると枠を消す（札は「まだ置いていない人」へもどる）', [b.place, b.biz, b.note].filter(Boolean).join(' '));
-    if (v === null) return;
-    if (!v.trim()) { S.boards[day] = S.boards[day].filter(x => x !== b); S.boards[day].forEach(x => Object.keys(x.next).forEach(n => { if (x.next[n] === b.id) delete x.next[n]; })); changed(day); return; }
-    const p = v.trim().split(/\s+/);
-    if (p.length === 1) Object.assign(b, { place: '', biz: p[0], note: '' }); else Object.assign(b, { place: p[0], biz: p[1], note: p.slice(2).join(' ') });
-    changed(day); return;
+    if (b) openForm(day, b);
+    return;
   }
   const t = ev.target.closest('[data-drop]') || (ev.target.closest('.blk') && ev.target.closest('.blk').querySelector('[data-drop="mem"]'));
   if (t && sel) { const s = sel; sel = null; act(s, t, false); }
 });
-document.getElementById('arrow').onclick = ev => { arrowMode = !arrowMode; ev.currentTarget.classList.toggle('on', arrowMode); document.body.classList.toggle('arrow', arrowMode); toast(arrowMode ? '札をつかんで、終わったあとに行く枠へ落とす（もう一度押すと終わる）' : '矢印を引くのを終わりました'); };
+// ---- 枠の入力の画面：場所と業務は必須。業務は一覧から（一覧にないものは「その他（名前を書く）」） ----
+let frmDay = '', frmBlk = null;
+const OTHER = '__other';
+function openForm(day, b) {
+  frmDay = day; frmBlk = b;
+  const places = new Set();
+  Object.values(S.boards).forEach(l => l.forEach(x => { if (x.place) places.add(x.place); }));
+  document.getElementById('plist').innerHTML = [...places].sort().map(p => '<option value="' + esc(p) + '">').join('');
+  const works = (S.work[day] || []).map(w => w.s);
+  const names = [...new Set(works.concat(BIZ))];
+  const cur = b ? b.biz : '';
+  const known = !cur || names.includes(cur);
+  document.getElementById('fbz').innerHTML = '<option value="">－ 選ぶ －</option>'
+    + (works.length ? '<optgroup label="この日の計画にある作業">' + works.map(n => '<option value="' + esc(n) + '">' + esc(n) + '</option>').join('') + '</optgroup>' : '')
+    + '<optgroup label="業務">' + BIZ.filter(n => !works.includes(n)).map(n => '<option value="' + esc(n) + '">' + esc(n) + '</option>').join('') + '</optgroup>'
+    + '<option value="' + OTHER + '">一覧にない（名前を書く）</option>';
+  document.getElementById('fbz').value = known ? cur : OTHER;
+  document.getElementById('fbz2').value = known ? '' : cur;
+  document.getElementById('fbx').hidden = known;
+  document.getElementById('fpl').value = b ? b.place : '';
+  document.getElementById('fnt').value = b ? b.note : '';
+  document.getElementById('frmt').textContent = b ? '枠を直す' : '枠を足す（' + day.slice(5).replace('-', '/') + '）';
+  document.getElementById('fdel').hidden = !b;
+  document.getElementById('ferr').textContent = '';
+  document.getElementById('frm').hidden = false;
+  setTimeout(() => document.getElementById('fpl').focus(), 0);
+}
+function closeForm() { document.getElementById('frm').hidden = true; frmBlk = null; }
+document.getElementById('fbz').onchange = e => { const o = e.target.value === OTHER; document.getElementById('fbx').hidden = !o; if (o) document.getElementById('fbz2').focus(); };
+document.getElementById('fcancel').onclick = closeForm;
+document.getElementById('frm').addEventListener('mousedown', e => { if (e.target.id === 'frm') closeForm(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !document.getElementById('frm').hidden) closeForm(); });
+document.getElementById('fdel').onclick = () => {
+  const b = frmBlk, day = frmDay; if (!b) return;
+  if (!confirm('この枠を消しますか？（札は「まだ置いていない人」へもどる）')) return;
+  S.boards[day] = S.boards[day].filter(x => x !== b);
+  S.boards[day].forEach(x => Object.keys(x.next).forEach(n => { if (x.next[n] === b.id) delete x.next[n]; }));
+  closeForm(); changed(day);
+};
+document.getElementById('frmf').onsubmit = e => {
+  e.preventDefault();
+  const place = document.getElementById('fpl').value.trim().normalize('NFKC');
+  const sv = document.getElementById('fbz').value;
+  const biz = (sv === OTHER ? document.getElementById('fbz2').value : sv).trim();
+  const note = document.getElementById('fnt').value.trim();
+  const err = document.getElementById('ferr');
+  if (!place && !biz) { err.textContent = '場所と業務を入れてください'; return; }
+  if (!place) { err.textContent = '場所を入れてください（例：1H）'; document.getElementById('fpl').focus(); return; }
+  if (!biz) { err.textContent = '業務を選んでください'; return; }
+  const day = frmDay, w = (S.work[day] || []).find(x => x.s === biz);
+  if (frmBlk) Object.assign(frmBlk, { place, biz, note, major: w ? w.s : (frmBlk.major === biz ? frmBlk.major : '') });
+  else S.boards[day].push({ id: newId(), place, biz, note, major: w ? w.s : '', lead: [], mem: [], next: {} });
+  closeForm(); changed(day);
+};
+document.getElementById('arrow').onclick = ev => { arrowMode = !arrowMode; ev.currentTarget.classList.toggle('on', arrowMode); document.body.classList.toggle('arrow', arrowMode); toast(arrowMode ? '人の札か枠の見出しをつかんで、行き先の枠へ落とす（もう一度押すと終わる）' : '矢印を引くのを終わりました'); };
 window.addEventListener('resize', () => { if (S) draw(); });
 async function go(k) {
   if (MOCK) { toast('試験のデータは1週間ぶんだけです'); return; }

@@ -1766,7 +1766,7 @@ function renderFront() {
 // ---------- 画面：スケジュール。?go=calendar はカレンダー（calendar.html）、?go=schedule は人の割り振り表（schedule.html）。
 // 中身は、上の帯の下にはめ込んで出す。自動の更新で描き直しても、はめ込んだ画面は作り直さない（作り直すと読み込みからやり直しになる）
 function renderSchedule() {
-  const src = page === 'calendar' ? 'calendar.html?embed=1&v=3' : page === 'whiteboard' ? 'whiteboard.html?embed=1&v=1' : 'schedule.html?embed=1&v=2';
+  const src = page === 'calendar' ? 'calendar.html?embed=1&v=4' : page === 'whiteboard' ? 'whiteboard.html?embed=1&v=2' : 'schedule.html?embed=1&v=2';
   const old = document.getElementById('schedframe');
   if (old && old.getAttribute('src') === src) {
     // はめ込んだ画面は作り直さず、右上の札だけ新しくする（窓口の状態が届くと、担当の名前が分かる）
