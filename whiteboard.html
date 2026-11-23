@@ -215,11 +215,37 @@ function demoBoards(s) {
   });
   return { days: s.days, people: s.people, cap: s.cap, boards, work: {} };
 }
-async function load(from) {
-  if (MOCK) { S = await (await fetch('wb_mock.json', { cache: 'no-store' })).json(); S.work = S.work || {}; start = S.days[0].key; }
-  else if (DEMO) { const s = await callApi('api=schedule' + (from ? '&from=' + from + '&exact=1' : '')); start = s.start; S = demoBoards(s); }
-  else { const s = await callApi('api=board&days=' + DAYS + (from ? '&from=' + from : '')); start = s.start; S = s; }
-  Object.values(S.boards).forEach(list => list.forEach(b => { b.next = b.next || {}; b.lead = b.lead || []; b.mem = b.mem || []; }));
+const chunks = [];   // 読んだ塊の始まりの日（7日ずつ）
+async function fetchChunk(from) {
+  let x;
+  if (MOCK) { x = await (await fetch('wb_mock.json', { cache: 'no-store' })).json(); x.work = x.work || {}; }
+  else if (DEMO) x = demoBoards(await callApi('api=schedule&from=' + from + '&exact=1'));
+  else x = await callApi('api=board&days=' + DAYS + '&from=' + from);
+  Object.values(x.boards).forEach(list => list.forEach(b => { b.next = b.next || {}; b.lead = b.lead || []; b.mem = b.mem || []; }));
+  return x;
+}
+// 読んだ塊を、今の S に足す（手直しして保存を待っている日は、上書きしない）
+function merge(x, keepDays) {
+  if (!S) S = { days: [], people: x.people, cap: {}, boards: {}, work: {} };
+  S.people = x.people;
+  x.people.forEach(p => { S.cap[p.name] = Object.assign(S.cap[p.name] || {}, (x.cap || {})[p.name] || {}); });
+  x.days.forEach(d => {
+    const i = S.days.findIndex(y => y.key === d.key);
+    if (i >= 0) S.days[i] = d; else S.days.push(d);
+    if (!(keepDays && keepDays.has(d.key))) S.boards[d.key] = x.boards[d.key] || [];
+    S.work[d.key] = (x.work || {})[d.key] || [];
+  });
+  S.days.sort((a, b) => a.key < b.key ? -1 : 1);
+}
+async function addChunk(from) {
+  if (chunks.includes(from)) return false;
+  chunks.push(from);
+  try { merge(await fetchChunk(from)); } catch (e) { chunks.splice(chunks.indexOf(from), 1); throw e; }
+  return true;
+}
+async function load(from) {   // はじめ：from の週と、その前・後の週
+  await addChunk(from);
+  if (!MOCK) await Promise.all([addChunk(addDays(from, -DAYS)), addChunk(addDays(from, DAYS))]).catch(() => {});
 }
 const present = day => S.people.filter(p => (S.cap[p.name] || {})[day] > 0).map(p => p.name);
 const placedCount = (day, n) => (S.boards[day] || []).reduce((c, b) => c + (b.lead.includes(n) ? 1 : 0) + (b.mem.includes(n) ? 1 : 0), 0);
@@ -287,8 +313,7 @@ function draw() {
   }).join('');
   el.scrollLeft = keepX;
   el.querySelectorAll('.day .body').forEach(b => { if (keepY[b.dataset.day]) b.scrollTop = keepY[b.dataset.day]; });
-  const a = S.days[0], z = S.days[S.days.length - 1];
-  document.getElementById('ttl').textContent = a ? a.label + ' 〜 ' + z.label : '';
+  title();
 
   const md = document.getElementById('mode');
   md.hidden = !(TRY || !ed);
@@ -578,17 +603,66 @@ document.addEventListener('keydown', e => {
 });
 document.getElementById('arrow').onclick = ev => { arrowMode = !arrowMode; ev.currentTarget.classList.toggle('on', arrowMode); document.body.classList.toggle('arrow', arrowMode); toast(arrowMode ? '人の札か枠の見出しをつかんで、行き先の枠へ落とす（もう一度押すと終わる）' : '矢印を引くのを終わりました'); };
 window.addEventListener('resize', () => { if (S) draw(); });
-async function go(k) {
-  if (MOCK) { toast('試験のデータは1週間ぶんだけです'); return; }
-  if (dirty.size) { clearTimeout(saveT); await flush(); }
-  try { await load(k); draw(); } catch (e) { toast(e.message); }
+// ---- 横に切れ目なく続ける：端に近づいたら、前・後の1週間を読んで足す ----
+const boardEl = document.getElementById('board');
+const dayEls = () => [...boardEl.querySelectorAll('.day')];
+// 今見えている日（左の端と右の端）
+function visibleDays() {
+  const L = boardEl.scrollLeft, R = L + boardEl.clientWidth;
+  const v = dayEls().filter(d => d.offsetLeft + d.offsetWidth > L + 20 && d.offsetLeft < R - 20);
+  return v.length ? [v[0].dataset.day, v[v.length - 1].dataset.day] : [];
 }
-document.getElementById('prev').onclick = () => go(addDays(start, -DAYS));
-document.getElementById('next').onclick = () => go(addDays(start, DAYS));
-document.getElementById('today').onclick = () => go(addDays(localToday(), -1));
-load(MOCK ? '' : addDays(localToday(), -1)).then(draw).catch(e => { document.getElementById('board').innerHTML = '<p style="padding:16px">' + esc(e.message) + '</p>'; });
-// 1分ごとに読み直す（ほかの人の手直しを取り込む。動かしている途中・保存待ちのときは待つ）
-setInterval(() => { if (!TRY && !document.hidden && !dirty.size && !saving && !sel) load(start).then(draw).catch(() => {}); }, 60000);
+function title() {
+  const v = visibleDays(), lab = k => (S.days.find(d => d.key === k) || {}).label || '';
+  document.getElementById('ttl').textContent = v.length ? lab(v[0]) + ' 〜 ' + lab(v[1]) : '';
+}
+let extending = false;
+async function extend() {
+  if (extending || MOCK || !S || !S.days.length) return;
+  const L = boardEl.scrollLeft, R = L + boardEl.clientWidth, W = boardEl.scrollWidth;
+  let side = 0;
+  if (L < 500) side = -1; else if (R > W - 500) side = 1;
+  if (!side) return;
+  extending = true;
+  try {
+    const from = side < 0 ? addDays(S.days[0].key, -DAYS) : addDays(S.days[S.days.length - 1].key, 1);
+    const w0 = boardEl.scrollWidth;
+    if (await addChunk(from)) { draw(); if (side < 0) boardEl.scrollLeft += boardEl.scrollWidth - w0; }   // 左に足した分だけずらして、見ている所を動かさない
+  } catch (e) { toast(e.message); }
+  extending = false;
+  title();
+}
+let scT = 0;
+boardEl.addEventListener('scroll', e => { if (e.target !== boardEl) return; title(); clearTimeout(scT); scT = setTimeout(extend, 120); });
+// その日の列へ横に動かす（‹ › は1週間ずつ。「今日」は今日の列を左の近くへ）
+function scrollToDay(k, smooth) {
+  const el = boardEl.querySelector('.day[data-day="' + k + '"]');
+  if (el) boardEl.scrollTo({ left: Math.max(0, el.offsetLeft - 22 - (k === localToday() ? (el.offsetWidth + 22) : 0)), behavior: smooth ? 'smooth' : 'auto' });
+}
+async function goDay(k) {
+  if (!S) return;
+  if (!S.days.some(d => d.key === k)) {   // まだ読んでいない日：その週を読む
+    try { await addChunk(chunkOf(k)); draw(); } catch (e) { toast(e.message); return; }
+  }
+  scrollToDay(k, true);
+}
+// 塊の始まり（はじめに読んだ日から7日ずつ）
+let base = '';
+const chunkOf = k => addDays(base, Math.floor((Date.parse(k) - Date.parse(base)) / 86400000 / DAYS) * DAYS);
+function stepWeek(n) { const v = visibleDays(); if (!v.length) return; goDay(addDays(v[0], DAYS * n)); }
+document.getElementById('prev').onclick = () => stepWeek(-1);
+document.getElementById('next').onclick = () => stepWeek(1);
+document.getElementById('today').onclick = () => goDay(localToday());
+base = MOCK ? '' : addDays(localToday(), -1);
+load(base).then(() => { if (MOCK) base = S.days[0].key; draw(); scrollToDay(MOCK ? S.days[0].key : localToday()); title(); })
+  .catch(e => { document.getElementById('board').innerHTML = '<p style="padding:16px">' + esc(e.message) + '</p>'; });
+// 1分ごとに、見えている所の塊を読み直す（ほかの人の手直しを取り込む。動かしている途中・保存待ちのときは待つ）
+setInterval(async () => {
+  if (TRY || document.hidden || dirty.size || saving || sel || link || !S) return;
+  const v = visibleDays(); if (!v.length) return;
+  const need = [...new Set([chunkOf(v[0]), chunkOf(v[1])])].filter(c => chunks.includes(c));
+  try { for (const c of need) merge(await fetchChunk(c), dirty); draw(); } catch (e) {}
+}, 60000);
 </script>
 </body>
 </html>
