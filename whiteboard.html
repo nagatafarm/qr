@@ -20,7 +20,7 @@
 <script src="config.js"></script>
 <script src="common.js"></script>
 <style>
-  :root { --green: #4f9363; --green-d: #2f6b3a; --green-l: #f0f6f1; --orange: #d4834a; --line: #dfe5e0; --gray: #6b6b6b; --red: #c33; --bg: #f6f7f5; --board: #fbfbf8; --arrow: #333; }
+  :root { --green: #4f9363; --green-d: #2f6b3a; --green-l: #f0f6f1; --orange: #d4834a; --line: #dfe5e0; --gray: #6b6b6b; --red: #c33; --bg: #f6f7f5; --board: #fff; --arrow: #4262ff; }
   * { box-sizing: border-box; }
   html, body { height: 100%; }
   body { margin: 0; background: var(--bg); color: #222; font-family: "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif; font-size: 14px; line-height: 1.4; display: flex; flex-direction: column; }
@@ -42,32 +42,35 @@
   .bar .vsw a + a { border-left: 1px solid #bbb; }
   .bar .vsw a.on { background: var(--green-l); color: var(--green-d); font-weight: bold; }
   .legend { font-size: 12px; color: var(--gray); display: flex; gap: 6px; align-items: center; }
-  #board { flex: 1; min-height: 0; overflow: auto; display: flex; align-items: stretch; background: #e9ece8; padding: 10px; gap: 10px; }
+  /* キャンバス（Miro のような点の方眼） */
+  #board { flex: 1; min-height: 0; overflow: auto; display: flex; align-items: stretch; background-color: #f5f6f8; background-image: radial-gradient(#c9ccd4 1px, transparent 1px); background-size: 18px 18px; padding: 16px; gap: 16px; }
   body.arrow #board { cursor: crosshair; }
   /* 1日 ＝ ホワイトボードの1列 */
-  .day { flex: none; width: 310px; background: var(--board); border: 2px solid #c9cfc8; border-radius: 6px; display: flex; flex-direction: column; box-shadow: inset 0 0 0 4px #fff; }
-  .day.today { border-color: var(--green); }
+  .day { flex: none; width: 310px; background: rgba(255,255,255,.72); border: 1px solid #e3e5ea; border-radius: 14px; display: flex; flex-direction: column; box-shadow: 0 2px 10px rgba(30,40,60,.06); backdrop-filter: blur(2px); }
+  .day.today { border-color: #4262ff; box-shadow: 0 0 0 2px rgba(66,98,255,.18), 0 2px 10px rgba(30,40,60,.06); }
   .day.past { opacity: .75; }
-  .day .dh { display: flex; align-items: baseline; gap: 8px; padding: 6px 10px 4px; border-bottom: 3px solid #333; }
-  .day .dh .d { font-size: 28px; font-weight: bold; line-height: 1; }
-  .day .dh .w { background: #222; color: #fff; border-radius: 4px; padding: 0 6px; font-weight: bold; }
-  .day .dh .w.sun { background: #c44; } .day .dh .w.sat { background: #2f6fb7; }
+  .day .dh { display: flex; align-items: baseline; gap: 8px; padding: 10px 12px 8px; border-bottom: 1px solid #eceef2; }
+  .day .dh .d { font-size: 24px; font-weight: bold; line-height: 1; color: #1f2430; }
+  .day .dh .w { background: #eef0f5; color: #555c6b; border-radius: 6px; padding: 1px 7px; font-weight: bold; font-size: 12px; }
+  .day .dh .w.sun { background: #fdecec; color: #c44; } .day .dh .w.sat { background: #e8f0fb; color: #2f6fb7; }
   .day .dh .n { margin-left: auto; font-size: 11px; color: var(--gray); text-align: right; }
   .day .body { flex: 1; overflow-y: auto; padding: 8px 22px 8px 8px; display: flex; flex-direction: column; gap: 10px; position: relative; }
   .day .body svg.arw { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; z-index: 2; }
-  .day .body svg.arw path.ln { fill: none; stroke: var(--arrow); stroke-width: 2.2; pointer-events: stroke; cursor: pointer; }
-  .day .body svg.arw path.ln:hover { stroke: var(--red); stroke-width: 3.5; }
+  .day .body svg.arw path.ln { fill: none; stroke: var(--arrow); stroke-width: 2; stroke-linejoin: round; pointer-events: stroke; cursor: pointer; }
+  .day .body svg.arw path.ln:hover { stroke: var(--red); stroke-width: 3; }
+  .day .body svg.arw circle { fill: #fff; stroke: var(--arrow); stroke-width: 2; }
   /* 枠 ＝ 「1H 出荷」の見出しと、その下の札 */
-  .blk { border-radius: 6px; padding: 4px 4px 6px; position: relative; z-index: 1; }
-  .blk.auto { border: 1.5px dashed #b9c2b9; background: rgba(255,255,255,.6); }
+  /* 枠：白いカード（Miro の付せん・カードの見え方） */
+  .blk { border-radius: 10px; padding: 8px 8px 8px; position: relative; z-index: 1; background: #fff; border: 1px solid #e3e5ea; box-shadow: 0 1px 4px rgba(30,40,60,.08); }
+  .blk.auto { border: 1.5px dashed #c7cbd4; background: rgba(255,255,255,.55); box-shadow: none; }
   .blk.drop, .tray.drop { background: #e8f1ff; outline: 2px dashed #6c9bd8; }
-  .blk .bh { display: flex; align-items: baseline; gap: 6px; font-size: 17px; font-weight: bold; }
+  .blk .bh { display: flex; align-items: baseline; gap: 6px; font-size: 15px; font-weight: bold; color: #1f2430; }
   .blk .bh.ed { cursor: pointer; }
   .blk .bh .pl { color: var(--green-d); }
   .blk .bh .nt { font-size: 11px; color: var(--gray); font-weight: normal; }
   .blk .bh .x { margin-left: auto; font-size: 11px; color: #999; font-weight: normal; white-space: nowrap; }
   .blk .bh .x.short { color: var(--red); font-weight: bold; }
-  .blk .wk { font-size: 11px; color: #555; background: #eef3ee; border-radius: 5px; padding: 2px 6px; margin: 2px 0; cursor: pointer; }
+  .blk .wk { font-size: 11px; color: #555c6b; background: #f3f5f9; border-radius: 6px; padding: 3px 7px; margin: 4px 0; cursor: pointer; }
   .blk .wk b { color: #222; }
   .blk .wk .auto { color: var(--orange); font-weight: bold; }
   .blk .pls { font-size: 11px; margin: 2px 0 4px; border-left: 3px solid #cfe0d2; padding-left: 6px; }
@@ -78,16 +81,20 @@
   .blk .mem { display: flex; flex-wrap: wrap; gap: 3px; min-height: 30px; }
   .blk .mem:empty::before { content: '名前の札をここへ'; color: #bbb; font-size: 11px; align-self: center; }
   /* 名前の札（マグネット）。社員は緑の枠、実習生は青い字 */
-  .mg { display: inline-flex; align-items: center; height: 28px; padding: 0 8px; background: #fff; border: 2px solid #d6d6d6; border-radius: 3px; font-size: 15px; font-weight: bold; color: #b0322b; user-select: none; letter-spacing: .08em; box-shadow: 0 1px 2px rgba(0,0,0,.15); white-space: nowrap; }
+  .mg { display: inline-flex; align-items: center; height: 28px; padding: 0 9px; background: #fff; border: 1.5px solid #d9dce3; border-radius: 7px; font-size: 14px; font-weight: bold; color: #b0322b; user-select: none; letter-spacing: .06em; box-shadow: 0 1px 2px rgba(30,40,60,.10); white-space: nowrap; }
   body.can .mg { cursor: grab; }
-  .mg.staff { border-color: #6bbf3a; color: #1f3d8a; background: #eef0ea; }
+  .mg.staff { border-color: #7cc456; color: #1f3d8a; background: #f3f9ee; }
   .mg.trainee { color: #1a5fb4; border-color: #8fb4e6; }
   .mg.sel { outline: 3px solid var(--orange); }
   .mg.dup::after { content: '2'; font-size: 9px; color: #fff; background: var(--orange); border-radius: 999px; padding: 0 4px; margin-left: 4px; letter-spacing: 0; }
   .add { border: 1px dashed #aaa; background: none; color: #777; border-radius: 6px; padding: 4px; cursor: pointer; font-size: 12px; }
   /* まだ置いていない人（その日に出勤する人） */
-  .tray { border-top: 2px dashed #bbb; padding: 6px 8px 8px; background: #f3f4f0; max-height: 34%; overflow-y: auto; flex: none; }
-  .tray .tt { font-size: 11px; color: var(--gray); margin-bottom: 4px; }
+  .tray { border-top: 1px dashed #d4d7de; padding: 8px 10px 10px; background: rgba(245,246,248,.9); border-radius: 0 0 14px 14px; max-height: 34%; overflow-y: auto; flex: none; }
+  .tray .tt { font-size: 11px; color: var(--gray); margin-bottom: 4px; cursor: pointer; user-select: none; display: flex; align-items: center; gap: 4px; }
+  .tray .tt .tw { display: inline-block; font-size: 12px; transition: transform .15s; }
+  .tray.shut .tt { margin-bottom: 0; }
+  .tray.shut .tt .tw { transform: rotate(-90deg); }
+  .tray.shut .mem { display: none; }
   .tray .mem { display: flex; flex-wrap: wrap; gap: 3px; }
   .muted { color: var(--gray); font-size: 12px; }
   #toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: #222; color: #fff; padding: 8px 14px; border-radius: 10px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 50; }
@@ -171,6 +178,8 @@ function realize(day, id) {
 }
 
 // ---- 描く ----
+// 「まだ置いていない人」をたたんでいるか（どの日も同じ。このブラウザに覚える）
+let trayShut = (() => { try { return localStorage.getItem('qrdemo.wbTray') === '1'; } catch (e) { return false; } })();
 const openPl = new Set();   // 計画の一覧を開いている枠（日|枠ID）
 let sel = null;             // 押して選んだ札 { n, day, from }
 function mg(n, day, from) {
@@ -208,7 +217,7 @@ function draw() {
         }).join('')}
         ${ed ? `<button type="button" class="add" data-add="${d.key}">＋ 枠を足す（場所・業務）</button>` : ''}
       </div>
-      <div class="tray" data-drop="tray" data-day="${d.key}"><div class="tt">まだ置いていない人（その日に出勤）</div><div class="mem">${rest.map(n => mg(n, d.key, 'tray')).join('') || '<span class="muted">全員置いた</span>'}</div></div>
+      <div class="tray${trayShut ? ' shut' : ''}" data-drop="tray" data-day="${d.key}"><div class="tt" data-tray="1" title="押すと、たたむ・ひらく"><span class="tw">▾</span>まだ置いていない人（その日に出勤）${rest.length}人</div><div class="mem">${rest.map(n => mg(n, d.key, 'tray')).join('') || '<span class="muted">全員置いた</span>'}</div></div>
     </div>`;
   }).join('');
   el.scrollLeft = keepX;
@@ -221,6 +230,18 @@ function draw() {
   md.textContent = TRY ? '見本：動かしても保存しません' : '見るだけ（直せるのは計画担当）';
   drawArrows();
 }
+// 角を丸めた折れ線（たて・よこの線を、半径 rad で丸めてつなぐ）
+function elbow(pts, rad) {
+  let d = 'M' + pts[0][0] + ',' + pts[0][1];
+  for (let i = 1; i < pts.length - 1; i++) {
+    const [px, py] = pts[i - 1], [cx, cy] = pts[i], [nx, ny] = pts[i + 1];
+    const l1 = Math.hypot(cx - px, cy - py), l2 = Math.hypot(nx - cx, ny - cy), r = Math.min(rad, l1 / 2, l2 / 2);
+    const ax = cx - (cx - px) / (l1 || 1) * r, ay = cy - (cy - py) / (l1 || 1) * r, bx = cx + (nx - cx) / (l2 || 1) * r, by = cy + (ny - cy) / (l2 || 1) * r;
+    d += ' L' + ax + ',' + ay + ' Q' + cx + ',' + cy + ' ' + bx + ',' + by;
+  }
+  const e = pts[pts.length - 1];
+  return d + ' L' + e[0] + ',' + e[1];
+}
 // 矢印：札から、行き先の枠の見出しへ。列の右の余白を回って下ろす（ホワイトボードの手書きの矢印と同じ見え方）
 function drawArrows() {
   document.querySelectorAll('.day .body').forEach(body => {
@@ -232,17 +253,16 @@ function drawArrows() {
       const t = body.querySelector(`.blk[data-b="${CSS.escape(b.next[n])}"] .bh`);
       if (!m || !t) return;
       const a = pos(m.getBoundingClientRect()), z = pos(t.getBoundingClientRect());
-      // 札の下から出て、列の右の余白を回り、行き先の枠の見出しの右へ入る
-      const x1 = a.x + a.w / 2, y1 = a.y + a.h, x2 = z.x + Math.min(z.w, 150), y2 = z.y + z.h / 2;
-      const xr = body.clientWidth - 6 - (k++ % 3) * 5;   // 何本かあるときは少しずらす
-      const down = y2 > y1, ym = (y1 + y2) / 2;
+      // 札の下から出て → 下へ少し → 右の余白へ → たてに行き先の高さまで → 左へ、枠の見出しの右に入る（Miro のカクカクした線。角は少し丸める）
+      const x1 = a.x + a.w / 2, y1 = a.y + a.h, x2 = z.x + z.w + 2, y2 = z.y + 12;
+      const xr = body.clientWidth - 8 - (k % 3) * 5, yo = y1 + 10 + (k++ % 3) * 4;   // 何本かあるときは少しずらす
       const to = (bl.find(x => x.id === b.next[n]) || {});
-      paths += `<path class="ln" data-arw="${esc(b.id)}|${esc(n)}" d="M${x1},${y1} C${x1},${y1 + 26} ${xr},${y1 + (down ? 10 : -10)} ${xr},${ym} S${x2 + 40},${y2} ${x2 + 10},${y2}" marker-end="url(#ah)"><title>${esc(n)}：終わったら ${esc([to.place, to.biz].filter(Boolean).join(' '))} へ${canEdit() ? '（押すと消す）' : ''}</title></path>`;
+      paths += `<circle cx="${x1}" cy="${y1 + 2}" r="3.5"/><path class="ln" data-arw="${esc(b.id)}|${esc(n)}" d="${elbow([[x1, y1 + 2], [x1, yo], [xr, yo], [xr, y2], [Math.min(x2 + 12, xr - 10), y2]], 8)}" marker-end="url(#ah)"><title>${esc(n)}：終わったら ${esc([to.place, to.biz].filter(Boolean).join(' '))} へ${canEdit() ? '（押すと消す）' : ''}</title></path>`;
     }));
     if (!paths) return;
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('class', 'arw'); svg.setAttribute('width', body.scrollWidth); svg.setAttribute('height', body.scrollHeight);
-    svg.innerHTML = `<defs><marker id="ah" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#333"/></marker></defs>` + paths;
+    svg.innerHTML = `<defs><marker id="ah" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,1 L9,5 L0,9 z" fill="#4262ff"/></marker></defs>` + paths;
     body.appendChild(svg);
   });
 }
@@ -309,6 +329,7 @@ board.addEventListener('click', ev => {
     if (b && confirm(short(n) + ' の矢印を消しますか？')) { delete b.next[n]; changed(day); }
     return;
   }
+  if (ev.target.closest('[data-tray]')) { trayShut = !trayShut; try { localStorage.setItem('qrdemo.wbTray', trayShut ? '1' : ''); } catch (e) {} draw(); return; }
   const pl = ev.target.closest('[data-pl]');
   if (pl) { openPl.has(pl.dataset.pl) ? openPl.delete(pl.dataset.pl) : openPl.add(pl.dataset.pl); draw(); return; }
   if (!canEdit()) return;
