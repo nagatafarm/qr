@@ -5,19 +5,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ホワイトボード｜なえログ</title>
 <script>
-// 人の割り振り表の「ホワイトボード」の形（11H のホワイトボードと同じ見え方）。2026-11-23 近藤さんFB の見本。
-// 日ごとに「場所＋業務」の枠を並べ、名前の札（マグネット）を置く。社員の札は「担当」の欄に置くと、その枠の受け持ち。
-// ?mock=1 … 手元の試験用（wb_mock.json を読む）。それ以外は、窓口の割り振り（?api=schedule）を業務ごとに束ねて出す。
-// 見本なので、動かした札は保存しない（読み込み直すと元にもどる）。
+// ホワイトボード（11H のホワイトボードと同じ形の、毎日の段取り。2026-11-23 近藤さんFB）。index.html?go=whiteboard の中にはめ込んで出す。
+//   1日 ＝ 列。「場所＋業務」の枠（1H 出荷・3H 寄せ植え など）に、担当（社員）と人の札を置く。
+//   枠のもとは計画：その日に予定がある作業を、工程ごとに「83TR・2件・必要2人」と出す（枠がまだない工程は、点線の「計画から」の枠で出る）。
+//   「この作業が終わったら、こっち」は矢印で引く（札は元の枠に残る）。
+//   置いたものは窓口（ホワイトボード.gs）が、スケジュール用のスプレッドシートの「ホワイトボード」シートに残す。直せるのは計画担当だけ。
+// ?demo=1 … 見本（保存しない。枠は人の一覧と出勤からその場で作る）。?mock=1 … 手元の試験（wb_mock.json）
 (function () {
-  const q = location.search, embed = /[?&]embed=1(&|$)/.test(q);
+  const q = location.search, embed = /[?&]embed=1(&|$)/.test(q), test = /[?&](demo|mock)=1(&|$)/.test(q);
+  if (!embed && !test && window.top === window.self) { location.replace('index.html?go=whiteboard'); return; }
   if (embed) { document.documentElement.classList.add('embed'); const b = document.createElement('base'); b.target = '_top'; document.head.appendChild(b); }
 })();
 </script>
 <script src="config.js"></script>
 <script src="common.js"></script>
 <style>
-  :root { --green: #4f9363; --green-d: #2f6b3a; --green-l: #f0f6f1; --orange: #d4834a; --line: #dfe5e0; --gray: #6b6b6b; --red: #c33; --bg: #f6f7f5; --board: #fbfbf8; }
+  :root { --green: #4f9363; --green-d: #2f6b3a; --green-l: #f0f6f1; --orange: #d4834a; --line: #dfe5e0; --gray: #6b6b6b; --red: #c33; --bg: #f6f7f5; --board: #fbfbf8; --arrow: #333; }
   * { box-sizing: border-box; }
   html, body { height: 100%; }
   body { margin: 0; background: var(--bg); color: #222; font-family: "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif; font-size: 14px; line-height: 1.4; display: flex; flex-direction: column; }
@@ -28,33 +31,55 @@
   html.embed header { display: none; }
   .bar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #fff; border-bottom: 1px solid var(--line); flex: none; flex-wrap: wrap; }
   .bar button { background: #fff; border: 1px solid #bbb; border-radius: 999px; padding: 5px 12px; cursor: pointer; font-size: 13px; }
+  .bar button.on { background: #333; color: #fff; border-color: #333; }
   .bar .ttl { font-size: 18px; font-weight: bold; }
   .bar .sp { flex: 1; }
-  .bar .mock { background: #fff6c8; border: 1px solid #e8d48a; color: #5a4800; border-radius: 8px; padding: 3px 10px; font-size: 12px; }
-  .legend { font-size: 12px; color: var(--gray); display: flex; gap: 10px; align-items: center; }
+  .bar .note { background: #fff6c8; border: 1px solid #e8d48a; color: #5a4800; border-radius: 8px; padding: 3px 10px; font-size: 12px; }
+  .bar .sv { font-size: 12px; color: var(--gray); }
+  .bar .sv.err { color: var(--red); font-weight: bold; }
+  .bar .vsw { display: inline-flex; border: 1px solid #bbb; border-radius: 999px; overflow: hidden; }
+  .bar .vsw a { padding: 5px 14px; font-size: 13px; color: #333; text-decoration: none; white-space: nowrap; background: #fff; }
+  .bar .vsw a + a { border-left: 1px solid #bbb; }
+  .bar .vsw a.on { background: var(--green-l); color: var(--green-d); font-weight: bold; }
+  .legend { font-size: 12px; color: var(--gray); display: flex; gap: 6px; align-items: center; }
   #board { flex: 1; min-height: 0; overflow: auto; display: flex; align-items: stretch; background: #e9ece8; padding: 10px; gap: 10px; }
+  body.arrow #board { cursor: crosshair; }
   /* 1日 ＝ ホワイトボードの1列 */
-  .day { flex: none; width: 300px; background: var(--board); border: 2px solid #c9cfc8; border-radius: 6px; display: flex; flex-direction: column; box-shadow: inset 0 0 0 4px #fff; }
+  .day { flex: none; width: 310px; background: var(--board); border: 2px solid #c9cfc8; border-radius: 6px; display: flex; flex-direction: column; box-shadow: inset 0 0 0 4px #fff; }
   .day.today { border-color: var(--green); }
+  .day.past { opacity: .75; }
   .day .dh { display: flex; align-items: baseline; gap: 8px; padding: 6px 10px 4px; border-bottom: 3px solid #333; }
   .day .dh .d { font-size: 28px; font-weight: bold; line-height: 1; }
   .day .dh .w { background: #222; color: #fff; border-radius: 4px; padding: 0 6px; font-weight: bold; }
   .day .dh .w.sun { background: #c44; } .day .dh .w.sat { background: #2f6fb7; }
   .day .dh .n { margin-left: auto; font-size: 11px; color: var(--gray); text-align: right; }
-  .day .body { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 10px; }
-  /* 枠 ＝ 「1H 出荷」のような手書きの見出しと、その下の札 */
-  .blk { border-radius: 6px; padding: 4px 4px 6px; }
+  .day .body { flex: 1; overflow-y: auto; padding: 8px 22px 8px 8px; display: flex; flex-direction: column; gap: 10px; position: relative; }
+  .day .body svg.arw { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; z-index: 2; }
+  .day .body svg.arw path.ln { fill: none; stroke: var(--arrow); stroke-width: 2.2; pointer-events: stroke; cursor: pointer; }
+  .day .body svg.arw path.ln:hover { stroke: var(--red); stroke-width: 3.5; }
+  /* 枠 ＝ 「1H 出荷」の見出しと、その下の札 */
+  .blk { border-radius: 6px; padding: 4px 4px 6px; position: relative; z-index: 1; }
+  .blk.auto { border: 1.5px dashed #b9c2b9; background: rgba(255,255,255,.6); }
   .blk.drop, .tray.drop { background: #e8f1ff; outline: 2px dashed #6c9bd8; }
-  .blk .bh { display: flex; align-items: baseline; gap: 6px; font-size: 17px; font-weight: bold; font-family: "Yu Gothic", "Hiragino Sans", sans-serif; cursor: pointer; }
+  .blk .bh { display: flex; align-items: baseline; gap: 6px; font-size: 17px; font-weight: bold; }
+  .blk .bh.ed { cursor: pointer; }
   .blk .bh .pl { color: var(--green-d); }
   .blk .bh .nt { font-size: 11px; color: var(--gray); font-weight: normal; }
-  .blk .bh .x { margin-left: auto; font-size: 11px; color: #999; font-weight: normal; }
+  .blk .bh .x { margin-left: auto; font-size: 11px; color: #999; font-weight: normal; white-space: nowrap; }
+  .blk .bh .x.short { color: var(--red); font-weight: bold; }
+  .blk .wk { font-size: 11px; color: #555; background: #eef3ee; border-radius: 5px; padding: 2px 6px; margin: 2px 0; cursor: pointer; }
+  .blk .wk b { color: #222; }
+  .blk .wk .auto { color: var(--orange); font-weight: bold; }
+  .blk .pls { font-size: 11px; margin: 2px 0 4px; border-left: 3px solid #cfe0d2; padding-left: 6px; }
+  .blk .pls div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .blk .pls .done { color: #999; text-decoration: line-through; }
   .blk .lead { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; min-height: 28px; font-size: 11px; color: var(--gray); margin: 2px 0; }
   .blk .lead > span.lb { margin-right: 2px; }
   .blk .mem { display: flex; flex-wrap: wrap; gap: 3px; min-height: 30px; }
   .blk .mem:empty::before { content: '名前の札をここへ'; color: #bbb; font-size: 11px; align-self: center; }
   /* 名前の札（マグネット）。社員は緑の枠、実習生は青い字 */
-  .mg { display: inline-flex; align-items: center; height: 28px; padding: 0 8px; background: #fff; border: 2px solid #d6d6d6; border-radius: 3px; font-size: 15px; font-weight: bold; color: #b0322b; cursor: grab; user-select: none; letter-spacing: .08em; box-shadow: 0 1px 2px rgba(0,0,0,.15); white-space: nowrap; }
+  .mg { display: inline-flex; align-items: center; height: 28px; padding: 0 8px; background: #fff; border: 2px solid #d6d6d6; border-radius: 3px; font-size: 15px; font-weight: bold; color: #b0322b; user-select: none; letter-spacing: .08em; box-shadow: 0 1px 2px rgba(0,0,0,.15); white-space: nowrap; }
+  body.can .mg { cursor: grab; }
   .mg.staff { border-color: #6bbf3a; color: #1f3d8a; background: #eef0ea; }
   .mg.trainee { color: #1a5fb4; border-color: #8fb4e6; }
   .mg.sel { outline: 3px solid var(--orange); }
@@ -65,36 +90,44 @@
   .tray .tt { font-size: 11px; color: var(--gray); margin-bottom: 4px; }
   .tray .mem { display: flex; flex-wrap: wrap; gap: 3px; }
   .muted { color: var(--gray); font-size: 12px; }
-  #toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: #222; color: #fff; padding: 8px 14px; border-radius: 10px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  #toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: #222; color: #fff; padding: 8px 14px; border-radius: 10px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 50; }
   #toast.show { opacity: 1; }
-  @media (max-width: 700px) { .day { width: 86vw; } }
+  @media (max-width: 700px) { .day { width: 86vw; } .legend { display: none; } }
 </style>
 </head>
 <body>
-<header><h1>ホワイトボード（見本）</h1><a href="index.html?go=schedule">割り振り表へ</a></header>
+<header><h1>ホワイトボード</h1><a href="index.html?go=whiteboard">なえログで開く</a></header>
 <div class="bar">
-  <button type="button" id="prev">‹</button><button type="button" id="next">›</button>
+  <button type="button" id="today">今日</button><button type="button" id="prev">‹</button><button type="button" id="next">›</button>
   <span class="ttl" id="ttl"></span>
-  <span class="mock">見本：札を動かしても保存しません。</span>
+  <span class="note" id="mode" hidden></span>
+  <span class="sv" id="sv"></span>
   <span class="sp"></span>
-  <span class="legend"><span class="mg staff" style="cursor:default">社員</span><span class="mg" style="cursor:default">パート</span><span class="mg trainee" style="cursor:default">実習生</span></span>
+  <button type="button" id="arrow" hidden title="札をつかんで、終わったあとに行く枠へ落とす（スマホは札を押してから枠を押す）。矢印を押すと消せる">→ 矢印を引く</button>
+  <span class="legend"><span class="mg staff">社員</span><span class="mg">パート</span><span class="mg trainee">実習生</span></span>
+  <span class="vsw"><a href="index.html?go=calendar">カレンダー</a><a href="index.html?go=whiteboard" class="on">ホワイトボード</a><a href="index.html?go=schedule">人の割り振り表</a></span>
 </div>
 <div id="board"></div>
 <div id="toast"></div>
 <script>
-const MOCK = /[?&]mock=1(&|$)/.test(location.search);
-// ?demo=1 … 見本の枠を、窓口の人の一覧と出勤からその場で作る（ホワイトボードの写真に似せた場所・業務。名前はファイルに書かない）
-const DEMO = /[?&]demo=1(&|$)/.test(location.search);
-const WD = '日月火水木金土';
+const Q = location.search;
+const MOCK = /[?&]mock=1(&|$)/.test(Q), DEMO = /[?&]demo=1(&|$)/.test(Q), TRY = MOCK || DEMO;
 const BIZ = ['播種', 'ポット入れ', '土入れ', '土並べ', '接ぎ木', '鉢上げ', '薬散', 'ラベル差し', '出荷', '店振り', '箱作り', '寄せ植え', '除草', 'その他'];
-let S = null;            // { days:[{key,label}], people:[{name,kubun}], cap:{name:{day:h}}, boards:{day:[{id,place,biz,note,lead:[],mem:[]}]} }
-let from = '';
-const toast = m => { const t = document.getElementById('toast'); t.textContent = m; t.className = 'show'; clearTimeout(toast.t); toast.t = setTimeout(() => t.className = '', 2200); };
+const DAYS = 7;
+let S = null;          // { days, people, cap, boards:{日:[枠]}, work:{日:[工程の作業]} }
+let start = '';
+const toast = m => { const t = document.getElementById('toast'); t.textContent = m; t.className = 'show'; clearTimeout(toast.t); toast.t = setTimeout(() => t.className = '', 2400); };
+const num = h => String(Math.round(Number(h) * 10) / 10);
+const addDays = (k, n) => new Date(Date.parse(k + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10);
+function localToday() { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+// 直せるか：計画担当でログインしている。見本・試験ではいつでも（保存はしない）
+function canEdit() { if (TRY) return true; try { return !!(authToken() && authCaps().planner); } catch (e) { return false; } }
 const kindOf = n => { const p = S.people.find(x => x.name === n); const k = p ? p.kubun : ''; return /社員|取締役/.test(k) ? 'staff' : /実習/.test(k) ? 'trainee' : ''; };
 const short = n => String(n).split(/[\s　]/)[0].slice(0, 4);   // 札は姓だけ（ホワイトボードと同じ）
 let seq = 1;
-const newId = () => 'b' + (seq++);
+const newId = () => 'w' + Date.now().toString(36).slice(-5) + (seq++);
 
+// ---- 読む ----
 function demoBoards(s) {
   let seed = 3; const rnd = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
   const pat = [['1H', '出荷'], ['', '接ぎ木'], ['16H', '出荷', 'AM'], ['', '除草'], ['3H', '寄せ植え'], ['PV', '出荷'], ['4H', 'その他', '床そうじ'], ['12H', '鉢上げ'], ['7H', 'その他', '種とり'], ['F12', '出荷'], ['1H', '土並べ']];
@@ -103,112 +136,219 @@ function demoBoards(s) {
     const pres = s.people.filter(p => (s.cap[p.name] || {})[d.key] > 0);
     const staff = pres.filter(p => /社員/.test(p.kubun)).map(p => p.name), part = pres.filter(p => !/社員|取締役/.test(p.kubun)).map(p => p.name);
     const n = 5 + Math.floor(rnd() * 3), list = [];
-    for (let k = 0; k < n; k++) { const x = pat[(i * 2 + k) % pat.length]; list.push({ id: newId(), place: x[0], biz: x[1], note: x[2] || '', lead: [], mem: [] }); }
+    for (let k = 0; k < n; k++) { const x = pat[(i * 2 + k) % pat.length]; list.push({ id: newId(), place: x[0], biz: x[1], major: '', note: x[2] || '', lead: [], mem: [], next: {} }); }
     staff.slice(0, n).forEach((nm, k) => list[k].lead.push(nm));
     part.slice(0, Math.floor(part.length * 0.85)).forEach((nm, k) => list[k % n].mem.push(nm));
+    if (list[2].mem[0]) list[2].next[list[2].mem[0]] = list[4].id;   // 矢印の見本
     boards[d.key] = list;
   });
-  return { days: s.days, people: s.people, cap: s.cap, boards };
+  return { days: s.days, people: s.people, cap: s.cap, boards, work: {} };
 }
-// 窓口の割り振り（人 × 計画の作業 × 日）を、日 × 業務の枠に束ねる（場所はまだ持っていないので空）
-function fromSchedule(s) {
-  const boards = {};
-  s.days.forEach(d => { boards[d.key] = []; });
-  s.assigns.forEach(a => {
-    const list = boards[a.date]; if (!list) return;
-    let b = list.find(x => x.biz === a.major);
-    if (!b) list.push(b = { id: newId(), place: '', biz: a.major, note: '', lead: [], mem: [] });
-    const staff = /社員|取締役/.test((s.people.find(p => p.name === a.name) || {}).kubun || '');
-    const arr = staff ? b.lead : b.mem;
-    if (!arr.includes(a.name)) arr.push(a.name);
-  });
-  return { days: s.days, people: s.people, cap: s.cap, boards };
+async function load(from) {
+  if (MOCK) { S = await (await fetch('wb_mock.json', { cache: 'no-store' })).json(); S.work = S.work || {}; start = S.days[0].key; }
+  else if (DEMO) { const s = await callApi('api=schedule' + (from ? '&from=' + from + '&exact=1' : '')); start = s.start; S = demoBoards(s); }
+  else { const s = await callApi('api=board&days=' + DAYS + (from ? '&from=' + from : '')); start = s.start; S = s; }
+  Object.values(S.boards).forEach(list => list.forEach(b => { b.next = b.next || {}; b.lead = b.lead || []; b.mem = b.mem || []; }));
 }
-async function load(f) {
-  if (MOCK) { const j = await (await fetch('wb_mock.json', { cache: 'no-store' })).json(); S = j; return; }
-  const s = await callApi('api=schedule' + (f ? '&from=' + f : ''));
-  from = s.start; S = DEMO ? demoBoards(s) : fromSchedule(s);
-}
-function present(day) { return S.people.filter(p => (S.cap[p.name] || {})[day] > 0).map(p => p.name); }
-function placedCount(day, n) { return (S.boards[day] || []).reduce((c, b) => c + (b.lead.includes(n) ? 1 : 0) + (b.mem.includes(n) ? 1 : 0), 0); }
+const present = day => S.people.filter(p => (S.cap[p.name] || {})[day] > 0).map(p => p.name);
+const placedCount = (day, n) => (S.boards[day] || []).reduce((c, b) => c + (b.lead.includes(n) ? 1 : 0) + (b.mem.includes(n) ? 1 : 0), 0);
+// 1人の出勤の時間（その日の出勤の合計 ÷ 人数。分からなければ 8）
+function perPerson(day) { const ps = present(day); if (!ps.length) return 8; return ps.reduce((n, x) => n + (S.cap[x][day] || 0), 0) / ps.length || 8; }
+const needOf = (day, w) => w && w.h > 0 ? Math.ceil(w.h / perPerson(day) * 2) / 2 : 0;
 
+// その日の枠：置いた枠 ＋ まだ枠がない工程の作業（点線の「計画から」の枠）
+function blocksOf(day) {
+  const bl = S.boards[day] || [], ws = S.work[day] || [];
+  const auto = ws.filter(w => !bl.some(b => b.major === w.s)).map(w => ({ id: 'auto:' + w.s, auto: true, place: '', biz: w.s, major: w.s, note: '', lead: [], mem: [], next: {} }));
+  return bl.concat(auto);
+}
+// 点線の枠に人を置いたら、本物の枠にする
+function realize(day, id) {
+  if (!id.startsWith('auto:')) return S.boards[day].find(x => x.id === id);
+  const major = id.slice(5), b = { id: newId(), place: '', biz: major, major, note: '', lead: [], mem: [], next: {} };
+  S.boards[day].push(b);
+  return b;
+}
+
+// ---- 描く ----
+const openPl = new Set();   // 計画の一覧を開いている枠（日|枠ID）
+let sel = null;             // 押して選んだ札 { n, day, from }
 function mg(n, day, from) {
   const k = kindOf(n), dup = placedCount(day, n) > 1;
-  return `<span class="mg ${k}${dup ? ' dup' : ''}${sel && sel.n === n && sel.day === day && sel.from === from ? ' sel' : ''}" draggable="true" data-n="${esc(n)}" data-day="${day}" data-from="${from}" title="${esc(n)}${dup ? '（ほかの枠にもいる：午前・午後など）' : ''}">${esc(short(n))}</span>`;
+  return `<span class="mg ${k}${dup ? ' dup' : ''}${sel && sel.n === n && sel.day === day && sel.from === from ? ' sel' : ''}" ${canEdit() ? 'draggable="true"' : ''} data-n="${esc(n)}" data-day="${day}" data-from="${from}" title="${esc(n)}${dup ? '（ほかの枠にもいる）' : ''}">${esc(short(n))}</span>`;
+}
+function workHtml(day, b) {
+  const w = (S.work[day] || []).find(x => x.s === b.major);
+  if (!w) return '';
+  const need = needOf(day, w), key = day + '|' + b.id, open = openPl.has(key);
+  return `<div class="wk" data-pl="${esc(key)}" title="押すと計画の一覧">${b.auto ? '<span class="auto">計画から　</span>' : ''}<b>${w.q ? num(w.q) + (w.u || 'TR') : w.n + '件'}</b>・${w.n}件${w.dn ? '（済' + w.dn + '）' : ''}${w.h ? '・残り ' + num(w.h) + 'h' : ''}${need ? '・必要 ' + need + '人' : ''} ${open ? '▾' : '▸'}</div>`
+    + (open ? `<div class="pls">${w.plans.map(p => `<div class="${p.done ? 'done' : ''}">${esc(p.n)}　<span class="muted">${esc(p.c)}${p.hs ? '・' + esc(p.hs) : ''}${p.q !== '' ? '・' + esc(num(p.q)) + 'TR' : ''}</span></div>`).join('')}</div>` : '');
 }
 function draw() {
-  const el = document.getElementById('board');
+  const ed = canEdit();
+  document.body.classList.toggle('can', ed);
+  const el = document.getElementById('board'), keepX = el.scrollLeft;
+  const keepY = {}; el.querySelectorAll('.day .body').forEach(b => { keepY[b.dataset.day] = b.scrollTop; });
   el.innerHTML = S.days.map(d => {
-    const wd = d.label.match(/\((.)\)/) ? d.label.match(/\((.)\)/)[1] : '';
-    const pres = present(d.key), bl = S.boards[d.key] || [];
+    const wd = (d.label.match(/\((.)\)/) || [])[1] || '';
+    const pres = present(d.key), bl = blocksOf(d.key);
     const rest = pres.filter(n => placedCount(d.key, n) === 0);
-    return `<div class="day${d.today ? ' today' : ''}" data-day="${d.key}">
+    return `<div class="day${d.today ? ' today' : ''}${d.past ? ' past' : ''}" data-day="${d.key}">
       <div class="dh"><span class="d">${Number(d.key.slice(8))}</span><span class="w ${wd === '日' ? 'sun' : wd === '土' ? 'sat' : ''}">${wd}</span>
         <span class="n">出勤 ${pres.length}人<br>まだ置いていない ${rest.length}人</span></div>
-      <div class="body">
-        ${bl.map(b => `<div class="blk" data-day="${d.key}" data-b="${b.id}">
-          <div class="bh" data-edit="${b.id}" title="押すと場所・業務・メモを直す"><span class="pl">${esc(b.place)}</span><span>${esc(b.biz)}</span><span class="nt">${esc(b.note)}</span><span class="x">${b.lead.length + b.mem.length}人</span></div>
-          <div class="lead" data-drop="lead" data-b="${b.id}" data-day="${d.key}"><span class="lb">担当</span>${b.lead.map(n => mg(n, d.key, b.id + ':lead')).join('') || '<span class="muted">社員の札をここへ</span>'}</div>
-          <div class="mem" data-drop="mem" data-b="${b.id}" data-day="${d.key}">${b.mem.map(n => mg(n, d.key, b.id + ':mem')).join('')}</div>
-        </div>`).join('')}
-        <button type="button" class="add" data-add="${d.key}">＋ 枠を足す（場所・業務）</button>
+      <div class="body" data-day="${d.key}">
+        ${bl.map(b => {
+          const w = (S.work[d.key] || []).find(x => x.s === b.major), need = needOf(d.key, w), cnt = b.lead.length + b.mem.length;
+          return `<div class="blk${b.auto ? ' auto' : ''}" data-day="${d.key}" data-b="${esc(b.id)}">
+          <div class="bh${ed && !b.auto ? ' ed' : ''}" ${ed && !b.auto ? `data-edit="${esc(b.id)}" title="押すと場所・業務・メモを直す"` : ''}><span class="pl">${esc(b.place)}</span><span>${esc(b.biz)}</span><span class="nt">${esc(b.note)}</span><span class="x${need && cnt < need ? ' short' : ''}">${cnt}人${need ? '／必要 ' + need : ''}</span></div>
+          ${workHtml(d.key, b)}
+          <div class="lead" data-drop="lead" data-b="${esc(b.id)}" data-day="${d.key}"><span class="lb">担当</span>${b.lead.map(n => mg(n, d.key, b.id + ':lead')).join('') || '<span class="muted">社員の札をここへ</span>'}</div>
+          <div class="mem" data-drop="mem" data-b="${esc(b.id)}" data-day="${d.key}">${b.mem.map(n => mg(n, d.key, b.id + ':mem')).join('')}</div>
+        </div>`;
+        }).join('')}
+        ${ed ? `<button type="button" class="add" data-add="${d.key}">＋ 枠を足す（場所・業務）</button>` : ''}
       </div>
       <div class="tray" data-drop="tray" data-day="${d.key}"><div class="tt">まだ置いていない人（その日に出勤）</div><div class="mem">${rest.map(n => mg(n, d.key, 'tray')).join('') || '<span class="muted">全員置いた</span>'}</div></div>
     </div>`;
   }).join('');
+  el.scrollLeft = keepX;
+  el.querySelectorAll('.day .body').forEach(b => { if (keepY[b.dataset.day]) b.scrollTop = keepY[b.dataset.day]; });
   const a = S.days[0], z = S.days[S.days.length - 1];
   document.getElementById('ttl').textContent = a ? a.label + ' 〜 ' + z.label : '';
+  document.getElementById('arrow').hidden = !ed;
+  const md = document.getElementById('mode');
+  md.hidden = !(TRY || !ed);
+  md.textContent = TRY ? '見本：動かしても保存しません' : '見るだけ（直せるのは計画担当）';
+  drawArrows();
+}
+// 矢印：札から、行き先の枠の見出しへ。列の右の余白を回って下ろす（ホワイトボードの手書きの矢印と同じ見え方）
+function drawArrows() {
+  document.querySelectorAll('.day .body').forEach(body => {
+    const day = body.dataset.day, bl = blocksOf(day), br = body.getBoundingClientRect();
+    const pos = r => ({ x: r.left - br.left + body.scrollLeft, y: r.top - br.top + body.scrollTop, w: r.width, h: r.height });
+    let paths = '', k = 0;
+    bl.forEach(b => Object.keys(b.next).forEach(n => {
+      const m = body.querySelector(`.mg[data-n="${CSS.escape(n)}"][data-from^="${CSS.escape(b.id + ':')}"]`);
+      const t = body.querySelector(`.blk[data-b="${CSS.escape(b.next[n])}"] .bh`);
+      if (!m || !t) return;
+      const a = pos(m.getBoundingClientRect()), z = pos(t.getBoundingClientRect());
+      // 札の下から出て、列の右の余白を回り、行き先の枠の見出しの右へ入る
+      const x1 = a.x + a.w / 2, y1 = a.y + a.h, x2 = z.x + Math.min(z.w, 150), y2 = z.y + z.h / 2;
+      const xr = body.clientWidth - 6 - (k++ % 3) * 5;   // 何本かあるときは少しずらす
+      const down = y2 > y1, ym = (y1 + y2) / 2;
+      const to = (bl.find(x => x.id === b.next[n]) || {});
+      paths += `<path class="ln" data-arw="${esc(b.id)}|${esc(n)}" d="M${x1},${y1} C${x1},${y1 + 26} ${xr},${y1 + (down ? 10 : -10)} ${xr},${ym} S${x2 + 40},${y2} ${x2 + 10},${y2}" marker-end="url(#ah)"><title>${esc(n)}：終わったら ${esc([to.place, to.biz].filter(Boolean).join(' '))} へ${canEdit() ? '（押すと消す）' : ''}</title></path>`;
+    }));
+    if (!paths) return;
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', 'arw'); svg.setAttribute('width', body.scrollWidth); svg.setAttribute('height', body.scrollHeight);
+    svg.innerHTML = `<defs><marker id="ah" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#333"/></marker></defs>` + paths;
+    body.appendChild(svg);
+  });
 }
 
-// ---- 札を動かす：PC はつかんで落とす（Ctrl を押しながらで、元の枠にも残す＝午前・午後）。スマホは札を押してから、置く先を押す ----
-let sel = null;   // 押して選んだ札 { n, day, from }
-function moveTo(src, dropEl, copy) {
-  const day = dropEl.dataset.day, kind = dropEl.dataset.drop, bid = dropEl.dataset.b;
-  if (src.day !== day) { toast('ほかの日へは動かせません（その日に出勤する人だけ置けます）'); return; }
-  const bl = S.boards[day];
-  if (!copy && src.from !== 'tray') { const [ob, ok] = src.from.split(':'); const b = bl.find(x => x.id === ob); if (b) b[ok] = b[ok].filter(x => x !== src.n); }
-  if (kind !== 'tray') {
-    const b = bl.find(x => x.id === bid);
-    if (kind === 'lead' && kindOf(src.n) !== 'staff') { toast('「担当」に置けるのは社員の札です'); draw(); return; }
-    if (!b[kind].includes(src.n)) b[kind].push(src.n);
-  }
+// ---- 保存（その日の枠をまとめて送る。続けて動かしたら最後に1回） ----
+const dirty = new Set(); let saveT = 0, saving = 0;
+function changed(day) {
   draw();
+  if (TRY) return;
+  dirty.add(day); clearTimeout(saveT); saveT = setTimeout(flush, 800);
+  sv('保存中…');
+}
+async function flush() {
+  const days = [...dirty]; dirty.clear();
+  for (const d of days) {
+    saving++;
+    try { await postApi({ action: 'board', d, blocks: (S.boards[d] || []).map(b => ({ id: b.id, place: b.place, biz: b.biz, major: b.major, note: b.note, lead: b.lead, mem: b.mem, next: b.next })) }); }
+    catch (e) { sv('保存できませんでした：' + e.message, true); saving--; return; }
+    saving--;
+  }
+  if (!dirty.size && !saving) sv('保存しました');
+}
+function sv(t, err) { const s = document.getElementById('sv'); s.textContent = t; s.className = 'sv' + (err ? ' err' : ''); }
+
+// ---- 札を動かす・矢印を引く ----
+// PC：つかんで落とす（Ctrl を押しながらで、元の枠にも残す＝午前・午後）。スマホ：札を押してから、置く先を押す
+// 「→ 矢印を引く」を押している間は、落とした先の枠へ矢印を引く（札は動かない）
+let arrowMode = false;
+function act(src, dropEl, copy) {
+  const day = dropEl.dataset.day, kind = dropEl.dataset.drop;
+  if (src.day !== day) { toast('ほかの日へは動かせません（その日に出勤する人だけ置けます）'); draw(); return; }
+  const bl = S.boards[day];
+  const [ob, ok] = src.from === 'tray' ? [null, null] : src.from.split(':');
+  if (arrowMode) {
+    if (!ob || kind === 'tray') { toast('矢印は、枠に置いてある札から、ほかの枠へ引きます'); draw(); return; }
+    const from = realize(day, ob), to = realize(day, dropEl.dataset.b);
+    if (from === to) { toast('同じ枠には引けません'); draw(); return; }
+    from.next[src.n] = to.id;
+    toast(short(src.n) + '：終わったら「' + [to.place, to.biz].filter(Boolean).join(' ') + '」へ');
+    changed(day); return;
+  }
+  if (kind === 'lead' && kindOf(src.n) !== 'staff') { toast('「担当」に置けるのは社員の札です'); draw(); return; }
+  if (!copy && ob) { const b = bl.find(x => x.id === ob); if (b) { b[ok] = b[ok].filter(x => x !== src.n); if (!b.lead.includes(src.n) && !b.mem.includes(src.n)) delete b.next[src.n]; } }
+  if (kind !== 'tray') { const b = realize(day, dropEl.dataset.b); if (!b[kind].includes(src.n)) b[kind].push(src.n); }
+  // 行き先がなくなった矢印は消す
+  bl.forEach(b => Object.keys(b.next).forEach(n => { if (!bl.some(x => x.id === b.next[n])) delete b.next[n]; }));
+  changed(day);
 }
 const board = document.getElementById('board');
-board.addEventListener('dragstart', ev => { const m = ev.target.closest('.mg'); if (!m) return; ev.dataTransfer.setData('text/plain', JSON.stringify({ n: m.dataset.n, day: m.dataset.day, from: m.dataset.from })); });
-board.addEventListener('dragover', ev => { const t = ev.target.closest('[data-drop]'); if (!t) return; ev.preventDefault(); document.querySelectorAll('.drop').forEach(x => x.classList.remove('drop')); (t.closest('.blk') || t).classList.add('drop'); });
+board.addEventListener('dragstart', ev => { const m = ev.target.closest('.mg'); if (!m || !canEdit()) return; ev.dataTransfer.setData('text/plain', JSON.stringify({ n: m.dataset.n, day: m.dataset.day, from: m.dataset.from })); });
+board.addEventListener('dragover', ev => { const t = ev.target.closest('[data-drop]') || ev.target.closest('.blk'); if (!t) return; ev.preventDefault(); document.querySelectorAll('.drop').forEach(x => x.classList.remove('drop')); (t.closest('.blk') || t).classList.add('drop'); });
 board.addEventListener('dragleave', ev => { if (!ev.relatedTarget || !board.contains(ev.relatedTarget)) document.querySelectorAll('.drop').forEach(x => x.classList.remove('drop')); });
 board.addEventListener('drop', ev => {
-  const t = ev.target.closest('[data-drop]'); document.querySelectorAll('.drop').forEach(x => x.classList.remove('drop'));
+  document.querySelectorAll('.drop').forEach(x => x.classList.remove('drop'));
+  let t = ev.target.closest('[data-drop]'); if (!t) { const b = ev.target.closest('.blk'); if (b) t = b.querySelector('[data-drop="mem"]'); }
   if (!t) return; ev.preventDefault();
-  try { moveTo(JSON.parse(ev.dataTransfer.getData('text/plain')), t, ev.ctrlKey); } catch (e) {}
+  try { act(JSON.parse(ev.dataTransfer.getData('text/plain')), t, ev.ctrlKey); } catch (e) {}
 });
 board.addEventListener('click', ev => {
+  const ln = ev.target.closest('[data-arw]');
+  if (ln) {
+    if (!canEdit()) return;
+    const i = ln.dataset.arw.indexOf('|'), bid = ln.dataset.arw.slice(0, i), n = ln.dataset.arw.slice(i + 1), day = ln.closest('.body').dataset.day, b = S.boards[day].find(x => x.id === bid);
+    if (b && confirm(short(n) + ' の矢印を消しますか？')) { delete b.next[n]; changed(day); }
+    return;
+  }
+  const pl = ev.target.closest('[data-pl]');
+  if (pl) { openPl.has(pl.dataset.pl) ? openPl.delete(pl.dataset.pl) : openPl.add(pl.dataset.pl); draw(); return; }
+  if (!canEdit()) return;
   const m = ev.target.closest('.mg');
   if (m) { sel = sel && sel.n === m.dataset.n && sel.from === m.dataset.from ? null : { n: m.dataset.n, day: m.dataset.day, from: m.dataset.from }; draw(); return; }
   const add = ev.target.closest('[data-add]');
-  if (add) { const v = prompt('場所と業務（例：1H 出荷 ／ 3H 寄せ植え ／ 接ぎ木）\n業務：' + BIZ.join('・'), ''); if (!v) return; const [pl, ...rest] = v.trim().split(/\s+/); const biz = rest.length ? rest.join(' ') : pl; S.boards[add.dataset.add].push({ id: newId(), place: rest.length ? pl : '', biz, note: '', lead: [], mem: [] }); draw(); return; }
+  if (add) {
+    const v = prompt('場所と業務（例：1H 出荷 ／ 3H 寄せ植え ／ 接ぎ木）\n業務：' + BIZ.join('・'), ''); if (!v || !v.trim()) return;
+    const p = v.trim().split(/\s+/), day = add.dataset.add;
+    const b = p.length === 1 ? { place: '', biz: p[0], note: '' } : { place: p[0], biz: p[1], note: p.slice(2).join(' ') };
+    const w = (S.work[day] || []).find(x => x.s === b.biz);
+    S.boards[day].push(Object.assign({ id: newId(), major: w ? w.s : '', lead: [], mem: [], next: {} }, b));
+    changed(day); return;
+  }
   const ed = ev.target.closest('[data-edit]');
   if (ed && !sel) {
     const day = ed.closest('.blk').dataset.day, b = S.boards[day].find(x => x.id === ed.dataset.edit);
-    const v = prompt('場所・業務・メモ（例：16H 出荷 AM）。空にすると枠を消す', [b.place, b.biz, b.note].filter(Boolean).join(' '));
+    const v = prompt('場所・業務・メモ（例：16H 出荷 AM）。空にすると枠を消す（札は「まだ置いていない人」へもどる）', [b.place, b.biz, b.note].filter(Boolean).join(' '));
     if (v === null) return;
-    if (!v.trim()) { S.boards[day] = S.boards[day].filter(x => x !== b); draw(); return; }
+    if (!v.trim()) { S.boards[day] = S.boards[day].filter(x => x !== b); S.boards[day].forEach(x => Object.keys(x.next).forEach(n => { if (x.next[n] === b.id) delete x.next[n]; })); changed(day); return; }
     const p = v.trim().split(/\s+/);
     if (p.length === 1) Object.assign(b, { place: '', biz: p[0], note: '' }); else Object.assign(b, { place: p[0], biz: p[1], note: p.slice(2).join(' ') });
-    draw(); return;
+    changed(day); return;
   }
-  const t = ev.target.closest('[data-drop]');
-  if (t && sel) { const s = sel; sel = null; moveTo(s, t, false); }
+  const t = ev.target.closest('[data-drop]') || (ev.target.closest('.blk') && ev.target.closest('.blk').querySelector('[data-drop="mem"]'));
+  if (t && sel) { const s = sel; sel = null; act(s, t, false); }
 });
-document.getElementById('prev').onclick = () => go(-7);
-document.getElementById('next').onclick = () => go(7);
-async function go(n) {
-  if (MOCK) { toast('見本では1週間ぶんだけです'); return; }
-  const d = new Date(Date.parse(from + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10);
-  await load(d); draw();
+document.getElementById('arrow').onclick = ev => { arrowMode = !arrowMode; ev.currentTarget.classList.toggle('on', arrowMode); document.body.classList.toggle('arrow', arrowMode); toast(arrowMode ? '札をつかんで、終わったあとに行く枠へ落とす（もう一度押すと終わる）' : '矢印を引くのを終わりました'); };
+window.addEventListener('resize', () => { if (S) draw(); });
+async function go(k) {
+  if (MOCK) { toast('試験のデータは1週間ぶんだけです'); return; }
+  if (dirty.size) { clearTimeout(saveT); await flush(); }
+  try { await load(k); draw(); } catch (e) { toast(e.message); }
 }
-load('').then(draw).catch(e => { document.getElementById('board').innerHTML = '<p style="padding:16px">' + esc(e.message) + '</p>'; });
+document.getElementById('prev').onclick = () => go(addDays(start, -DAYS));
+document.getElementById('next').onclick = () => go(addDays(start, DAYS));
+document.getElementById('today').onclick = () => go(addDays(localToday(), -1));
+load(MOCK ? '' : addDays(localToday(), -1)).then(draw).catch(e => { document.getElementById('board').innerHTML = '<p style="padding:16px">' + esc(e.message) + '</p>'; });
+// 1分ごとに読み直す（ほかの人の手直しを取り込む。動かしている途中・保存待ちのときは待つ）
+setInterval(() => { if (!TRY && !document.hidden && !dirty.size && !saving && !sel) load(start).then(draw).catch(() => {}); }, 60000);
 </script>
 </body>
 </html>
