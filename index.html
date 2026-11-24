@@ -163,6 +163,7 @@
   /* 除草・在庫管理の中の切り替え（記録する／マップ、在庫を見る／入庫・出庫／履歴）：上の帯のいちばん下に、小さめのタブで */
   header .subnav { order: 10; flex: 1 0 100%; display: flex; gap: 6px; margin-top: 2px; }
   header .subnav .hbtn { padding: 4px 16px; font-size: 13px; border-radius: 999px; }
+  header .subnav .tohome { display: none; }   /* PC は右上に「メニューへ戻る」がある。スマホ（右上のボタンを隠す幅）だけ、タブの左に出す */
   header .gnav a, header .gnav .hbtn { flex: 1; text-align: center; font-size: 14px; padding: 6px 4px; }
   header .gnav .on { background: #fff; color: var(--green-d); font-weight: bold; }
   header .hbtn.on { background: rgba(255,255,255,.25); font-weight: bold; }
@@ -197,6 +198,9 @@
     header.schedhead .ht, header.schedhead .hbtns, header.schedhead .me { display: none !important; }
     header.schedhead .gnav { gap: 4px; }
     header.schedhead .gnav .hbtn { padding: 5px 2px; font-size: 13px; }
+    header.schedhead .subnav { gap: 4px; flex-wrap: wrap; }
+    header.schedhead .subnav .hbtn { padding: 4px 10px; }
+    header.schedhead .subnav .tohome { display: inline-block; background: rgba(255,255,255,.92); color: #2f6f45; border-color: #fff; font-weight: bold; }
   }
   #schedframe { display: block; width: 100%; border: 0; background: var(--bg); height: calc(100vh - var(--hh, 110px)); height: calc(100dvh - var(--hh, 110px)); }
 
@@ -1924,7 +1928,7 @@ function renderExt() {
   document.getElementById('app').innerHTML = `
     <header class="schedhead"><div class="ht"><h1>${weed ? '除草' : '在庫管理'}</h1><div class="sub">${weed ? '除草の記録・マップ' : '在庫を見る・入庫と出庫'}</div></div>
       ${hbtnsHtml()}${navHtml()}
-      <nav class="subnav" aria-label="${weed ? '除草' : '在庫管理'}の画面">${(weed ? [['weed', '記録する'], ['weedmap', 'マップ']] : [['stock', '在庫を見る'], ['stockio', '入庫・出庫'], ['stocklog', '履歴']]).map(x => `<button type="button" class="hbtn${x[0] === page ? ' on' : ''}" data-nav="${x[0]}">${x[1]}</button>`).join('')}</nav></header>
+      <nav class="subnav" aria-label="${weed ? '除草' : '在庫管理'}の画面"><button type="button" class="hbtn tohome" data-nav="front">‹ メニュー</button>${(weed ? [['weed', '記録する'], ['weedmap', 'マップ']] : [['stock', '在庫を見る'], ['stockio', '入庫・出庫'], ['stocklog', '履歴']]).map(x => `<button type="button" class="hbtn${x[0] === page ? ' on' : ''}" data-nav="${x[0]}">${x[1]}</button>`).join('')}</nav></header>
     <iframe id="schedframe" data-ext="${page}" src="${src}" title="${weed ? '除草' : '在庫管理'}"></iframe>`;
   document.getElementById('bulkbar').hidden = true;
   document.getElementById('home').onclick = () => goPage('front');
