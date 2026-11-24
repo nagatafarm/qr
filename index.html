@@ -90,6 +90,7 @@
   .fsum { font-size: 12px; color: var(--green-d); padding-top: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .fhit { display: inline-block; margin-left: 6px; padding: 0 7px; border-radius: 999px; background: var(--orange-l); color: var(--orange-d); font-size: 11px; font-weight: normal; vertical-align: 1px; }
   .loginlogo { text-align: center; margin: 2px 0 10px; }
+  .helplink { display: block; text-align: center; margin: 12px 0 4px; padding: 10px; border: 1px solid #b9d3bf; border-radius: 12px; background: #eef6f0; color: var(--green-d); font-weight: bold; text-decoration: none; }
   .loginlogo .appname { font-size: 22px; font-weight: bold; color: var(--green-d); letter-spacing: .08em; margin-top: 2px; }
   .loginmain { padding-top: 28px; }   /* ログインの画面は、上の緑の帯を出さない */
   .loginlogo img { width: 120px; height: auto; mix-blend-mode: multiply; }   /* ロゴの白い地を、画面の地の色になじませる */
@@ -203,7 +204,7 @@
     header.schedhead .gnav .hbtn { padding: 5px 2px; font-size: 13px; }
     header.schedhead .subnav { gap: 4px; flex-wrap: wrap; }
     header.schedhead .subnav .hbtn { padding: 4px 10px; }
-    header.schedhead .subnav .tohelp { display: inline-block; margin-left: auto; }
+    header.schedhead .subnav .tohelp { display: inline-block; margin-left: auto; padding: 4px 11px; }
     header.schedhead .subnav .tohome { display: inline-block; background: rgba(255,255,255,.92); color: #2f6f45; border-color: #fff; font-weight: bold; }
   }
   #schedframe { display: block; width: 100%; border: 0; background: var(--bg); height: calc(100vh - var(--hh, 110px)); height: calc(100dvh - var(--hh, 110px)); }
@@ -1019,10 +1020,10 @@ function renderGLogin() {
         ${gBusy ? '<p class="muted" style="margin:0">確かめています…</p>' : '<div id="gbtn" style="display:flex;justify-content:center;min-height:44px"></div>'}
         ${gMsg ? `<p id="gmsg" style="margin:14px 0 0;color:#b3261e;font-weight:bold">${esc(gMsg)}</p>` : ''}
       </div>
+      <a class="helplink" href="help.html#login">？ ログインの方法・使い方</a>
       <p class="muted">入れないときは、総務に伝えてください（スケジュール用のスプレッドシートの「ログイン」シートに、Google のメールアドレスを足す）。<br>
         パートさん用の共有のスマホは、社員がログインしてから、右上の名前 →「このスマホをパートさん用にする」を押します。</p>
       <a class="big wish" href="wish.html" style="margin-top:18px">パートさん：出勤希望を出す<small>ログインは要りません。はじめての人は、自分の名札の QR をスマホのカメラで読んでください</small></a>
-      <p style="text-align:center;margin-top:18px"><a href="help.html#login" style="font-weight:bold">ログインの方法・使い方</a></p>
       <p class="muted" style="text-align:center"><a href="privacy.html">個人情報の取り扱い</a></p>
     </main>`;
   document.getElementById('bulkbar').hidden = true;
@@ -1160,7 +1161,7 @@ function helpHref() {
   const a = { weed: 'weed', weedmap: 'weedmap', stock: 'stock', stockio: 'stockio', stocklog: 'stockio', dayplan: 'dayplan' }[page];
   return 'help.html' + (a ? '#' + a : '');
 }
-function helpBtn(cls) { return `<a class="hbtn ${cls || ''}" href="${helpHref()}" target="_blank" rel="noopener" title="この画面の使い方">？ 使い方</a>`; }
+function helpBtn(cls) { return `<a class="hbtn ${cls || ''}" href="${helpHref()}" target="_blank" rel="noopener" title="この画面の使い方">${cls === 'tohelp' ? '？' : '？ 使い方'}</a>`; }
 function hbtnsHtml(extra, noHome, noUser) {
   const user = noUser ? '' : isPart() ? '<button type="button" class="hbtn" id="nextp">次の人</button>' : loggedIn() ? '<button type="button" class="hbtn" id="chg">ログアウト</button>' : '';
   const late = noHome ? 0 : overdueList().length;   // メニュー以外の画面：予定日を過ぎた作業の数。押すと、メニューのお知らせをひらく

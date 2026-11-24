@@ -7,189 +7,167 @@
 <style>
   :root { --green: #4f9363; --green-d: #2f6f45; --orange: #d4824a; --bg: #f5f5f3; --line: #dfe6df; }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: #222; font-family: "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif; line-height: 1.8; font-size: 16px; }
+  body { margin: 0; background: var(--bg); color: #222; font-family: "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif; line-height: 1.7; font-size: 16px; }
   header { background: var(--green); color: #fff; padding: 14px 16px; }
   header h1 { margin: 0; font-size: 19px; }
-  header p { margin: 2px 0 0; font-size: 13px; opacity: .95; }
-  main { max-width: 760px; margin: 0 auto; padding: 14px 16px 40px; }
-  nav.toc { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 12px 16px; margin: 6px 0 18px; }
-  nav.toc b { font-size: 13px; color: #4a5a4f; letter-spacing: .08em; }
-  nav.toc ol { margin: 6px 0 0; padding-left: 1.4em; }
-  nav.toc a { color: var(--green-d); }
-  section { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 16px 18px; margin: 14px 0; box-shadow: 0 2px 8px rgba(0,0,0,.05); scroll-margin-top: 10px; }
-  h2 { font-size: 18px; margin: 0 0 8px; padding-left: 10px; border-left: 5px solid var(--green); }
-  h3 { font-size: 15px; margin: 16px 0 4px; color: var(--green-d); }
-  p { margin: 6px 0; }
-  ol, ul { margin: 6px 0; padding-left: 1.5em; }
-  li { margin: 3px 0; }
-  .btn { display: inline-block; border: 1px solid #b9c4bb; border-radius: 8px; padding: 0 8px; background: #f3f6f3; font-weight: bold; white-space: nowrap; }
-  .note { background: #fff8e6; border: 1px solid #ecd9a0; border-radius: 12px; padding: 8px 12px; margin: 10px 0; font-size: 14px; }
-  .warn { background: #fdecec; border: 1px solid #efb1b1; border-radius: 12px; padding: 8px 12px; margin: 10px 0; font-size: 14px; }
-  table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 14px; }
+  main { max-width: 760px; margin: 0 auto; padding: 12px 14px 96px; }
+  .toc { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 14px; }
+  .toc a { background: #fff; border: 1px solid #b9d3bf; border-radius: 999px; padding: 6px 14px; color: var(--green-d); text-decoration: none; font-weight: bold; font-size: 14px; }
+  section { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 16px; margin: 14px 0; box-shadow: 0 2px 8px rgba(0,0,0,.05); scroll-margin-top: 8px; }
+  h2 { font-size: 18px; margin: 0 0 12px; padding-left: 10px; border-left: 5px solid var(--green); }
+  .row { display: flex; gap: 18px; align-items: flex-start; }
+  .phone { flex: none; width: 220px; position: relative; border: 6px solid #2b2b2b; border-radius: 26px; overflow: hidden; background: #000; box-shadow: 0 4px 14px rgba(0,0,0,.2); }
+  .phone img { display: block; width: 100%; height: auto; }
+  .phone .m { position: absolute; width: 30px; height: 30px; margin: -15px 0 0 -15px; border-radius: 50%; background: var(--orange); color: #fff; font-weight: bold; font-size: 17px; line-height: 26px; text-align: center; border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.45); }
+  .steps { flex: 1; min-width: 0; margin: 0; padding: 0; list-style: none; }
+  .steps li { display: flex; gap: 10px; align-items: flex-start; margin: 0 0 12px; font-size: 16px; }
+  .steps .n { flex: none; width: 28px; height: 28px; border-radius: 50%; background: var(--orange); color: #fff; font-weight: bold; text-align: center; line-height: 28px; }
+  .steps .n.p { background: #8a968c; }
+  .steps b { color: var(--green-d); }
+  .tip { background: #fff8e6; border: 1px solid #ecd9a0; border-radius: 12px; padding: 8px 12px; margin: 10px 0 0; font-size: 14px; }
+  .go { display: inline-block; margin-top: 6px; background: var(--green); color: #fff; text-decoration: none; border-radius: 999px; padding: 7px 18px; font-weight: bold; font-size: 14px; }
+  .line img { display: block; width: 100%; max-width: 420px; border-radius: 12px; border: 1px solid var(--line); margin: 0 auto 10px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 14px; margin: 4px 0 10px; }
+  .dot { display: inline-block; width: 13px; height: 13px; border-radius: 50%; border: 1px solid #000; vertical-align: -2px; margin-right: 4px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
   th, td { border: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }
-  th { background: #eef4ef; white-space: nowrap; }
-  .dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; border: 1px solid #000; vertical-align: -1px; margin-right: 4px; }
-  .go { display: inline-block; margin-top: 8px; background: var(--green); color: #fff; text-decoration: none; border-radius: 999px; padding: 6px 18px; font-weight: bold; font-size: 14px; }
-  .back { display: block; text-align: center; margin: 22px 0 0; }
-  .back a { background: var(--orange); }
+  th { background: #eef4ef; }
   .muted { color: #666; font-size: 13px; }
+  .fab { position: fixed; right: 14px; bottom: 14px; z-index: 50; background: var(--orange); color: #fff; text-decoration: none; font-weight: bold; border-radius: 999px; padding: 12px 20px; box-shadow: 0 4px 14px rgba(0,0,0,.3); font-size: 15px; }
+  @media (max-width: 560px) {
+    .row { flex-direction: column; align-items: center; }
+    .phone { width: 240px; }
+    .steps { width: 100%; }
+  }
 </style>
 </head>
 <body>
-<header>
-  <h1>なえログ　使い方</h1>
-  <p>ログインの方法と、LINE の下のメニューから開く画面の使い方</p>
-</header>
+<header><h1>なえログ　使い方</h1></header>
 <main>
-  <nav class="toc"><b>もくじ</b>
-    <ol>
-      <li><a href="#login">ログインする</a></li>
-      <li><a href="#line">LINE の下のメニューから開く</a></li>
-      <li><a href="#weed">除草を記録する</a></li>
-      <li><a href="#weedmap">除草マップを見る</a></li>
-      <li><a href="#stock">在庫を見る</a></li>
-      <li><a href="#stockio">入庫・出庫を記録する</a></li>
-      <li><a href="#dayplan">予定を入力する</a></li>
-      <li><a href="#trouble">うまくいかないとき</a></li>
-    </ol>
-  </nav>
+  <div class="toc">
+    <a href="#login">ログイン</a><a href="#line">LINE から開く</a><a href="#move">画面を移る</a><a href="#weed">除草を記録</a><a href="#weedmap">除草マップ</a><a href="#stock">在庫を見る</a><a href="#stockio">入庫・出庫</a><a href="#dayplan">予定を入力</a><a href="#trouble">困ったとき</a>
+  </div>
 
   <section id="login">
-    <h2>1. ログインする</h2>
-    <p>なえログは、<b>Google のアカウント</b>でログインします。会社に伝えてあるアカウントだけが入れます。</p>
-    <ol>
-      <li>なえログを開くと、「Google でログイン」のボタンが出ます。押します。</li>
-      <li>Google のアカウントを選ぶ画面が出ます。<b>会社に伝えたアカウント</b>を選びます。</li>
-      <li>メニューが出たら、ログインできています。右上に自分の名前が出ます。</li>
-    </ol>
-    <p>一度ログインすると、そのスマホ・PC では 30日間、ログインしたままです。</p>
-    <div class="note"><b>はじめての人</b>：使っている Google のメールアドレス（○○@gmail.com など）を、総務に伝えてください。登録が済むと、ログインできるようになります。</div>
-    <h3>ログアウトする・人を替える</h3>
-    <p>右上の <span class="btn">ログアウト</span> を押します。ほかの人が使うときは、ログアウトしてから、その人のアカウントでログインします。</p>
-    <h3>パートさん用の共有のスマホ</h3>
-    <p>社員がそのスマホでログインしてから、右上の名前 → <span class="btn">このスマホをパートさん用にする</span> を押します。あとは、名札の QR を読んだ人として記録できます。</p>
-    <h3>パートさんの出勤希望</h3>
-    <p>出勤希望は、ログインなしで出せます。ログインの画面の <span class="btn">パートさん：出勤希望を出す</span> を押します。はじめての人は、自分の名札の QR をスマホのカメラで読んでください。</p>
+    <h2>ログインする</h2>
+    <div class="row">
+      <div class="phone"><img src="help/login.jpg" alt="ログインの画面"><span class="m" style="left:50%;top:34.3%">1</span></div>
+      <ol class="steps">
+        <li><span class="n">1</span><span><b>Google でログイン</b>を押す</span></li>
+        <li><span class="n p">2</span><span>会社に伝えた <b>Google のアカウント</b>を選ぶ</span></li>
+        <li><span class="n p">3</span><span>メニューが出たら完了。30日間はログインしたまま</span></li>
+      </ol>
+    </div>
+    <p class="tip">はじめての人は、使っている Google のメールアドレスを総務に伝えてください。登録が済むと入れます。</p>
   </section>
 
-  <section id="line">
-    <h2>2. LINE の下のメニューから開く</h2>
-    <p>LINE のトーク画面の下のメニューを押すと、なえログの画面が <b>Chrome などのブラウザ</b>で開きます（LINE の中の画面では開きません）。</p>
-    <table>
-      <tr><th>メニュー</th><th>開く画面</th></tr>
-      <tr><td>除草を記録</td><td><a href="#weed">除草を記録する</a></td></tr>
-      <tr><td>除草マップ</td><td><a href="#weedmap">除草マップを見る</a></td></tr>
-      <tr><td>在庫を見る</td><td><a href="#stock">在庫を見る</a></td></tr>
-      <tr><td>入庫出庫</td><td><a href="#stockio">入庫・出庫を記録する</a></td></tr>
-      <tr><td>予定を入力</td><td><a href="#dayplan">予定を入力する</a></td></tr>
-    </table>
-    <p>はじめて開いたときは、ログインの画面が出ます。<a href="#login">1. ログインする</a> のとおりにログインすると、押したメニューの画面が出ます。</p>
-    <p>どの画面でも、上の緑の帯から、ほかの画面へ移れます。スマホでは <span class="btn">‹ メニュー</span> で、なえログのメニューに戻ります。</p>
+  <section id="line" class="line">
+    <h2>LINE の下のメニューから開く</h2>
+    <img src="help/linemenu.jpg" alt="LINE の下のメニュー">
+    <ol class="steps">
+      <li><span class="n p">1</span><span>使いたいボタンを押す。<b>Chrome などのブラウザ</b>で開く</span></li>
+      <li><span class="n p">2</span><span>はじめてのときだけ、ログインの画面が出る。ログインすると、押した画面になる</span></li>
+    </ol>
+  </section>
+
+  <section id="move">
+    <h2>画面を移る</h2>
+    <div class="row">
+      <div class="phone"><img src="help/weed.jpg" alt="上の緑の帯"><span class="m" style="left:50%;top:9.8%">1</span><span class="m" style="left:12.5%;top:15.8%">2</span></div>
+      <ol class="steps">
+        <li><span class="n">1</span><span>上の緑の帯で、<b>登録・調べる・予定・除草・在庫</b>に移る</span></li>
+        <li><span class="n">2</span><span><b>‹ メニュー</b>で、なえログのメニューに戻る</span></li>
+        <li><span class="n p">？</span><span>右の <b>？</b> で、その画面の使い方が開く</span></li>
+      </ol>
+    </div>
   </section>
 
   <section id="weed">
-    <h2>3. 除草を記録する</h2>
-    <p>除草が終わったら、その場で記録します。</p>
-    <ol>
-      <li><b>場所</b>を押して選びます。いくつでも選べます。選んだ場所は緑になります。</li>
-      <li><b>範囲</b>が出たら、除草した所を選びます。全部やったときは <span class="btn">全体</span> のままです。</li>
-      <li><b>手段</b>（草刈り・手で抜く など）を1つ選びます。</li>
-      <li>ほかの欄（除草前の状態 など）が出ていたら、選びます。「必須」と書いてある欄は、選ばないと送れません。</li>
-      <li>下の <span class="btn">送信</span> を押します。</li>
-    </ol>
-    <p>記録すると、LINE の通知グループに知らせが出ます。</p>
-    <h3>まちがえたとき</h3>
-    <p>画面の <span class="btn">記録を取り消す</span> から、自分が 24時間以内に入れた記録を取り消せます。</p>
-    <h3>除草を人に頼むとき</h3>
-    <p>上の <span class="btn">除草を依頼する</span> を押して、場所と頼む相手を選んで送ります。</p>
-    <a class="go" href="index.html?go=weed">除草を記録する画面を開く</a>
+    <h2>除草を記録する</h2>
+    <div class="row">
+      <div class="phone"><img src="help/weed.jpg" alt="除草の記録の画面"><span class="m" style="left:16.7%;top:50.3%">1</span><span class="m" style="left:19%;top:80%">2</span><span class="m" style="left:73.6%;top:94.8%">3</span></div>
+      <ol class="steps">
+        <li><span class="n">1</span><span><b>場所</b>を押す（いくつでも）</span></li>
+        <li><span class="n">2</span><span><b>手段</b>を1つ選ぶ。「必須」の欄が出ていたら、それも選ぶ</span></li>
+        <li><span class="n">3</span><span><b>送信</b>を押す</span></li>
+      </ol>
+    </div>
+    <p class="tip">まちがえたら、画面を下へ送って「記録を取り消す」。自分が 24時間以内に入れたものを取り消せます。</p>
+    <a class="go" href="index.html?go=weed">この画面を開く</a>
   </section>
 
   <section id="weedmap">
-    <h2>4. 除草マップを見る</h2>
-    <p>どの場所の除草が要るかを、地図の色で見ます。</p>
-    <table>
-      <tr><th>色</th><th>意味</th></tr>
-      <tr><td><span class="dot" style="background:#00e676"></span>緑</td><td>期限内。まだ除草しなくてよい</td></tr>
-      <tr><td><span class="dot" style="background:#ffea00"></span>黄</td><td>もうすぐ。あと数日で期限</td></tr>
-      <tr><td><span class="dot" style="background:#ff1744"></span>赤</td><td>除草が必要。「今すぐ！」の札が付きます</td></tr>
-      <tr><td><span class="dot" style="background:#e0e0e0"></span>灰</td><td>記録なし</td></tr>
-    </table>
-    <ul>
-      <li>場所を押すと、その場所の名前・最後に除草した日・担当が出ます。</li>
-      <li>左上の <b>担当</b> で、人ごとに絞れます。</li>
-      <li>左上の窓の題（除草状況の地図）を押すと、窓をたためます。</li>
-      <li>指2本で広げる・左の ＋ － で、大きさを変えられます。</li>
-    </ul>
-    <a class="go" href="index.html?go=weedmap">除草マップを開く</a>
+    <h2>除草マップを見る</h2>
+    <div class="row">
+      <div class="phone"><img src="help/weedmap.jpg" alt="除草マップ（見本の絵）"><span class="m" style="left:51.7%;top:15.8%">1</span></div>
+      <div class="steps">
+        <ol class="steps">
+          <li><span class="n">1</span><span>除草の画面で <b>マップ</b>を押す</span></li>
+          <li><span class="n p">2</span><span>場所を押すと、最後に除草した日・担当が出る</span></li>
+        </ol>
+        <div class="legend">
+          <span><span class="dot" style="background:#00e676"></span>期限内</span>
+          <span><span class="dot" style="background:#ffea00"></span>もうすぐ</span>
+          <span><span class="dot" style="background:#ff1744"></span>除草が必要</span>
+          <span><span class="dot" style="background:#e0e0e0"></span>記録なし</span>
+        </div>
+        <p class="muted">左上の窓は、題を押すとたためます。画像は見本の絵です。</p>
+      </div>
+    </div>
+    <a class="go" href="index.html?go=weedmap">この画面を開く</a>
   </section>
 
   <section id="stock">
-    <h2>5. 在庫を見る</h2>
-    <p>農薬・備品などの、今の残りを見ます。</p>
-    <ul>
-      <li>種類（農薬・備品 など）の見出しを押すと、中がひらきます。区分の見出しを押すと、品目が出ます。</li>
-      <li>品目の右に <b>残り</b> が出ます。その下の小さな「目安」は、要発注の目安です。</li>
-      <li><b style="color:#a32020">赤い字</b>は要発注です。残りが目安以下になっています。</li>
-      <li>上の <span class="btn">要発注だけ</span> を押すと、発注が要る品目だけになります。</li>
-      <li>上の欄に品目の名前を入れると、探せます。</li>
-    </ul>
-    <a class="go" href="index.html?go=stock">在庫を見る画面を開く</a>
+    <h2>在庫を見る</h2>
+    <div class="row">
+      <div class="phone"><img src="help/stock.jpg" alt="在庫を見る画面"><span class="m" style="left:51.8%;top:66.5%">1</span><span class="m" style="left:71.5%;top:54.3%">2</span></div>
+      <ol class="steps">
+        <li><span class="n">1</span><span><b>種類 → 区分</b>の見出しを押すと、品目と残りが出る</span></li>
+        <li><span class="n">2</span><span><b>要発注だけ</b>で、発注が要る品目だけにする</span></li>
+        <li><span class="n p">赤</span><span>赤い字は<b>要発注</b>。残りが「目安」以下</span></li>
+      </ol>
+    </div>
+    <a class="go" href="index.html?go=stock">この画面を開く</a>
   </section>
 
   <section id="stockio">
-    <h2>6. 入庫・出庫を記録する</h2>
-    <p>入れた・使った・数えた、をその場で記録します。</p>
-    <ol>
-      <li><b>種類</b> → <b>区分</b> → <b>品目</b> の順に選びます。</li>
-      <li><b>動き</b>を選びます。</li>
-    </ol>
-    <table>
-      <tr><th>動き</th><th>入れる数</th></tr>
-      <tr><td>入庫</td><td>入れた数（1〜999）</td></tr>
-      <tr><td>出庫</td><td>使った・持ち出した数（1〜999）</td></tr>
-      <tr><td>棚卸</td><td>今、数えた数（0〜999）。この数が残りになります</td></tr>
-    </table>
-    <ol start="3">
-      <li>数を入れて <span class="btn">確認へ</span> を押します。</li>
-      <li>内容を確かめて <span class="btn">記録する</span> を押します。</li>
-    </ol>
-    <h3>まちがえたとき</h3>
-    <p><span class="btn">記録を取り消す</span> から、自分が 24時間以内に入れた記録を取り消せます。</p>
-    <h3>だれが・いつ入れたかを見る</h3>
-    <p>上の緑の帯の <span class="btn">履歴</span> で見られます。</p>
-    <div class="note">「記録の数が合いません。棚卸してください」と出たら、実物を数えて、<b>棚卸</b>で数を入れ直してください。</div>
-    <a class="go" href="index.html?go=stockio">入庫・出庫の画面を開く</a>
+    <h2>入庫・出庫を記録する</h2>
+    <div class="row">
+      <div class="phone"><img src="help/stockio.jpg" alt="入庫出庫の画面"><span class="m" style="left:16.9%;top:38.4%">1</span><span class="m" style="left:35.9%;top:56.4%">2</span><span class="m" style="left:26.4%;top:94.8%">4</span></div>
+      <ol class="steps">
+        <li><span class="n">1</span><span><b>種類</b>を選ぶ</span></li>
+        <li><span class="n">2</span><span><b>動き</b>を選ぶ（出庫・入庫・棚卸）</span></li>
+        <li><span class="n p">3</span><span>下の区分をひらいて、品目に<b>数</b>を入れる</span></li>
+        <li><span class="n">4</span><span><b>確認へ</b> → 中身を見て <b>記録する</b></span></li>
+      </ol>
+    </div>
+    <p class="tip">棚卸は「今、数えた数」を入れます。その数が残りになります。まちがえたら「記録を取り消す」。</p>
+    <a class="go" href="index.html?go=stockio">この画面を開く</a>
   </section>
 
   <section id="dayplan">
-    <h2>7. 予定を入力する</h2>
-    <p>自分のその日の時間割を出します。</p>
-    <ol>
-      <li>上に、始まりと終わる予定の時間が出ます。</li>
-      <li>空いている時間を押すと、その時間の作業を入れられます。</li>
-      <li>入れた作業を押すと、時間を変える・消すができます。</li>
-      <li>できたら <span class="btn">予定を送る</span> を押します。</li>
+    <h2>予定を入力する</h2>
+    <ol class="steps">
+      <li><span class="n p">1</span><span><b>空いている時間</b>を押して、作業を入れる</span></li>
+      <li><span class="n p">2</span><span>入れた作業を押すと、時間を変える・消すができる</span></li>
+      <li><span class="n p">3</span><span><b>予定を送る</b>を押す</span></li>
     </ol>
-    <a class="go" href="index.html?go=dayplan">予定を入力する画面を開く</a>
+    <a class="go" href="index.html?go=dayplan">この画面を開く</a>
   </section>
 
   <section id="trouble">
-    <h2>8. うまくいかないとき</h2>
+    <h2>困ったとき</h2>
     <table>
       <tr><th>出たこと</th><th>やること</th></tr>
-      <tr><td>「このアドレスは、ログインできる人の一覧にありません」</td><td>選んだアカウントが、会社に伝えたものとちがいます。別のアカウントを選び直すか、総務に、使っているメールアドレスを伝えてください</td></tr>
-      <tr><td>「Google でログイン」を押しても、先へ進まない</td><td>LINE の中の画面で開いていませんか。右上の「︙」→「ブラウザで開く」（または Chrome で開く）を選んでください</td></tr>
-      <tr><td>「なえログにログインしてから、もう一度開いてください」</td><td>なえログのメニューに戻って、ログインしてから開き直してください</td></tr>
-      <tr><td>「読み込めませんでした」</td><td>電波のよい所で、画面を下に引いて読み込み直してください</td></tr>
-      <tr><td>画面が古いまま・ボタンが出ない</td><td>画面を下に引いて読み込み直してください。直らなければ、ブラウザのタブを閉じて開き直します</td></tr>
-      <tr><td>除草・在庫のボタンがメニューに出ない</td><td>ログインした社員にだけ出ます。パートさん用のスマホには出ません</td></tr>
+      <tr><td>「一覧にありません」と出る</td><td>別の Google のアカウントを選び直す。だめなら、総務にメールアドレスを伝える</td></tr>
+      <tr><td>ログインを押しても進まない</td><td>LINE の中で開いている。右上の「︙」→ ブラウザで開く</td></tr>
+      <tr><td>画面が古い・ボタンがない</td><td>画面を下に引いて、読み込み直す</td></tr>
+      <tr><td>除草・在庫が出ない</td><td>ログインした社員にだけ出る</td></tr>
     </table>
-    <p>それでも直らないときは、画面の右下の <span class="btn">✎ 意見</span>（出ている人だけ）か、総務・高部まで知らせてください。</p>
   </section>
 
-  <p class="back"><a class="go" href="index.html">なえログを開く</a></p>
-  <p class="muted" style="text-align:center"><a href="privacy.html">個人情報の取り扱い</a>　／　2026年11月24日</p>
+  <p class="muted" style="text-align:center"><a href="privacy.html">個人情報の取り扱い</a></p>
 </main>
+<a class="fab" href="index.html">なえログ ログインに戻る</a>
 </body>
 </html>
