@@ -197,6 +197,14 @@
     header:has(.me) > div:first-child { flex: 1 1 0; min-width: 0; }
     /* 1段目＝題名と名前の札、2段目＝ボタン。題名は1行に収める（ボタンに押されて、1字ずつ縦に折り返すのを防ぐ） */
     header:not(.fronthead):has(.me) h1, header:not(.fronthead):has(.me) .sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* メニューの帯（スマホ）：1段目に題名と説明を横1列、2段目に ？・ログアウト・名前を横1列。薄くする */
+    header.fronthead { padding: 8px 12px; row-gap: 6px; }
+    header.fronthead > div:first-child { order: 0; flex: 1 0 100%; display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+    header.fronthead h1 { white-space: nowrap; flex: none; }
+    header.fronthead .sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+    header.fronthead .hbtns { order: 1; }
+    header.fronthead .me { order: 2; margin-left: auto; }
+    header.fronthead .hbtn { padding: 3px 9px; }
     header:not(.fronthead):has(.me) .me { order: 1; }
     header:not(.fronthead):has(.me) .hbtns { order: 4; flex: 1 0 100%; }
   }
