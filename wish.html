@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>出勤希望｜なえログ</title>
-<script src="config.js"></script>
-<script src="common.js"></script>
+<script src="config.js?v=g1"></script>
+<script src="common.js?v=g1"></script>
 <script src="weather.js?v=7"></script>
 <style>
   :root { --green: #4f9363; --green-d: #2f6b3a; --green-l: #f0f6f1; --orange: #d4834a; --orange-d: #9a5320; --orange-l: #fdf5ee; --line: #dfe5e0; --gray: #6b6b6b; --red: #c33; --blue: #2a6fb8; --bg: #f6f7f5; }
@@ -126,8 +126,8 @@ function head(sub) {
 function renderNoName() {
   document.getElementById('app').innerHTML = head('名前が決まっていません') + `<main><div class="card">
     <p>だれの出勤希望かが、まだ決まっていません。</p>
-    <p class="muted">「もどる」を押して、名札の QR を読むか、担当と名前を選んでから、もう一度開いてください。</p>
-    <p><a class="btn go" style="text-decoration:none;display:inline-block" href="index.html?go=reg">名前を決める</a></p></div></main>`;
+    <p class="muted">${typeof GOOGLE_CLIENT_ID === 'string' && GOOGLE_CLIENT_ID ? 'パートさんは、自分の名札の QR を、スマホのカメラで読んでください。名前が入って、この画面が開きます。社員は、ログインしてから開いてください。' : '「もどる」を押して、名札の QR を読むか、担当と名前を選んでから、もう一度開いてください。'}</p>
+    <p><a class="btn go" style="text-decoration:none;display:inline-block" href="index.html?go=reg">${typeof GOOGLE_CLIENT_ID === 'string' && GOOGLE_CLIENT_ID ? 'もどる' : '名前を決める'}</a></p></div></main>`;
 }
 function renderError(msg) {
   document.getElementById('app').innerHTML = head('読み込めませんでした') + `<main><div class="card"><p>${esc(msg)}</p><p><button type="button" class="btn go" onclick="location.reload()">もう一度読み込む</button></p></div></main>`;

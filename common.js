@@ -18,7 +18,7 @@ async function callApi(options) {
   const query = typeof options === 'string' ? options : '';
   if (query) options = null;
   try {
-    res = await fetch(options ? API_URL : API_URL + '?' + (query || 'api=state&slim=1'),
+    res = await fetch(options ? API_URL : API_URL + '?' + (query || 'api=state&slim=1') + tokenQuery(),
       Object.assign({ credentials: 'omit', cache: 'no-store', redirect: 'follow' }, options || {}));
   } catch (e) {
     throw new Error('通信できませんでした。電波の状態を確認してください');
@@ -30,7 +30,11 @@ async function callApi(options) {
   } catch (e) {
     throw new Error('データの窓口から正しい返事がありません。config.js のURLと、Apps Script のデプロイを確認してください');
   }
-  if (!data.ok) throw new Error(data.error || '失敗しました');
+  if (!data.ok) {
+    const er = new Error(data.error || '失敗しました');
+    if (data.needLogin || data.error === 'ログインが要ります') er.needLogin = true;   // 合言葉が無い・切れた（index.html がログインの画面へ戻す）
+    throw er;
+  }
   return unslim(data.state);
 }
 
@@ -59,4 +63,8 @@ function postRecord(rec) { return postApi(Object.assign({ action: 'record' }, re
 function authToken() { try { return localStorage.getItem('qrdemo.token') || ''; } catch (e) { return ''; } }
 // ログインした人のできること：{ depts[], planner, wish, majors[] }（index.html がログインのときと、窓口の状態が届くたびに覚え直す）
 function authCaps() { try { return JSON.parse(localStorage.getItem('qrdemo.caps') || '{}') || {}; } catch (e) { return {}; } }
-function postApi(body) { return callApi({ method: 'POST', body: JSON.stringify(Object.assign({ token: authToken(), slim: true }, body)) }); }
+// パートさん用の共有のスマホが持つ、端末の合言葉（ログインした社員が「このスマホをパートさん用にする」を押すともらえる）
+function deviceToken() { try { return localStorage.getItem('qrdemo.device') || ''; } catch (e) { return ''; } }
+// 読む口（GET）にも合言葉を付ける。無ければ、窓口は返事をしない
+function tokenQuery() { const t = authToken() || deviceToken(); return t ? '&token=' + encodeURIComponent(t) : ''; }
+function postApi(body) { return callApi({ method: 'POST', body: JSON.stringify(Object.assign({ token: authToken() || deviceToken(), slim: true }, body)) }); }
