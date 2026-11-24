@@ -173,7 +173,7 @@
   /* 引っぱっている間の、のびる先の見本（点線の帯） */
   #ghost { position: fixed; z-index: 30; pointer-events: none; border: 2px dashed var(--c, #1a73e8); border-radius: 8px; background: color-mix(in srgb, var(--c, #1a73e8) 14%, transparent); display: flex; align-items: flex-start; justify-content: flex-end; }
   #ghost[hidden], #ghost b[hidden] { display: none; }
-  /* 計画の予定日の外の日（のばした・動かした分）：斜線とオレンジの線（2026-11-24 意見） */
+  /* 計画の予定日より後ろの日（のばした・動かした分。前に入るのはよい）：斜線とオレンジの線（2026-11-24 意見） */
   .grp .offd { position: absolute; top: 0; bottom: 0; pointer-events: none; z-index: 1; border-top: 3px solid #f08c00;
     background: repeating-linear-gradient(135deg, rgba(240,140,0,.20) 0 6px, transparent 6px 12px); }
   .grp .gh .mv { font-size: 10px; background: #fff3d6; color: #8a5a00; border-radius: 999px; padding: 0 6px; flex: none; }
@@ -648,7 +648,7 @@ function grpHtml(k, g) {
     const tot = Number(e.q) > 0 ? Math.round(Number(e.q) * e.of * 10) / 10 : 0;
     const gx = canEdit();   // 月でも帯はのばせる
     const o = e.o || e.d0 || k, moved = (e.d0 || k) !== o || e.of > 1;
-    return `<div class="grp spg${gx ? ' ed' : ''}${isShut(fk) ? ' shut' : ''}${e.done ? ' alldone' : ''}" style="--c:${colorOf(g.s)}" data-gs="${esc(g.s)}" data-sp="${esc(sp)}" data-k="${k}" data-o="${o}"${moved ? ` title="計画の予定日は ${md(o)}。斜線の日は、予定日の外"` : ''}>
+    return `<div class="grp spg${gx ? ' ed' : ''}${isShut(fk) ? ' shut' : ''}${e.done ? ' alldone' : ''}" style="--c:${colorOf(g.s)}" data-gs="${esc(g.s)}" data-sp="${esc(sp)}" data-k="${k}" data-o="${o}"${moved ? ` title="計画の予定日は ${md(o)}。斜線の日は、予定日より後ろ"` : ''}>
         <div class="gh" data-d="${k}" data-s="${esc(g.s)}" data-fk="${esc(fk)}" title="押すと、たたむ・ひらく${gx ? '（つかんで別の日へ動かせる）' : ''}"><span class="tg">▾</span><b>${esc(g.s)}</b>${tot ? esc(num(tot) + (e.u || 'TR')) : ''}${e.of > 1 ? `<span class="spd">${esc(md(e.d0 || k))}〜${esc(md(d1))}（${e.of}日）</span>` : ''}${(e.d0 || k) !== o ? `<span class="mv">計画 ${esc(md(o))}</span>` : ''}${pplHtml(k, g)}</div>
         ${rowHtml(Object.assign({}, e, { q: tot || e.q }), false, true)}${gx ? gripHtml([e], g.s, e.d0 || k, e.of) : ''}</div>`;
   }
@@ -764,13 +764,13 @@ function alignSpans() {
       ch[0].style.width = (b.right - a.left) + 'px'; ch[0].classList.add('band');
       ch.slice(1).forEach(g => g.classList.add('tail'));
     });
-    // 計画の予定日の外の日に、斜線を引く（帯の頭に、日ごとに重ねる）
+    // 計画の予定日より後ろの日に、斜線を引く（帯の頭に、日ごとに重ねる）
     chains.forEach(ch => {
       const head = ch[0], o = head.dataset.o;
       if (!o) return;   // メモ（計画日がない）
       const h0 = head.getBoundingClientRect();
       ch.forEach(g => {
-        if (g.dataset.k === o) return;
+        if (g.dataset.k <= o) return;   // 予定日より前に入るのはよい（遅れる日だけ斜線。2026-11-24 意見）
         const c = g.closest('.col, .day'), r = c ? c.getBoundingClientRect() : g.getBoundingClientRect();
         const i = document.createElement('i'); i.className = 'offd';
         const l = Math.max(0, r.left - h0.left - (g === head ? 0 : 6)), w = g === head ? Math.min(h0.width, r.right - h0.left) - l : r.width + 6;
