@@ -160,6 +160,9 @@
   /* どの画面でも上の帯に出す3つのボタン（作業を登録する・作業を調べる・スケジュール） */
   header { flex-wrap: wrap; }
   header .gnav { order: 9; flex: 1 0 100%; display: flex; gap: 6px; }
+  /* 除草・在庫管理の中の切り替え（記録する／マップ、在庫を見る／入庫・出庫／履歴）：上の帯のいちばん下に、小さめのタブで */
+  header .subnav { order: 10; flex: 1 0 100%; display: flex; gap: 6px; margin-top: 2px; }
+  header .subnav .hbtn { padding: 4px 16px; font-size: 13px; border-radius: 999px; }
   header .gnav a, header .gnav .hbtn { flex: 1; text-align: center; font-size: 14px; padding: 6px 4px; }
   header .gnav .on { background: #fff; color: var(--green-d); font-weight: bold; }
   header .hbtn.on { background: rgba(255,255,255,.25); font-weight: bold; }
@@ -1920,11 +1923,43 @@ function renderExt() {
   const weed = page === 'weed' || page === 'weedmap';
   document.getElementById('app').innerHTML = `
     <header class="schedhead"><div class="ht"><h1>${weed ? '除草' : '在庫管理'}</h1><div class="sub">${weed ? '除草の記録・マップ' : '在庫を見る・入庫と出庫'}</div></div>
-      ${hbtnsHtml()}${navHtml()}</header>
+      ${hbtnsHtml()}${navHtml()}
+      <nav class="subnav" aria-label="${weed ? '除草' : '在庫管理'}の画面">${(weed ? [['weed', '記録する'], ['weedmap', 'マップ']] : [['stock', '在庫を見る'], ['stockio', '入庫・出庫'], ['stocklog', '履歴']]).map(x => `<button type="button" class="hbtn${x[0] === page ? ' on' : ''}" data-nav="${x[0]}">${x[1]}</button>`).join('')}</nav></header>
     <iframe id="schedframe" data-ext="${page}" src="${src}" title="${weed ? '除草' : '在庫管理'}"></iframe>`;
   document.getElementById('bulkbar').hidden = true;
   document.getElementById('home').onclick = () => goPage('front');
+  const fr = document.getElementById('schedframe');
+  fr.addEventListener('load', () => extSkin(fr));
   fitFrame();
+}
+// はめ込んだ除草・在庫の画面に、なえログの見た目を着せる（同じサイトなので、上から書き足せる。向こうのファイルは変えない。LINE から開いたときの見た目は元のまま）
+const EXT_CSS = `
+  body { font-family: "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif; font-size: 16px; color: #222; background: #f5f5f3; }
+  main { max-width: 760px; padding: 16px 16px 0; }
+  .home-bar { display: none !important; }
+  .title { font-size: 20px; margin: 4px 2px 12px; }
+  .heading { font-size: 16px; }
+  .group-label { font-size: 13px; font-weight: bold; color: #4a5a4f; letter-spacing: .06em; margin: 12px 0 6px; }
+  .note { font-size: 13px; color: #666; }
+  .message, .result { font-size: 16px; }
+  .card, .result { background: #fff; border: 1px solid #dfe6df; border-radius: 16px; padding: 16px; margin: 14px 0; box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+  .card > .heading:first-child { margin: 0 0 10px; padding: 0 0 0 10px; background: none; border-bottom: 0; border-left: 4px solid #4f9363; border-radius: 0; }
+  button { min-height: 44px; font-size: 16px; border-radius: 12px; }
+  .choice { min-width: 64px; padding: 6px 16px; border: 1px solid #cfd6d0; border-radius: 999px; }
+  .choice.selected { background: #4f9363; color: #fff; border: 2px solid #2f6f45; padding: 5px 15px; }
+  .reset, .again, .close { border: 1px solid #cfd6d0; border-radius: 12px; }
+  .send { background: #d4824a; border: 0; border-radius: 12px; font-size: 18px; }
+  .actions { background: #f5f5f3; border-top: 1px solid #dfe6df; margin: 16px -16px 0; padding: 10px 16px 14px; }
+  .previous { border-top: 1px dashed #cfd6d0; }
+  input, select, textarea { font-family: inherit; font-size: 16px; border: 1px solid #cfd6d0 !important; border-radius: 10px !important; }
+`;
+function extSkin(fr) {
+  try {
+    const d = fr.contentDocument;
+    if (!d || !d.head || d.getElementById('naelog-skin')) return;
+    const st = d.createElement('style'); st.id = 'naelog-skin'; st.textContent = EXT_CSS;
+    d.head.appendChild(st);
+  } catch (e) { /* 着せられなくても、画面は使える */ }
 }
 window.addEventListener('message', ev => {
   if (ev.origin !== location.origin || !ev.data || ev.data.type !== 'naelog-ready') return;
