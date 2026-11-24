@@ -508,8 +508,10 @@ let VIEW = new URLSearchParams(location.search).get('view') === '1';
 // 名札の QR から開いたときは ?who=名前 が付いている
 const WHO = (new URLSearchParams(location.search).get('who') || '').trim();
 const GO = new URLSearchParams(location.search).get('go') || '';
+// 除草・在庫管理（別の置き場 ../record/ の画面を、上の帯の下にはめ込む）：なえログの go の値 → 向こうの go の値
+const EXT_PAGES = new Map([['weed', 'record'], ['weedmap', 'map'], ['stock', 'stocklist'], ['stockio', 'stock'], ['stocklog', 'stockhistory']]);
 // 今の画面：front（最初の画面）／reg（作業を登録する）／find（作業を調べる）。QR から開いたときは最初の画面を飛ばす
-let page = ID ? (VIEW ? 'find' : 'reg') : WHO ? 'reg' : GO === 'find' ? 'find' : GO === 'reg' ? 'reg' : GO === 'schedule' ? 'schedule' : GO === 'calendar' ? 'calendar' : GO === 'whiteboard' ? 'whiteboard' : GO === 'dayplan' ? 'dayplan' : 'front';
+let page = ID ? (VIEW ? 'find' : 'reg') : WHO ? 'reg' : EXT_PAGES.has(GO) ? GO : GO === 'find' ? 'find' : GO === 'reg' ? 'reg' : GO === 'schedule' ? 'schedule' : GO === 'calendar' ? 'calendar' : GO === 'whiteboard' ? 'whiteboard' : GO === 'dayplan' ? 'dayplan' : 'front';
 const PLANNER = '__all__';         // 計画担当（すべてを見る）
 const PART = '__part__';           // パートさん用（共有のスマホ）。名札の QR を読んで、その人として記録する
 const PART_IDLE_MIN = 10;          // パートさん用：この分数さわらなければ、名札の読み取りへ戻す
@@ -1846,8 +1848,6 @@ function wishFor() {
   return !!(p && p.kubun && p.kubun.indexOf('パート') >= 0);
 }
 // ---------- 画面：最初の画面（作業を登録する／作業を調べる） ----------
-// 除草・在庫管理の画面（LINE の Bot と同じページ。人の見分けは LINE のログイン）。メニューには、ログインした社員にだけ出す
-const LINE_APP = 'https://liff.line.me/2011954714-Qx2LccvV';
 // メニューのボタンの絵（平らな絵。24×24 のマスに描いた形）
 const ICONS = {
   reg: 'M9 2h6a1 1 0 0 1 1 1h2a2 2 0 0 1 2 2v15a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2a1 1 0 0 1 1-1zm0 2v2h6V4H9zm1.6 13.1 5.8-5.8-1.4-1.4-4.4 4.4-1.9-1.9-1.4 1.4 3.3 3.3z',
@@ -1870,8 +1870,8 @@ function renderFront() {
       <button type="button" class="big reg" id="f-reg">${ic('reg')}<span class="tx">作業を登録する<small>終わった作業を記録する（QR を読む・やることの一覧）</small></span></button>
       <button type="button" class="big find" id="f-find">${ic('find')}<span class="tx">作業を調べる<small>計画の中身と進み具合を見る（QR を読む・名前で探す）</small></span></button>
       ${loggedIn() ? `<div class="two">
-        <a class="big half weed" href="${LINE_APP}?go=record" target="_blank" rel="noopener">${ic('weed')}<span class="tx">除草<small>記録・マップ（LINE でひらく）</small></span></a>
-        <a class="big half stock" href="${LINE_APP}?go=stocklist" target="_blank" rel="noopener">${ic('stock')}<span class="tx">在庫管理<small>一覧・入庫・出庫（LINE でひらく）</small></span></a>
+        <button type="button" class="big half weed" data-nav="weed">${ic('weed')}<span class="tx">除草<small>記録・マップ</small></span></button>
+        <button type="button" class="big half stock" data-nav="stock">${ic('stock')}<span class="tx">在庫管理<small>一覧・入庫・出庫</small></span></button>
       </div>` : ''}
       <h2 class="grp">予定の確認</h2>
       <button type="button" class="big sched" data-nav="calendar">${ic('sched')}<span class="tx">スケジュール<small>いつ・どの作業が・どれだけあるかを、月・週のカレンダーで見る（人の割り振り表もここから）</small></span></button>
@@ -1907,6 +1907,31 @@ function renderSchedule() {
   fitFrame();
 }
 // はめ込んだ表の高さを、画面の残り（上の帯の下）いっぱいにする。帯の高さだけ測り、残りは CSS（100dvh）に任せる
+// ---------- 画面：除草・在庫管理。別の置き場（../record/。LINE の Bot と同じ画面）を、上の帯の下にはめ込む。
+// 向こうの画面は「なえログの合言葉をください」と言ってくる（naelog-ready）ので、ログイン中の合言葉を返す（naelog-token）。LINE のログインは要らない
+function renderExt() {
+  const src = '../record/?go=' + EXT_PAGES.get(page) + '&from=naelog';
+  const old = document.getElementById('schedframe');
+  if (old && old.dataset.ext === page) {
+    const me = document.querySelector('#app header .me');
+    if (me) me.outerHTML = meHtml();
+    return;
+  }
+  const weed = page === 'weed' || page === 'weedmap';
+  document.getElementById('app').innerHTML = `
+    <header class="schedhead"><div class="ht"><h1>${weed ? '除草' : '在庫管理'}</h1><div class="sub">${weed ? '除草の記録・マップ' : '在庫を見る・入庫と出庫'}</div></div>
+      ${hbtnsHtml()}${navHtml()}</header>
+    <iframe id="schedframe" data-ext="${page}" src="${src}" title="${weed ? '除草' : '在庫管理'}"></iframe>`;
+  document.getElementById('bulkbar').hidden = true;
+  document.getElementById('home').onclick = () => goPage('front');
+  fitFrame();
+}
+window.addEventListener('message', ev => {
+  if (ev.origin !== location.origin || !ev.data || ev.data.type !== 'naelog-ready') return;
+  const f = document.getElementById('schedframe');
+  if (!f || !f.dataset.ext || ev.source !== f.contentWindow) return;   // はめ込んだ除草・在庫の画面からの頼みだけに答える
+  ev.source.postMessage({ type: 'naelog-token', token: loggedIn() ? authToken() : '' }, location.origin);
+});
 function fitFrame() {
   const h = document.querySelector('#app header');
   if (h && document.getElementById('schedframe')) document.documentElement.style.setProperty('--hh', h.offsetHeight + 'px');
@@ -1932,7 +1957,7 @@ function openPlan(id, view) {
 window.addEventListener('popstate', () => {
   const q = new URLSearchParams(location.search);
   ID = q.get('id') || ''; VIEW = q.get('view') === '1';
-  page = ID ? (VIEW ? 'find' : 'reg') : q.get('go') === 'find' ? 'find' : q.get('go') === 'reg' ? 'reg' : q.get('go') === 'schedule' ? 'schedule' : q.get('go') === 'calendar' ? 'calendar' : q.get('go') === 'whiteboard' ? 'whiteboard' : q.get('go') === 'dayplan' ? 'dayplan' : 'front';
+  page = ID ? (VIEW ? 'find' : 'reg') : EXT_PAGES.has(q.get('go')) ? q.get('go') : q.get('go') === 'find' ? 'find' : q.get('go') === 'reg' ? 'reg' : q.get('go') === 'schedule' ? 'schedule' : q.get('go') === 'calendar' ? 'calendar' : q.get('go') === 'whiteboard' ? 'whiteboard' : q.get('go') === 'dayplan' ? 'dayplan' : 'front';
   if (state) render();
 });
 
@@ -2357,6 +2382,7 @@ window.addEventListener('resize', () => { const h = document.querySelector('#app
 function renderBody() {
   // 最初の画面をふくめ、どの画面の前にも、まずログイン（ログインの一覧は窓口の状態に入っているので、届くまで待つ）
   if (needLogin()) { if (G_ON) renderGLogin(); else if (state) renderSetup(); return; }
+  if (EXT_PAGES.has(page)) { if (loggedIn()) return renderExt(); page = 'front'; }   // 除草・在庫管理は、ログインした社員だけ
   if (page === 'schedule' || page === 'calendar' || page === 'whiteboard' || page === 'dayplan') return renderSchedule();   // 窓口の状態を待たずに出す（表は自分で読み込む）
   if (!state) return;
   if (page === 'front' && !inSetup) return renderFront();
