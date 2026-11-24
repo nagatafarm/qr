@@ -121,6 +121,12 @@
   .big.half small { font-size: 12px; }
   .big.weed { background: #6f8f2f; }
   .big.stock { background: #2f8a8a; }
+  /* メニューのいちばん下の資料（使い方・就業ガイドライン・機械マニュアル）：小さめの白いカード */
+  .docs { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-top: 14px; }
+  .doc span { white-space: nowrap; }
+  .doc { display: flex; align-items: center; gap: 10px; background: #fff; border: 1px solid #dfe6df; border-radius: 14px; padding: 10px 12px; color: #2f6f45; font-weight: bold; font-size: 14px; text-decoration: none; box-shadow: 0 1px 4px rgba(0,0,0,.05); }
+  .doc .ic { flex: none; width: 34px; height: 34px; border-radius: 10px; background: #eef6f0; display: flex; align-items: center; justify-content: center; }
+  .doc .ic svg { width: 20px; height: 20px; fill: #4f9363; display: block; }
   /* メニューのボタンの絵（平らな白い絵。2026-11-24） */
   .big .ic { flex: none; width: 52px; height: 52px; border-radius: 14px; background: rgba(255,255,255,.18); display: flex; align-items: center; justify-content: center; }
   .big .ic svg { width: 32px; height: 32px; fill: #fff; display: block; }
@@ -1880,6 +1886,9 @@ const ICONS = {
   stock: 'M3 7l9-4 9 4v10l-9 4-9-4V7zm9-1.8L6.2 7.7 12 10.3l5.8-2.6L12 5.2zM5 9.3v6.4l6 2.7v-6.4L5 9.3zm8 9.1 6-2.7V9.3l-6 2.7v6.4z',
   sched: 'M7 2h2v2h6V2h2v2h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2V2zM5 10v10h14V10H5zm2 2h4v4H7v-4z',
   wish: 'M6 2h8l6 6v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm7 1.5V9h5.5L13 3.5zM12 11l-4 4h3v4h2v-4h3l-4-4z',
+  help: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 2a8 8 0 1 1 0 16 8 8 0 0 1 0-16zm-1 12h2v2h-2v-2zm1-10a4 4 0 0 0-4 4h2a2 2 0 1 1 3.1 1.7c-.9.6-2.1 1.3-2.1 3.3h2c0-1 .5-1.4 1.2-1.9A4 4 0 0 0 12 6z',
+  guide: 'M5 3h11a3 3 0 0 1 3 3v15H8a3 3 0 0 1-3-3V3zm2 2v13a1 1 0 0 0 1 1h9V6a1 1 0 0 0-1-1H7zm2 2h6v2H9V7zm0 4h6v2H9v-2z',
+  manual: 'M22 19l-6.6-6.6a5 5 0 0 0-6.8-6.4l3.3 3.3-2.1 2.1-3.3-3.3a5 5 0 0 0 6.4 6.8L19.5 21.5 22 19z',
 };
 function ic(k) { return `<span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path fill-rule="evenodd" d="${ICONS[k]}"/></svg></span>`; }
 function renderFront() {
@@ -1902,7 +1911,12 @@ function renderFront() {
       ${loggedIn() ? `<button type="button" class="big sched" data-nav="dayplan">${ic('sched')}<span class="tx">1日の予定<small>自分のその日の時間割を出す（始まり・終わり・何時から何をするか）</small></span></button>` : ''}
       ${wishFor() ? `<h2 class="grp">書類の提出</h2><a class="big wish" href="wish.html">${ic('wish')}<span class="tx">出勤希望<small>${canWish() ? 'パートさんの来月・再来月の出勤希望を見る。出勤の表に入れる' : '来月・再来月の出勤する日に 〇 を付けて出す'}</small></span></a>` : ''}
       ${who ? `<p class="muted" style="text-align:center;margin-top:16px">${esc(who)}${isPart() ? '<br><button type="button" class="tologin" id="f-login">社員としてログインする</button>' : ''}</p>` : ''}
-      <p class="muted" style="text-align:center;margin-top:10px"><a href="help.html">使い方</a></p>
+      <h2 class="grp">資料</h2>
+      <div class="docs">
+        <a class="doc" href="help.html">${ic('help')}<span>なえログの使い方</span></a>
+        <a class="doc" href="https://nagatafarm.github.io/guide/" target="_blank" rel="noopener">${ic('guide')}<span>就業ガイドライン</span></a>
+        ${loggedIn() ? `<a class="doc" href="https://app.notion.com/p/411aee2ae9e68147825ddd34278224e7" target="_blank" rel="noopener">${ic('manual')}<span>機械マニュアル</span></a>` : ''}
+      </div>
       <p class="muted" style="text-align:center;font-size:11px;margin-top:6px">天気の予報：Open-Meteo</p>
     </main>`;
   document.getElementById('bulkbar').hidden = true;
