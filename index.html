@@ -509,7 +509,7 @@ let VIEW = new URLSearchParams(location.search).get('view') === '1';
 const WHO = (new URLSearchParams(location.search).get('who') || '').trim();
 const GO = new URLSearchParams(location.search).get('go') || '';
 // 今の画面：front（最初の画面）／reg（作業を登録する）／find（作業を調べる）。QR から開いたときは最初の画面を飛ばす
-let page = ID ? (VIEW ? 'find' : 'reg') : WHO ? 'reg' : GO === 'find' ? 'find' : GO === 'reg' ? 'reg' : GO === 'schedule' ? 'schedule' : GO === 'calendar' ? 'calendar' : GO === 'whiteboard' ? 'whiteboard' : 'front';
+let page = ID ? (VIEW ? 'find' : 'reg') : WHO ? 'reg' : GO === 'find' ? 'find' : GO === 'reg' ? 'reg' : GO === 'schedule' ? 'schedule' : GO === 'calendar' ? 'calendar' : GO === 'whiteboard' ? 'whiteboard' : GO === 'dayplan' ? 'dayplan' : 'front';
 const PLANNER = '__all__';         // 計画担当（すべてを見る）
 const PART = '__part__';           // パートさん用（共有のスマホ）。名札の QR を読んで、その人として記録する
 const PART_IDLE_MIN = 10;          // パートさん用：この分数さわらなければ、名札の読み取りへ戻す
@@ -1126,7 +1126,7 @@ function meHtml() {
 }
 function navHtml() {
   const cur = inSetup ? '' : page;
-  return meHtml() + `<nav class="gnav"><button type="button" class="hbtn${cur === 'reg' ? ' on' : ''}" data-nav="reg">作業を登録する</button><button type="button" class="hbtn${cur === 'find' ? ' on' : ''}" data-nav="find">作業を調べる</button><button type="button" class="hbtn${cur === 'schedule' || cur === 'calendar' || cur === 'whiteboard' ? ' on' : ''}" data-nav="calendar">スケジュール</button></nav>`;
+  return meHtml() + `<nav class="gnav"><button type="button" class="hbtn${cur === 'reg' ? ' on' : ''}" data-nav="reg">作業を登録する</button><button type="button" class="hbtn${cur === 'find' ? ' on' : ''}" data-nav="find">作業を調べる</button><button type="button" class="hbtn${cur === 'schedule' || cur === 'calendar' || cur === 'whiteboard' || cur === 'dayplan' ? ' on' : ''}" data-nav="calendar">スケジュール</button></nav>`;
 }
 document.addEventListener('click', ev => {
   const b = ev.target.closest && ev.target.closest('[data-nav]');
@@ -1875,6 +1875,7 @@ function renderFront() {
       </div>` : ''}
       <h2 class="grp">予定の確認</h2>
       <button type="button" class="big sched" data-nav="calendar">${ic('sched')}<span class="tx">スケジュール<small>いつ・どの作業が・どれだけあるかを、月・週のカレンダーで見る（人の割り振り表もここから）</small></span></button>
+      ${loggedIn() ? `<button type="button" class="big sched" data-nav="dayplan">${ic('sched')}<span class="tx">1日の予定<small>自分のその日の時間割を出す（始まり・終わり・何時から何をするか）</small></span></button>` : ''}
       ${wishFor() ? `<h2 class="grp">書類の提出</h2><a class="big wish" href="wish.html">${ic('wish')}<span class="tx">出勤希望<small>${canWish() ? 'パートさんの来月・再来月の出勤希望を見る。出勤の表に入れる' : '来月・再来月の出勤する日に 〇 を付けて出す'}</small></span></a>` : ''}
       ${who ? `<p class="muted" style="text-align:center;margin-top:16px">${esc(who)}${isPart() ? '<br><button type="button" class="tologin" id="f-login">社員としてログインする</button>' : ''}</p>` : ''}
       <p class="muted" style="text-align:center;font-size:11px;margin-top:6px">天気の予報：Open-Meteo</p>
@@ -1888,7 +1889,7 @@ function renderFront() {
 // ---------- 画面：スケジュール。?go=calendar はカレンダー（calendar.html）、?go=schedule は人の割り振り表（schedule.html）。
 // 中身は、上の帯の下にはめ込んで出す。自動の更新で描き直しても、はめ込んだ画面は作り直さない（作り直すと読み込みからやり直しになる）
 function renderSchedule() {
-  const src = page === 'calendar' ? 'calendar.html?embed=1&v=14' : page === 'whiteboard' ? 'whiteboard.html?embed=1&v=16' : 'schedule.html?embed=1&v=7';
+  const src = page === 'calendar' ? 'calendar.html?embed=1&v=15' : page === 'whiteboard' ? 'whiteboard.html?embed=1&v=17' : page === 'dayplan' ? 'dayplan.html?embed=1&v=1' : 'schedule.html?embed=1&v=8';
   const old = document.getElementById('schedframe');
   if (old && old.getAttribute('src') === src) {
     // はめ込んだ画面は作り直さず、右上の札だけ新しくする（窓口の状態が届くと、担当の名前が分かる）
@@ -1898,7 +1899,7 @@ function renderSchedule() {
   }
   const cal = page === 'calendar';
   document.getElementById('app').innerHTML = `
-    <header class="schedhead"><div class="ht"><h1>スケジュール</h1><div class="sub">${cal ? 'いつ・どの作業が・どれだけあるか' : page === 'whiteboard' ? 'だれが・どこで・何をするか' : 'いつまでに・どの作業を・だれが'}</div></div>
+    <header class="schedhead"><div class="ht"><h1>スケジュール</h1><div class="sub">${cal ? 'いつ・どの作業が・どれだけあるか' : page === 'whiteboard' ? 'だれが・どこで・何をするか' : page === 'dayplan' ? '自分のその日の時間割' : 'いつまでに・どの作業を・だれが'}</div></div>
       ${hbtnsHtml()}${navHtml()}</header>
     <iframe id="schedframe" src="${src}" title="${cal ? 'カレンダー' : 'スケジュール'}"></iframe>`;
   document.getElementById('bulkbar').hidden = true;
@@ -1931,7 +1932,7 @@ function openPlan(id, view) {
 window.addEventListener('popstate', () => {
   const q = new URLSearchParams(location.search);
   ID = q.get('id') || ''; VIEW = q.get('view') === '1';
-  page = ID ? (VIEW ? 'find' : 'reg') : q.get('go') === 'find' ? 'find' : q.get('go') === 'reg' ? 'reg' : q.get('go') === 'schedule' ? 'schedule' : q.get('go') === 'calendar' ? 'calendar' : q.get('go') === 'whiteboard' ? 'whiteboard' : 'front';
+  page = ID ? (VIEW ? 'find' : 'reg') : q.get('go') === 'find' ? 'find' : q.get('go') === 'reg' ? 'reg' : q.get('go') === 'schedule' ? 'schedule' : q.get('go') === 'calendar' ? 'calendar' : q.get('go') === 'whiteboard' ? 'whiteboard' : q.get('go') === 'dayplan' ? 'dayplan' : 'front';
   if (state) render();
 });
 
@@ -2356,7 +2357,7 @@ window.addEventListener('resize', () => { const h = document.querySelector('#app
 function renderBody() {
   // 最初の画面をふくめ、どの画面の前にも、まずログイン（ログインの一覧は窓口の状態に入っているので、届くまで待つ）
   if (needLogin()) { if (G_ON) renderGLogin(); else if (state) renderSetup(); return; }
-  if (page === 'schedule' || page === 'calendar' || page === 'whiteboard') return renderSchedule();   // 窓口の状態を待たずに出す（表は自分で読み込む）
+  if (page === 'schedule' || page === 'calendar' || page === 'whiteboard' || page === 'dayplan') return renderSchedule();   // 窓口の状態を待たずに出す（表は自分で読み込む）
   if (!state) return;
   if (page === 'front' && !inSetup) return renderFront();
   if (page === 'find') {
@@ -2383,7 +2384,7 @@ function renderBody() {
 function showMessage(msg) {
   document.getElementById('app').innerHTML = `<header><h1>なえログ</h1></header><main><div class="card">${esc(msg)}</div></main>`;
 }
-if (G_ON && gNeed()) renderGLogin(); else if ((page === 'schedule' || page === 'calendar' || page === 'whiteboard') && !needLogin()) renderSchedule(); else showMessage('読み込んでいます…');
+if (G_ON && gNeed()) renderGLogin(); else if ((page === 'schedule' || page === 'calendar' || page === 'whiteboard' || page === 'dayplan') && !needLogin()) renderSchedule(); else showMessage('読み込んでいます…');
 // 前に開いたときの状態をすぐ出し、裏で読み直す（2026-11-23 速さ）。届いたら描き直す
 let started = false;
 function loadLastState() { try { const v = JSON.parse(localStorage.getItem('qrdemo.stateLast') || 'null'); return v && Array.isArray(v.plans) ? v : null; } catch (e) { return null; } }

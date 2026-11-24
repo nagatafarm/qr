@@ -69,6 +69,7 @@
   .bar .vsw a { padding: 5px 14px; font-size: 13px; color: #333; text-decoration: none; white-space: nowrap; background: #fff; }
   .bar .vsw a + a { border-left: 1px solid #bbb; }
   .bar .vsw a.on { background: var(--green-l); color: var(--green-d); font-weight: bold; }
+  @media (max-width: 560px) { .bar .vsw { max-width: 100%; overflow-x: auto; } .bar .vsw a { padding: 5px 9px; font-size: 12px; } }   /* 4つ並んでも、スマホの幅に収める */
   #fbtn { display: none; }
 
   .body { flex: 1; min-height: 0; display: flex; }
@@ -306,7 +307,7 @@
   <button type="button" id="histbtn" hidden title="この画面でした手直しの一覧（Ctrl+Z で戻す・Ctrl+Y でやり直す）">履歴</button>
   <button type="button" id="fold" hidden>全部たたむ</button>
   <span class="seg"><button type="button" data-view="month">月</button><button type="button" data-view="week">週</button><button type="button" data-view="week2">2週</button></span>
-  <span class="vsw"><a href="index.html?go=calendar" class="on">カレンダー</a><a href="index.html?go=whiteboard">ホワイトボード</a><a href="index.html?go=schedule">人の割り振り表</a></span>
+  <span class="vsw"><a href="index.html?go=calendar" class="on">カレンダー</a><a href="index.html?go=whiteboard">ホワイトボード</a><a href="index.html?go=schedule">人の割り振り表</a><a href="index.html?go=dayplan">1日の予定</a></span>
 </div>
 <div id="mini" hidden></div>
 <div id="hpanel" hidden><div class="hh">履歴<span class="sp"></span><button type="button" id="h-undo">↶ 戻す</button><button type="button" id="h-redo">↷ やり直す</button><button type="button" id="h-x" aria-label="閉じる">×</button></div><ol id="hlist"></ol><div class="hf">Ctrl+Z で戻す・Ctrl+Y でやり直す。このパソコン・スマホでした手直しだけ（50件まで）</div></div>

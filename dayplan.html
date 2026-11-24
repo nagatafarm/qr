@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>1日の予定｜なえログ</title>
+<script>
+// 1日の予定（社員が、自分のその日の時間割を出す。2026-11-24 高部さん）。index.html?go=dayplan の中にはめ込んで出す。
+//   上に始まり・終わりの時刻（ダイヤルで選ぶ。はじめは 8:00〜17:15）、下にその人の勤務の時間の帯。
+//   空いている時間を押すと、その時間の作業を入れる（候補は、その日のホワイトボードの枠・カレンダーの工程・メモ。一覧にない作業も書ける）。
+//   昼休み 12:00〜13:00 と休憩 15:00〜15:15 は、作業の時間に数えない。17:15 より後に終わると残業。
+//   「予定を送る」で、窓口（1日の予定.gs）がスケジュール用のスプレッドシートの「1日の予定」シートに残す。
+//   ホワイトボードの枠の作業を送ると、その枠の「人」に名前が入る。計画担当は「全員の一覧」で、全員の予定を1枚で見る。
+(function () {
+  const q = location.search, embed = /[?&]embed=1(&|$)/.test(q), test = /[?&]mock=1(&|$)/.test(q);
+  if (!embed && !test && window.top === window.self) { location.replace('index.html?go=dayplan'); return; }
+  if (embed) { document.documentElement.classList.add('embed'); const b = document.createElement('base'); b.target = '_top'; document.head.appendChild(b); }
+})();
+</script>
+<script src="config.js?v=g1"></script>
+<script src="common.js?v=g1"></script>
+<style>
+:root {
+  --bg: #f6f7f5; --card: #ffffff; --fg: #222; --mut: #6b6b6b; --line: #dfe5e0;
+  --brand: #4f9363; --brand-d: #2f6b3a; --brand-l: #f0f6f1; --off: #eceeea; --warn: #c2571a; --ok: #2f7d4a;
+  --c-sow: #8e44ad; --c-soil: #9a6230; --c-pot: #2e7d4f; --c-ship: #1e7fc8; --c-memo: #a07c00; --c-other: #6f7a72;
+  --hour: 52px; --wh: 40px;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--fg); font-family: "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif; font-size: 14px; line-height: 1.4; }
+button, input { font-family: inherit; }
+header { background: var(--brand); color: #fff; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+header h1 { font-size: 17px; margin: 0; }
+header a { color: #fff; font-size: 13px; border: 1px solid rgba(255,255,255,.6); border-radius: 8px; padding: 4px 10px; text-decoration: none; }
+html.embed header { display: none; }
+.bar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #fff; border-bottom: 1px solid var(--line); flex-wrap: wrap; position: sticky; top: 0; z-index: 5; }
+.bar button { background: #fff; border: 1px solid #bbb; border-radius: 999px; padding: 5px 12px; cursor: pointer; font-size: 13px; color: #222; }
+.bar .ttl { font-size: 18px; font-weight: bold; }
+.bar .sp { flex: 1; }
+.bar .vsw, .bar .tabs { display: inline-flex; border: 1px solid #bbb; border-radius: 999px; overflow: hidden; }
+.bar .vsw a, .bar .tabs button { padding: 5px 14px; font-size: 13px; color: #333; text-decoration: none; white-space: nowrap; background: #fff; border: 0; border-radius: 0; }
+.bar .vsw a + a, .bar .tabs button + button { border-left: 1px solid #bbb; }
+.bar .vsw a.on, .bar .tabs button.on { background: var(--brand-l); color: var(--brand-d); font-weight: bold; }
+  @media (max-width: 560px) { .bar .vsw { max-width: 100%; overflow-x: auto; } .bar .vsw a { padding: 5px 9px; font-size: 12px; } }   /* 4つ並んでも、スマホの幅に収める */
+main { padding: 14px 16px 40px; max-width: 1100px; margin: 0 auto; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.msg { text-align: center; color: var(--mut); padding: 40px 0; }
+
+/* 社員の入力 */
+.staff { max-width: 520px; margin: 0 auto; display: grid; gap: 12px; }
+.who { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.who h2 { font-size: 19px; margin: 0; }
+.who .d { color: var(--mut); }
+.endcard { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: grid; gap: 10px; }
+.times { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tbtn { border: 1px solid var(--line); background: var(--bg); color: var(--fg); border-radius: 10px; padding: 4px 10px; cursor: pointer; font: inherit; display: grid; text-align: left; }
+.tbtn small { font-size: 11px; color: var(--mut); }
+.tbtn b { font-size: 26px; font-variant-numeric: tabular-nums; line-height: 1.15; }
+.times .dash { color: var(--mut); font-size: 20px; }
+.pill { font-size: 12px; border-radius: 999px; padding: 2px 10px; font-weight: 700; white-space: nowrap; }
+.pill.ok { background: #e3f1e7; color: var(--ok); }
+.pill.over { background: #fbe9de; color: var(--warn); }
+.pill.mut { background: var(--off); color: var(--mut); }
+.btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn { border: 1px solid var(--line); background: var(--card); color: var(--fg); font: inherit; border-radius: 10px; padding: 8px 14px; cursor: pointer; min-height: 40px; }
+.btn.main { background: var(--brand); color: #fff; border-color: var(--brand); font-weight: 700; }
+.btn.big { font-size: 16px; padding: 10px 18px; }
+.btn:disabled { opacity: .45; cursor: default; }
+.hint { font-size: 12px; color: var(--mut); margin: 0; }
+.sentat { font-size: 12px; color: var(--ok); }
+.sentat.dirty { color: var(--warn); font-weight: 700; }
+
+.tl { background: var(--card); border: 1px solid var(--line); border-radius: 12px; display: grid; grid-template-columns: 46px 1fr; overflow: hidden; padding: 8px 0; }
+.hours { position: relative; }
+.hours div { position: absolute; right: 6px; font-size: 11px; color: var(--mut); transform: translateY(-7px); font-variant-numeric: tabular-nums; }
+.lane { position: relative; border-left: 1px solid var(--line); cursor: pointer; }
+.lane .hl { position: absolute; left: 0; right: 0; border-top: 1px solid var(--line); pointer-events: none; }
+.lane .hl.half { border-top-style: dashed; opacity: .6; }
+.lane .offt { position: absolute; left: 0; right: 0; background: repeating-linear-gradient(135deg, var(--off) 0 8px, transparent 8px 14px); pointer-events: none; }
+.blk { position: absolute; left: 6px; right: 6px; border-radius: 8px; padding: 3px 8px; color: #fff; background: var(--c); font-size: 12px; overflow: hidden; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,.15); display: flex; flex-direction: column; line-height: 1.3; }
+.blk b { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 70px; }
+.blk .t { opacity: .9; font-variant-numeric: tabular-nums; }
+.blk .src { position: absolute; right: 6px; top: 3px; font-size: 10px; background: rgba(255,255,255,.25); border-radius: 999px; padding: 0 6px; }
+.blk.brk { background: var(--off); color: var(--mut); box-shadow: none; border: 1px dashed var(--line); cursor: default; flex-direction: row; gap: 6px; align-items: center; }
+.blk.brk b { font-size: 11px; padding: 0; }
+.blk.short b { font-size: 11px; }
+.blk.short .t { display: none; }
+.send { position: sticky; bottom: 0; display: flex; gap: 8px; align-items: center; background: rgba(246,247,245,.94); padding: 8px 0 calc(8px + env(safe-area-inset-bottom, 0px)); }
+.send .sum { font-size: 12px; color: var(--mut); flex: 1; min-width: 0; }
+
+/* 下から出る選ぶ画面 */
+.sheet-bg { position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 20; display: flex; align-items: flex-end; justify-content: center; }
+.sheet { background: var(--card); color: var(--fg); width: 100%; max-width: 520px; border-radius: 16px 16px 0 0; padding: 16px 16px calc(16px + env(safe-area-inset-bottom, 0px)); display: grid; gap: 12px; max-height: 88vh; overflow: auto; }
+.sheet h3 { margin: 0; font-size: 17px; }
+.sheet .grp { display: grid; gap: 6px; }
+.sheet .grp > .lbl { font-size: 12px; color: var(--mut); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { border: 1.5px solid var(--line); background: var(--card); color: var(--fg); font: inherit; font-size: 13px; border-radius: 10px; padding: 7px 10px; cursor: pointer; text-align: left; display: grid; gap: 1px; }
+.chip small { color: var(--mut); font-size: 11px; }
+.chip.on { border-color: var(--c, var(--brand)); background: color-mix(in srgb, var(--c, var(--brand)) 12%, var(--card)); }
+.chip .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--c); margin-right: 5px; }
+.chip .me { color: var(--brand-d); font-weight: 700; }
+.sheet input[type=text] { font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--fg); width: 100%; }
+.sheet .row { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+
+/* ダイヤル：時と分（5分きざみ）を、くるくる回して選ぶ。端がなく、55の次は00（時も1つ進む） */
+.dials { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-start; }
+.dialset { display: grid; gap: 4px; }
+.dialset .lbl { font-size: 12px; color: var(--mut); }
+.dial { display: flex; align-items: center; gap: 2px; position: relative; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 0 6px; }
+.dial::before { content: ""; position: absolute; left: 4px; right: 4px; top: calc(var(--wh) * 2); height: var(--wh); border-radius: 8px; background: #dce9df; pointer-events: none; }
+.wheel { height: calc(var(--wh) * 5); width: 52px; overflow-y: auto; scroll-snap-type: y mandatory; scrollbar-width: none; -webkit-mask-image: linear-gradient(transparent, #000 30%, #000 70%, transparent); mask-image: linear-gradient(transparent, #000 30%, #000 70%, transparent); position: relative; z-index: 1; outline: none; }
+.wheel::-webkit-scrollbar { display: none; }
+.wheel div { height: var(--wh); line-height: var(--wh); text-align: center; scroll-snap-align: center; font-size: 22px; font-variant-numeric: tabular-nums; cursor: pointer; }
+.wheel .pad { scroll-snap-align: none; cursor: default; }
+.dial .colon { font-size: 22px; z-index: 1; }
+.durline { font-size: 13px; }
+.durline b { font-variant-numeric: tabular-nums; }
+.toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: #222; color: #fff; padding: 10px 16px; border-radius: 10px; font-size: 13px; z-index: 30; max-width: calc(100% - 32px); }
+
+/* 全員の一覧（計画担当） */
+.admin { display: grid; gap: 14px; }
+.admin h2 { font-size: 19px; margin: 0; }
+.kpis { display: flex; flex-wrap: wrap; gap: 8px; }
+.kpi { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; min-width: 0; }
+.kpi .lbl { font-size: 11px; color: var(--mut); }
+.kpi .v { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.need { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: grid; gap: 6px; }
+.need .r { display: grid; grid-template-columns: 80px 1fr 100px; gap: 8px; align-items: center; font-size: 12px; }
+.need .bar2 { height: 10px; background: var(--off); border-radius: 999px; overflow: hidden; position: relative; }
+.need .bar2 i { position: absolute; inset: 0 auto 0 0; background: var(--c); border-radius: 999px; }
+.need .r .n { text-align: right; font-variant-numeric: tabular-nums; }
+.need .r .n.short { color: var(--warn); font-weight: 700; }
+.board { overflow-x: auto; background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
+.board .grid { display: grid; grid-template-columns: 46px repeat(var(--n), minmax(118px, 1fr)); min-width: max-content; }
+.board .colh { background: var(--card); border-bottom: 1px solid var(--line); border-left: 1px solid var(--line); padding: 6px 8px; font-size: 12px; display: grid; gap: 2px; justify-items: start; align-content: start; }
+.board .colh b { font-size: 13px; }
+.board .colh .tm { color: var(--mut); font-variant-numeric: tabular-nums; }
+.board .corner { border-bottom: 1px solid var(--line); background: var(--card); }
+.board .lane { cursor: default; }
+.board .lane.miss { background: repeating-linear-gradient(135deg, var(--off) 0 8px, transparent 8px 14px); }
+.board .lane.miss::after { content: "まだ出していない"; position: absolute; top: 40%; left: 0; right: 0; text-align: center; color: var(--mut); font-size: 12px; }
+.board .blk { cursor: default; left: 4px; right: 4px; padding: 2px 6px; font-size: 11px; }
+.board .blk b { font-size: 12px; padding-right: 0; }
+.legend { display: flex; flex-wrap: wrap; gap: 10px; font-size: 12px; color: var(--mut); }
+.legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 3px; background: var(--c); margin-right: 4px; vertical-align: -1px; }
+@media (max-width: 480px) { .need .r { grid-template-columns: 64px 1fr 88px; } .tbtn b { font-size: 22px; } }
+@media (prefers-reduced-motion: no-preference) { .sheet { animation: up .18s ease-out; } @keyframes up { from { transform: translateY(20px); opacity: .6; } } }
+</style>
+</head>
+<body>
+<header><h1>1日の予定</h1><a href="index.html?go=dayplan">なえログで開く</a></header>
+<div class="bar">
+  <button type="button" id="today">今日</button><button type="button" id="prev" aria-label="前の日">‹</button><button type="button" id="next" aria-label="次の日">›</button>
+  <span class="ttl" id="ttl"></span>
+  <span class="tabs" id="tabs" hidden><button type="button" id="t-staff" class="on">自分の予定</button><button type="button" id="t-admin">全員の一覧</button></span>
+  <span class="sp"></span>
+  <span class="vsw"><a href="index.html?go=calendar">カレンダー</a><a href="index.html?go=whiteboard">ホワイトボード</a><a href="index.html?go=schedule">人の割り振り表</a><a href="index.html?go=dayplan" class="on">1日の予定</a></span>
+</div>
+<main id="main"><p class="msg">読み込んでいます…</p></main>
+
+<script>
+const MOCK = /[?&]mock=1(&|$)/.test(location.search);
+const DEF_START = 8 * 60;
+let TEIJI = 17 * 60 + 15, BREAKS = [{ s: 12 * 60, e: 13 * 60, name: '昼休み' }, { s: 15 * 60, e: 15 * 60 + 15, name: '休憩' }];
+// 工程の色（カレンダー・ホワイトボードの工程の名前から）
+function colorOf(s) {
+  s = String(s || '');
+  if (/播種/.test(s)) return 'var(--c-sow)';
+  if (/土入れ|ポット/.test(s)) return 'var(--c-soil)';
+  if (/鉢上げ|土並べ|接ぎ木|ラベル/.test(s)) return 'var(--c-pot)';
+  if (/出荷|店振り|箱作り/.test(s)) return 'var(--c-ship)';
+  if (/メモ/.test(s)) return 'var(--c-memo)';
+  return 'var(--c-other)';
+}
+const fmt = m => Math.floor(m / 60) + ':' + String(m % 60).padStart(2, '0');
+const durText = m => (m >= 60 ? Math.floor(m / 60) + '時間' : '') + (m % 60 ? m % 60 + '分' : '');
+const addDays = (k, n) => new Date(Date.parse(k + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10);
+function localToday() { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+const H = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--hour')) || 52;
+const breakIn = (s, e) => BREAKS.reduce((n, b) => n + Math.max(0, Math.min(e, b.e) - Math.max(s, b.s)), 0);
+const workMin = blocks => blocks.reduce((n, b) => n + (b.e - b.s) - breakIn(b.s, b.e), 0);
+
+let D = localToday(), X = null, view = 'staff', mine = null, nextId = 1, dirty = false, busy = false;
+
+// ---- 読む ----
+async function load(d) {
+  D = d;
+  document.getElementById('ttl').textContent = d.slice(5).replace('-', '/');
+  document.getElementById('main').innerHTML = '<p class="msg">読み込んでいます…</p>';
+  try {
+    X = MOCK ? await (await fetch('dp_mock.json', { cache: 'no-store' })).json() : await callApi('api=dayplan&d=' + encodeURIComponent(d));
+  } catch (e) {
+    X = null;
+    document.getElementById('main').innerHTML = `<p class="msg">${esc(e.message || '読み込めませんでした')}</p>`;
+    return;
+  }
+  if (MOCK) D = X.d;
+  if (X.d !== D) return;   // 読んでいる間に、ほかの日へ移った
+  TEIJI = X.teiji || TEIJI; BREAKS = X.breaks || BREAKS;
+  document.getElementById('ttl').textContent = X.label + (X.d === X.today ? ' 今日' : '');
+  document.getElementById('tabs').hidden = !X.admin;
+  if (!X.admin) view = 'staff';
+  const m = X.mine;
+  mine = m ? { start: m.s, end: m.e, blocks: m.blocks.map(b => Object.assign({ id: nextId++ }, b)), at: m.at } : { start: DEF_START, end: TEIJI, blocks: [], at: '' };
+  dirty = false;
+  draw();
+}
+
+// ---- 時間の帯 ----
+const taskOf = b => ({ t: b.t, st: b.st || 'その他', src: b.src || '', pl: b.pl || '' });
+function laneHtml(blocks, start, end, from, to, admin) {
+  const y = m => (m - from) / 60 * H();
+  let s = '';
+  for (let m = from; m <= to; m += 30) s += `<div class="hl${m % 60 ? ' half' : ''}" style="top:${y(m)}px"></div>`;
+  if (start > from) s += `<div class="offt" style="top:0;height:${y(start)}px"></div>`;
+  if (end < to) s += `<div class="offt" style="top:${y(end)}px;bottom:0"></div>`;
+  BREAKS.forEach(b => { if (b.e > start && b.s < end) s += `<div class="blk brk" style="top:${y(b.s)}px;height:${y(b.e) - y(b.s) - 1}px"><b>${b.name}</b>${b.e - b.s < 30 ? '' : `<span>${fmt(b.s)}〜${fmt(b.e)}</span>`}</div>`; });
+  blocks.forEach(b => {
+    const t = taskOf(b), h = y(b.e) - y(b.s);
+    s += `<div class="blk${h < 34 ? ' short' : ''}" data-b="${b.id}" style="--c:${colorOf(t.st)};top:${y(b.s) + 1}px;height:${Math.max(14, h - 2)}px" title="${esc(fmt(b.s) + '〜' + fmt(b.e) + ' ' + t.t)}">${admin || !t.src ? '' : `<span class="src">${esc(t.src)}</span>`}<b>${esc(t.t)}</b><span class="t">${fmt(b.s)}〜${fmt(b.e)}${t.pl ? '・' + esc(t.pl) : ''}</span></div>`;
+  });
+  return s;
+}
+function hoursHtml(from, to) { let s = ''; for (let m = Math.ceil(from / 60) * 60; m < to; m += 60) s += `<div style="top:${(m - from) / 60 * H()}px">${fmt(m)}</div>`; return s; }
+// 帯の範囲：勤務の始まり〜終わり（入れた作業がはみ出していれば、そこまで）。1時間の区切りにそろえる
+const rangeOf = (start, end, blocks) => {
+  const a = Math.min(start, ...blocks.map(b => b.s)), z = Math.max(end, ...blocks.map(b => b.e));
+  return [Math.floor(a / 60) * 60, Math.ceil(z / 60) * 60];
+};
+const endPill = (start, end) => end === TEIJI ? '<span class="pill ok">定時</span>' : end > TEIJI ? `<span class="pill over">残業 ${durText(end - TEIJI)}</span>` : '<span class="pill mut">早く終わる</span>';
+
+// ---- 自分の予定 ----
+function drawStaff() {
+  const filled = workMin(mine.blocks), avail = mine.end - mine.start - breakIn(mine.start, mine.end);
+  const [from, to] = rangeOf(mine.start, mine.end, mine.blocks);
+  const past = X.d < X.today;
+  document.getElementById('main').innerHTML = `
+  <section class="staff">
+    <div class="who"><h2>${esc(X.me)} さん</h2><span class="d">${esc(X.label)} の予定</span>
+      ${dirty ? '<span class="sentat dirty">まだ送っていない直しがあります</span>' : mine.at ? `<span class="sentat">送った（${esc(mine.at)}）</span>` : ''}</div>
+    <div class="endcard">
+      <div class="times">
+        <button type="button" class="tbtn" id="b-start"><small>始まり</small><b>${fmt(mine.start)}</b></button><span class="dash">〜</span>
+        <button type="button" class="tbtn" id="b-end"><small>終わる予定</small><b>${fmt(mine.end)}</b></button>
+        ${endPill(mine.start, mine.end)}
+      </div>
+      <div class="btns">
+        <button type="button" class="btn main big" id="teiji"${mine.end === TEIJI ? ' disabled' : ''}>定時で終わる（${fmt(TEIJI)}）</button>
+        <button type="button" class="btn" id="plus">＋30分（残業）</button>
+      </div>
+      <p class="hint">時刻を押すと、ダイヤルで変えられます。空いている時間を押すと、その時間の作業を入れられます。入れた作業を押すと、時間を変える・消すができます。</p>
+    </div>
+    <div class="tl"><div class="hours" style="height:${(to - from) / 60 * H()}px">${hoursHtml(from, to)}</div><div class="lane" id="lane" style="height:${(to - from) / 60 * H()}px">${laneHtml(mine.blocks, mine.start, mine.end, from, to, false)}</div></div>
+    <div class="send"><span class="sum">作業 ${durText(filled) || '0分'} ／ 勤務 ${durText(avail)}${filled < avail ? '（あと ' + durText(avail - filled) + ' 空き）' : ''}</span><button type="button" class="btn main big" id="send"${busy ? ' disabled' : ''}>${busy ? '送っています…' : mine.at ? '直して送る' : '予定を送る'}</button></div>
+    ${past ? '<p class="hint">過ぎた日の予定です。直して送ることもできます。</p>' : ''}
+  </section>`;
+  document.getElementById('teiji').onclick = () => setDay(mine.start, TEIJI);
+  document.getElementById('plus').onclick = () => setDay(mine.start, Math.min(24 * 60, mine.end + 30));
+  document.getElementById('b-start').onclick = () => openDay();
+  document.getElementById('b-end').onclick = () => openDay();
+  document.getElementById('send').onclick = send;
+  document.getElementById('lane').onclick = ev => {
+    const b = ev.target.closest('.blk');
+    if (b && b.classList.contains('brk')) return;
+    if (b) return openSheet(mine.blocks.find(x => x.id === Number(b.dataset.b)));
+    const r = ev.currentTarget.getBoundingClientRect(), m = from + Math.floor((ev.clientY - r.top) / H() * 4) * 15;
+    if (m < mine.start || m >= mine.end) return toast('勤務の時間の外です。始まり・終わりの時刻を押して変えてください');
+    if (BREAKS.some(k => m >= k.s && m < k.e)) return;
+    openSheet({ id: 0, k: '', t: '', s: m, e: Math.min(m + 60, mine.end) });
+  };
+}
+function changed() { dirty = true; drawStaff(); }
+function setDay(start, end) {
+  mine.start = start; mine.end = end;
+  mine.blocks = mine.blocks.map(b => Object.assign({}, b, { s: Math.max(b.s, start), e: Math.min(b.e, end) })).filter(b => b.e > b.s);
+  changed();
+}
+async function send() {
+  if (busy) return;
+  if (MOCK) { mine.at = '試験'; dirty = false; drawStaff(); return toast('送りました（試験なので保存しません）'); }
+  busy = true; drawStaff();
+  try {
+    const r = await postApi({ action: 'dayplan', d: D, s: mine.start, e: mine.end, blocks: mine.blocks.map(b => ({ s: b.s, e: b.e, t: b.t, k: b.k, st: b.st, src: b.src, pl: b.pl })) });
+    mine.at = r.at; dirty = false;
+    toast(r.joined && r.joined.length ? '送りました。ホワイトボードの「' + r.joined.join('」「') + '」に、名前を入れました' : '送りました');
+  } catch (e) {
+    toast(e.message || '送れませんでした');
+  }
+  busy = false; drawStaff();
+}
+
+// ---- ダイヤル（時：分。5分きざみ。端がなく、55の次は00、23の次は0に戻る） ----
+const LOOP = 7, MID = 3;  // 同じ並びを7回つなぎ、止まったら真ん中の並びへ戻す
+const WH = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--wh')) || 40;
+function dialHtml(key, label, m) {
+  const hrs = Array.from({ length: 24 }, (_, i) => i), mins = Array.from({ length: 12 }, (_, i) => i * 5);
+  const col = (k, list, f) => `<div class="wheel" tabindex="0" data-w="${k}" aria-label="${k === 'h' ? '時' : '分'}"><div class="pad"></div><div class="pad"></div>${Array.from({ length: LOOP }, () => list.map(v => `<div data-v="${v}">${f(v)}</div>`).join('')).join('')}<div class="pad"></div><div class="pad"></div></div>`;
+  return `<div class="dialset" data-dial="${key}"><span class="lbl">${label}</span><div class="dial">${col('h', hrs, v => v)}<span class="colon">:</span>${col('m', mins, v => String(v).padStart(2, '0'))}</div></div>`;
+}
+// ダイヤルを動かせるようにする。val() で今の値（分）、onChange で変わったとき
+function bindDial(el, m, onChange) {
+  const wh = el.querySelector('[data-w="h"]'), wm = el.querySelector('[data-w="m"]');
+  const N = { h: 24, m: 12 };
+  const at = w => ((Math.round(w.scrollTop / WH()) % N[w.dataset.w]) + N[w.dataset.w]) % N[w.dataset.w];
+  const val = () => at(wh) * 60 + at(wm) * 5;
+  const row = w => Math.round(w.scrollTop / WH());
+  let mRow = 0;  // 分のダイヤルの前の位置。55→00 で時を1つ進め、00→55 で1つ戻すのに使う
+  const put = (w, i) => { w.scrollTop = (MID * N[w.dataset.w] + i) * WH(); if (w === wm) mRow = row(wm); };
+  const set = v => { put(wh, Math.floor(v / 60) % 24); put(wm, Math.round((v % 60) / 5) % 12); };
+  set(m);
+  wm.addEventListener('scroll', () => {
+    const r = row(wm); if (r === mRow) return;
+    const carry = Math.floor((((mRow % 12) + 12) % 12 + (r - mRow)) / 12);
+    mRow = r;
+    if (carry) wh.scrollTop += carry * WH();
+  });
+  let t = 0;
+  [wh, wm].forEach(w => {
+    let tw = 0;
+    w.addEventListener('scroll', () => {
+      clearTimeout(t); t = setTimeout(() => onChange(val()), 90);
+      clearTimeout(tw); tw = setTimeout(() => { const c = Math.floor(Math.round(w.scrollTop / WH()) / N[w.dataset.w]); if (c !== MID) put(w, at(w)); }, 160);
+    });
+    w.addEventListener('click', ev => { const d = ev.target.closest('[data-v]'); if (d) w.scrollTo({ top: [...w.querySelectorAll('[data-v]')].indexOf(d) * WH(), behavior: 'smooth' }); });
+    w.addEventListener('keydown', ev => { if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') { ev.preventDefault(); w.scrollTop += (ev.key === 'ArrowDown' ? 1 : -1) * WH(); } });
+  });
+  return { val, set };
+}
+function sheetEl(html) {
+  const el = document.createElement('div'); el.className = 'sheet-bg';
+  el.innerHTML = `<div class="sheet" role="dialog">${html}</div>`;
+  document.body.appendChild(el);
+  el.addEventListener('click', ev => { if (ev.target === el) el.remove(); });
+  return el;
+}
+// 始まり・終わりの時刻
+function openDay() {
+  let st = mine.start, en = mine.end;
+  const el = sheetEl(`<h3>この日の勤務</h3>
+    <div class="dials">${dialHtml('s', '始まり', st)}${dialHtml('e', '終わる予定', en)}</div>
+    <div class="chips"><button type="button" class="chip" id="d-def">${fmt(DEF_START)}〜${fmt(TEIJI)}（ふつう）</button></div>
+    <p class="hint durline" id="d-line"></p>
+    <div class="row"><button type="button" class="btn" id="d-x">やめる</button><button type="button" class="btn main" id="d-ok">決める</button></div>`);
+  const line = () => { el.querySelector('#d-line').innerHTML = en > st ? `勤務 <b>${durText(en - st - breakIn(st, en))}</b>（休みをのぞく）` : '<b style="color:var(--warn)">終わりを、始まりより後にしてください</b>'; };
+  const ds = bindDial(el.querySelector('[data-dial="s"]'), st, v => { st = v; line(); });
+  const de = bindDial(el.querySelector('[data-dial="e"]'), en, v => { en = v; line(); });
+  line();
+  el.querySelector('#d-def').onclick = () => { ds.set(DEF_START); de.set(TEIJI); st = DEF_START; en = TEIJI; line(); };
+  el.querySelector('#d-x').onclick = () => el.remove();
+  el.querySelector('#d-ok').onclick = () => { st = ds.val(); en = de.val(); if (en <= st) return toast('終わりを、始まりより後にしてください'); el.remove(); setDay(st, en); };
+}
+// 作業を入れる・直す
+function openSheet(b) {
+  const sheet = Object.assign({}, b);
+  const lens = [15, 20, 30, 45, 60, 90, 120, 180];
+  const free = sheet.k === 'x' ? sheet.t : '';
+  const tasks = X.tasks || [];
+  const el = sheetEl(`<h3>${sheet.id ? '作業を直す' : '何をする？'}</h3>
+    <div class="grp"><span class="lbl">この日の作業（ホワイトボードとカレンダーから）</span><div class="chips">
+      ${tasks.length ? tasks.map((t, i) => `<button type="button" class="chip${sheet.k === t.k ? ' on' : ''}" data-i="${i}" style="--c:${colorOf(t.s)}"><span><span class="dot"></span>${esc(t.t)}</span><small>${t.me ? '<span class="me">あなたの枠</span>・' : ''}${esc(t.src)}${t.pl ? '・' + esc(t.pl) : ''}${t.note ? '・' + esc(t.note) : ''}</small></button>`).join('') : '<span class="hint">この日は、ホワイトボードにもカレンダーにも作業がありません</span>'}
+    </div></div>
+    <div class="grp"><span class="lbl">一覧にない作業</span><input type="text" id="free" maxlength="40" placeholder="例：機械の点検" value="${esc(free)}"></div>
+    <div class="grp"><span class="lbl">時間（ダイヤルを回す。5分きざみ）</span><div class="dials">${dialHtml('s', 'から', sheet.s)}${dialHtml('e', 'まで', sheet.e)}</div></div>
+    <div class="grp"><span class="lbl">長さですぐ決める</span><div class="chips">${lens.map(l => `<button type="button" class="chip" data-l="${l}">${durText(l)}</button>`).join('')}</div></div>
+    <p class="hint durline" id="span"></p>
+    <div class="row">${sheet.id ? '<button type="button" class="btn" id="del">消す</button>' : ''}<button type="button" class="btn" id="cancel">やめる</button><button type="button" class="btn main" id="ok">入れる</button></div>`);
+  const close = () => el.remove();
+  const span = () => {
+    const br = breakIn(sheet.s, sheet.e);
+    el.querySelector('#span').innerHTML = sheet.e > sheet.s ? `${fmt(sheet.s)}〜${fmt(sheet.e)}　作業 <b>${durText(sheet.e - sheet.s - br)}</b>${br ? '（休み ' + durText(br) + ' をのぞく）' : ''}` : '<b style="color:var(--warn)">「まで」を「から」より後にしてください</b>';
+  };
+  const ds = bindDial(el.querySelector('[data-dial="s"]'), sheet.s, v => { sheet.s = v; span(); });
+  const de = bindDial(el.querySelector('[data-dial="e"]'), sheet.e, v => { sheet.e = v; span(); });
+  span();
+  el.addEventListener('click', ev => {
+    const c = ev.target.closest('[data-i]'), l = ev.target.closest('[data-l]');
+    if (c) {
+      const t = tasks[Number(c.dataset.i)];
+      Object.assign(sheet, { k: t.k, t: t.t, st: t.s, src: t.src, pl: t.pl || '' });
+      el.querySelector('#free').value = '';
+      el.querySelectorAll('[data-i]').forEach(x => x.classList.toggle('on', x === c));
+    }
+    if (l) {   // 長さで決める：休みをまたぐときは、休みの分だけ後ろへ
+      sheet.s = ds.val();
+      let e = sheet.s + Number(l.dataset.l);
+      BREAKS.forEach(k => { if (sheet.s < k.s && e > k.s) e += k.e - k.s; });
+      sheet.e = Math.min(e, 24 * 60); de.set(sheet.e); span();
+    }
+  });
+  el.querySelector('#free').oninput = ev => {
+    const v = ev.target.value.trim();
+    if (v) { Object.assign(sheet, { k: 'x', t: v, st: 'その他', src: '', pl: '' }); el.querySelectorAll('[data-i]').forEach(x => x.classList.remove('on')); }
+    else if (sheet.k === 'x') sheet.k = '';
+  };
+  el.querySelector('#cancel').onclick = close;
+  if (sheet.id) el.querySelector('#del').onclick = () => { mine.blocks = mine.blocks.filter(x => x.id !== sheet.id); close(); changed(); toast('消しました（「直して送る」で残ります）'); };
+  el.querySelector('#ok').onclick = () => {
+    sheet.s = ds.val(); sheet.e = de.val();
+    if (!sheet.k || !sheet.t) return toast('作業を選ぶか、一覧にない作業を書いてください');
+    if (sheet.e <= sheet.s) return toast('「まで」を「から」より後にしてください');
+    // 勤務の時間の外に入れたら、勤務の時間をのばす（3:00 から入れた など）
+    if (sheet.s < mine.start) mine.start = sheet.s;
+    if (sheet.e > mine.end) mine.end = sheet.e;
+    // 重なった分は、前からある作業を短くする
+    mine.blocks = mine.blocks.filter(x => x.id !== sheet.id).flatMap(x => {
+      if (x.e <= sheet.s || x.s >= sheet.e) return [x];
+      const out = [];
+      if (x.s < sheet.s) out.push(Object.assign({}, x, { e: sheet.s }));
+      if (x.e > sheet.e) out.push(Object.assign({}, x, { id: x.s < sheet.s ? nextId++ : x.id, s: sheet.e }));
+      return out;
+    });
+    if (!sheet.id) sheet.id = nextId++;
+    mine.blocks.push(sheet); mine.blocks.sort((a, b) => a.s - b.s);
+    close(); changed();
+    toast(sheet.k.startsWith('w:') ? '入れました。送ると、ホワイトボードの「' + sheet.t + '」にも名前が入ります' : '入れました（「予定を送る」で残ります）');
+  };
+}
+
+// ---- 全員の一覧（計画担当） ----
+function drawAdmin() {
+  const people = (X.all || []).map(p => p.name === X.me && !p.miss ? Object.assign({}, p, { name: p.name + '（あなた）' }) : p);
+  const sent = people.filter(p => !p.miss), got = {};
+  sent.forEach(p => p.blocks.forEach(b => { const k = b.st || 'その他'; got[k] = (got[k] || 0) + (b.e - b.s - breakIn(b.s, b.e)) / 60; }));
+  const overN = sent.filter(p => p.e > TEIJI).length;
+  const from = sent.length ? Math.floor(Math.min(...sent.map(p => Math.min(p.s, ...p.blocks.map(b => b.s)))) / 60) * 60 : DEF_START;
+  const to = sent.length ? Math.ceil(Math.max(...sent.map(p => Math.max(p.e, ...p.blocks.map(b => b.e)))) / 60) * 60 : TEIJI + 45;
+  const ht = (to - from) / 60 * H();
+  const need = X.need || {}, keys = Object.keys(need);
+  Object.keys(got).forEach(k => { if (keys.indexOf(k) < 0 && k !== 'その他' && k !== 'メモ') keys.push(k); });
+  const lanes = people.map(p => `<div class="lane${p.miss ? ' miss' : ''}" style="height:${ht}px">${p.miss ? '' : laneHtml(p.blocks.map((b, i) => Object.assign({ id: i }, b)), p.s, p.e, from, to, true)}</div>`).join('');
+  const steps = [...new Set(sent.flatMap(p => p.blocks.map(b => b.st || 'その他')))];
+  document.getElementById('main').innerHTML = `
+  <section class="admin">
+    <div class="who"><h2>${esc(X.label)} の予定（全員）</h2><span class="d">社員が出した予定を、1枚に並べたもの</span></div>
+    <div class="kpis">
+      <div class="kpi"><div class="lbl">出した人</div><div class="v">${sent.length} / ${people.length}人</div></div>
+      <div class="kpi"><div class="lbl">残業の予定</div><div class="v">${overN}人</div></div>
+      <div class="kpi"><div class="lbl">いちばん早く始まる</div><div class="v">${sent.length ? fmt(Math.min(...sent.map(p => p.s))) : '—'}</div></div>
+      <div class="kpi"><div class="lbl">いちばん遅く終わる</div><div class="v">${sent.length ? fmt(Math.max(...sent.map(p => p.e))) : '—'}</div></div>
+    </div>
+    ${keys.length ? `<div class="need"><b style="font-size:13px">カレンダーの必要時間に、社員の予定が足りているか</b>
+      ${keys.map(k => { const g = Math.round((got[k] || 0) * 10) / 10, n = Math.round((need[k] || 0) * 10) / 10; return `<div class="r" style="--c:${colorOf(k)}"><span>${esc(k)}</span><span class="bar2"><i style="width:${n ? Math.min(100, g / n * 100) : 100}%"></i></span><span class="n${n && g < n ? ' short' : ''}">${g} / ${n || '—'}時間</span></div>`; }).join('')}
+      <p class="hint">必要時間は、カレンダーの計画から出したもの（社員とパートさんを合わせた時間）。ここで数えるのは、社員が出した予定だけ。</p>
+    </div>` : ''}
+    ${people.length ? `<div class="board"><div class="grid" style="--n:${people.length}">
+      <div class="corner"></div>${people.map(p => `<div class="colh"><b>${esc(p.name)}</b>${p.miss ? '<span class="pill mut">まだ</span>' : `<span class="tm">${fmt(p.s)}〜${fmt(p.e)}</span>${p.e > TEIJI ? `<span class="pill over">残業 ${durText(p.e - TEIJI)}</span>` : p.e === TEIJI ? '<span class="pill ok">定時</span>' : ''}`}</div>`).join('')}
+      <div class="hours" style="height:${ht}px">${hoursHtml(from, to)}</div>${lanes}
+    </div></div>` : '<p class="msg">「ログイン」シートに社員がいません</p>'}
+    ${steps.length ? `<div class="legend">${steps.map(k => `<span style="--c:${colorOf(k)}">${esc(k)}</span>`).join('')}</div>` : ''}
+  </section>`;
+}
+
+function toast(m) {
+  document.querySelectorAll('.toast').forEach(x => x.remove());
+  const t = document.createElement('div'); t.className = 'toast'; t.textContent = m; t.setAttribute('role', 'status');
+  document.body.appendChild(t); setTimeout(() => t.remove(), 3500);
+}
+function draw() {
+  if (!X) return;
+  document.getElementById('t-staff').classList.toggle('on', view === 'staff');
+  document.getElementById('t-admin').classList.toggle('on', view === 'admin');
+  view === 'staff' ? drawStaff() : drawAdmin();
+}
+const leave = () => !dirty || confirm('まだ送っていない直しがあります。送らずに、ほかの日へ移りますか？');
+document.getElementById('t-staff').onclick = () => { view = 'staff'; draw(); };
+document.getElementById('t-admin').onclick = () => { view = 'admin'; draw(); };
+document.getElementById('today').onclick = () => { if (leave()) load(localToday()); };
+document.getElementById('prev').onclick = () => { if (leave()) load(addDays(D, -1)); };
+document.getElementById('next').onclick = () => { if (leave()) load(addDays(D, 1)); };
+window.addEventListener('beforeunload', ev => { if (dirty) { ev.preventDefault(); ev.returnValue = ''; } });
+load(D);
+</script>
+</body>
+</html>

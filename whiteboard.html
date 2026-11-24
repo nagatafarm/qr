@@ -42,6 +42,7 @@
   .bar .vsw a { padding: 5px 14px; font-size: 13px; color: #333; text-decoration: none; white-space: nowrap; background: #fff; }
   .bar .vsw a + a { border-left: 1px solid #bbb; }
   .bar .vsw a.on { background: var(--green-l); color: var(--green-d); font-weight: bold; }
+  @media (max-width: 560px) { .bar .vsw { max-width: 100%; overflow-x: auto; } .bar .vsw a { padding: 5px 9px; font-size: 12px; } }   /* 4つ並んでも、スマホの幅に収める */
   .legend { font-size: 12px; color: var(--gray); display: flex; gap: 6px; align-items: center; }
   /* キャンバス（Miro のような点の方眼） */
   #board { flex: 1; min-height: 0; overflow: auto; display: flex; align-items: stretch; background-color: #f5f6f8; background-image: radial-gradient(#c9ccd4 1px, transparent 1px); background-size: 18px 18px; padding: 22px; gap: 22px; }
@@ -175,7 +176,7 @@
   <button type="button" id="cols" title="日の中の枠を2列に並べる・1列にもどす">枠を2列に</button>
   <button type="button" id="arrow" style="display:none" title="人の札（途中からこっち）か、枠の見出し（業務が終わったらこっち）をつかんで、行き先の枠へ落とす（スマホは札を押してから枠を押す）。矢印を押すと消せる">→ 矢印を引く</button>
   <span class="legend"><span class="mg staff">社員</span><span class="mg">パート</span><span class="mg trainee">実習生</span></span>
-  <span class="vsw"><a href="index.html?go=calendar">カレンダー</a><a href="index.html?go=whiteboard" class="on">ホワイトボード</a><a href="index.html?go=schedule">人の割り振り表</a></span>
+  <span class="vsw"><a href="index.html?go=calendar">カレンダー</a><a href="index.html?go=whiteboard" class="on">ホワイトボード</a><a href="index.html?go=schedule">人の割り振り表</a><a href="index.html?go=dayplan">1日の予定</a></span>
 </div>
 <div id="board"></div>
 <div id="frm" hidden><form class="box" id="frmf" autocomplete="off">

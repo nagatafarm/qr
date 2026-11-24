@@ -52,6 +52,7 @@
   .bar .vsw a { padding: 5px 14px; font-size: 13px; color: #333; text-decoration: none; white-space: nowrap; background: #fff; }
   .bar .vsw a + a { border-left: 1px solid #bbb; }
   .bar .vsw a.on { background: var(--green-l); color: var(--green-d); font-weight: bold; }
+  @media (max-width: 560px) { .bar .vsw { max-width: 100%; overflow-x: auto; } .bar .vsw a { padding: 5px 9px; font-size: 12px; } }   /* 4つ並んでも、スマホの幅に収める */
   #fbtn { display: none; }
 
   .body { flex: 1; min-height: 0; display: flex; }
@@ -538,7 +539,7 @@ function render() {
       <span class="sp"></span>
       <span class="upd">最終更新 ${esc(sch.updated)}</span>
       <button type="button" class="auto" id="auto"${canEdit() && canPart() ? '' : ' disabled'}${canEdit() && !canPart() ? ' title="組み直すとパートさんの割り振りも変わるので、パート割り振りの係だけが使えます"' : ''}>自動で組み直す</button>
-      <span class="vsw"><a href="index.html?go=calendar">カレンダー</a><a href="index.html?go=whiteboard">ホワイトボード</a><a href="index.html?go=schedule" class="on">人の割り振り表</a></span>
+      <span class="vsw"><a href="index.html?go=calendar">カレンダー</a><a href="index.html?go=whiteboard">ホワイトボード</a><a href="index.html?go=schedule" class="on">人の割り振り表</a><a href="index.html?go=dayplan">1日の予定</a></span>
     </div>
     <div class="body">
       <aside id="side">
