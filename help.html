@@ -18,7 +18,10 @@
   .row { display: flex; gap: 18px; align-items: flex-start; }
   .phone { flex: none; width: 220px; position: relative; border: 6px solid #2b2b2b; border-radius: 26px; overflow: hidden; background: #000; box-shadow: 0 4px 14px rgba(0,0,0,.2); }
   .phone img { display: block; width: 100%; height: auto; }
-  .phone .m { position: absolute; width: 30px; height: 30px; margin: -15px 0 0 -15px; border-radius: 50%; background: var(--orange); color: #fff; font-weight: bold; font-size: 17px; line-height: 26px; text-align: center; border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.45); }
+  /* 押す所の番号：下の画面が透けて見えるように、うすい色の輪にする（字は小さく、輪の右上に寄せる） */
+  .phone .m { position: absolute; width: 34px; height: 34px; margin: -17px 0 0 -17px; border-radius: 50%; background: rgba(212,130,74,.22); border: 2px solid rgba(212,130,74,.85); box-shadow: 0 0 0 2px rgba(255,255,255,.55); }
+  .phone .m { color: transparent; font-size: 0; }
+  .phone .m::after { content: attr(data-n); position: absolute; right: -9px; top: -9px; width: 18px; height: 18px; border-radius: 50%; background: rgba(212,130,74,.92); color: #fff; font-size: 12px; font-weight: bold; line-height: 18px; text-align: center; }
   .steps { flex: 1; min-width: 0; margin: 0; padding: 0; list-style: none; }
   .steps li { display: flex; gap: 10px; align-items: flex-start; margin: 0 0 12px; font-size: 16px; }
   .steps .n { flex: none; width: 28px; height: 28px; border-radius: 50%; background: var(--orange); color: #fff; font-weight: bold; text-align: center; line-height: 28px; }
@@ -51,7 +54,7 @@
   <section id="login">
     <h2>ログインする</h2>
     <div class="row">
-      <div class="phone"><img src="help/login.jpg" alt="ログインの画面"><span class="m" style="left:50%;top:34.3%">1</span></div>
+      <div class="phone"><img src="help/login.jpg" alt="ログインの画面"><span class="m" data-n="1" style="left:50%;top:34.3%">1</span></div>
       <ol class="steps">
         <li><span class="n">1</span><span><b>Google でログイン</b>を押す</span></li>
         <li><span class="n p">2</span><span>会社に伝えた <b>Google のアカウント</b>を選ぶ</span></li>
@@ -73,7 +76,7 @@
   <section id="move">
     <h2>画面を移る</h2>
     <div class="row">
-      <div class="phone"><img src="help/weed.jpg" alt="上の緑の帯"><span class="m" style="left:50%;top:9.8%">1</span><span class="m" style="left:12.5%;top:15.8%">2</span></div>
+      <div class="phone"><img src="help/weed.jpg" alt="上の緑の帯"><span class="m" data-n="1" style="left:50%;top:9.8%">1</span><span class="m" data-n="2" style="left:12.5%;top:15.8%">2</span></div>
       <ol class="steps">
         <li><span class="n">1</span><span>上の緑の帯で、<b>登録・調べる・予定・除草・在庫</b>に移る</span></li>
         <li><span class="n">2</span><span><b>‹ メニュー</b>で、なえログのメニューに戻る</span></li>
@@ -85,7 +88,7 @@
   <section id="weed">
     <h2>除草を記録する</h2>
     <div class="row">
-      <div class="phone"><img src="help/weed.jpg" alt="除草の記録の画面"><span class="m" style="left:16.7%;top:50.3%">1</span><span class="m" style="left:19%;top:80%">2</span><span class="m" style="left:73.6%;top:94.8%">3</span></div>
+      <div class="phone"><img src="help/weed.jpg" alt="除草の記録の画面"><span class="m" data-n="1" style="left:16.7%;top:50.3%">1</span><span class="m" data-n="2" style="left:19%;top:80%">2</span><span class="m" data-n="3" style="left:73.6%;top:94.8%">3</span></div>
       <ol class="steps">
         <li><span class="n">1</span><span><b>場所</b>を押す（いくつでも）</span></li>
         <li><span class="n">2</span><span><b>手段</b>を1つ選ぶ。「必須」の欄が出ていたら、それも選ぶ</span></li>
@@ -99,7 +102,7 @@
   <section id="weedmap">
     <h2>除草マップを見る</h2>
     <div class="row">
-      <div class="phone"><img src="help/weedmap.jpg" alt="除草マップ（見本の絵）"><span class="m" style="left:51.7%;top:15.8%">1</span></div>
+      <div class="phone"><img src="help/weedmap.jpg" alt="除草マップ（見本の絵）"><span class="m" data-n="1" style="left:51.7%;top:15.8%">1</span></div>
       <div class="steps">
         <ol class="steps">
           <li><span class="n">1</span><span>除草の画面で <b>マップ</b>を押す</span></li>
@@ -120,7 +123,7 @@
   <section id="stock">
     <h2>在庫を見る</h2>
     <div class="row">
-      <div class="phone"><img src="help/stock.jpg" alt="在庫を見る画面"><span class="m" style="left:51.8%;top:66.5%">1</span><span class="m" style="left:71.5%;top:54.3%">2</span></div>
+      <div class="phone"><img src="help/stock.jpg" alt="在庫を見る画面"><span class="m" data-n="1" style="left:51.8%;top:66.5%">1</span><span class="m" data-n="2" style="left:71.5%;top:54.3%">2</span></div>
       <ol class="steps">
         <li><span class="n">1</span><span><b>種類 → 区分</b>の見出しを押すと、品目と残りが出る</span></li>
         <li><span class="n">2</span><span><b>要発注だけ</b>で、発注が要る品目だけにする</span></li>
@@ -133,7 +136,7 @@
   <section id="stockio">
     <h2>入庫・出庫を記録する</h2>
     <div class="row">
-      <div class="phone"><img src="help/stockio.jpg" alt="入庫出庫の画面"><span class="m" style="left:16.9%;top:38.4%">1</span><span class="m" style="left:35.9%;top:56.4%">2</span><span class="m" style="left:26.4%;top:94.8%">4</span></div>
+      <div class="phone"><img src="help/stockio.jpg" alt="入庫出庫の画面"><span class="m" data-n="1" style="left:16.9%;top:38.4%">1</span><span class="m" data-n="2" style="left:35.9%;top:56.4%">2</span><span class="m" data-n="4" style="left:26.4%;top:94.8%">4</span></div>
       <ol class="steps">
         <li><span class="n">1</span><span><b>種類</b>を選ぶ</span></li>
         <li><span class="n">2</span><span><b>動き</b>を選ぶ（出庫・入庫・棚卸）</span></li>
