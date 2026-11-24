@@ -157,7 +157,7 @@
   .grp.tail { visibility: hidden; }
   .grp .gh .spd { font-size: 11px; opacity: .9; margin-left: 2px; }
   /* のばした作業の帯：右の端ぜんぶが「つまみ」。横に引っぱってのばす・縮める（2026-11-24 意見：もっと横にのばせそうな見た目に） */
-  .grp.ed { position: relative; }
+  .grp.ed, .grp.spg { position: relative; }
   .grp.spg.ed .gh, .grp.spg.ed a.row { padding-right: 18px; }
   .grp .gx.l { left: 0; right: auto; border-left: none; border-right: 1px solid color-mix(in srgb, var(--c) 40%, #fff); }
   .grp .gx.l::after { content: '‹'; }
@@ -172,7 +172,27 @@
   .grp:not(.spg) .gx::before, .grp .gx.l::before { height: 12px; width: 2px; border-right: none; }
   /* 引っぱっている間の、のびる先の見本（点線の帯） */
   #ghost { position: fixed; z-index: 30; pointer-events: none; border: 2px dashed var(--c, #1a73e8); border-radius: 8px; background: color-mix(in srgb, var(--c, #1a73e8) 14%, transparent); display: flex; align-items: flex-start; justify-content: flex-end; }
-  #ghost[hidden], #ghost b[hidden] { display: none; }   /* 離したら消す（display:flex が hidden に勝って、残っていた） */
+  #ghost[hidden], #ghost b[hidden] { display: none; }
+  /* 計画の予定日の外の日（のばした・動かした分）：斜線とオレンジの線（2026-11-24 意見） */
+  .grp .offd { position: absolute; top: 0; bottom: 0; pointer-events: none; z-index: 1; border-top: 3px solid #f08c00;
+    background: repeating-linear-gradient(135deg, rgba(240,140,0,.20) 0 6px, transparent 6px 12px); }
+  .grp .gh .mv { font-size: 10px; background: #fff3d6; color: #8a5a00; border-radius: 999px; padding: 0 6px; flex: none; }
+  /* 見出しをつかんで、別の日へ動かす（マウス） */
+  .grp.ed > .gh { cursor: grab; }
+  body.moving, body.moving * { cursor: grabbing !important; user-select: none; }
+  /* 手直しの履歴（右に出す・しまう） */
+  #histbtn { position: relative; }
+  #hpanel { position: fixed; right: 0; top: 96px; bottom: 0; width: 330px; max-width: 92vw; box-sizing: border-box; background: #fff; border-left: 1px solid var(--line); box-shadow: -4px 0 12px rgba(0,0,0,.08); z-index: 40; display: flex; flex-direction: column; }
+  #hpanel[hidden] { display: none; }
+  #hpanel .hh { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); font-weight: bold; }
+  #hpanel .hh .sp { flex: 1; }
+  #hpanel .hh button { font-size: 12px; padding: 2px 8px; white-space: nowrap; flex: none; }
+  #hpanel .hh { white-space: nowrap; }
+  #hpanel ol { list-style: none; margin: 0; padding: 0; overflow: auto; flex: 1; }
+  #hpanel li { padding: 6px 10px; border-bottom: 1px solid #f0f0f0; font-size: 12px; }
+  #hpanel li .tm { color: var(--gray); font-size: 11px; margin-right: 6px; }
+  #hpanel li.undone { color: #aaa; text-decoration: line-through; }
+  #hpanel .hf { padding: 6px 10px; font-size: 11px; color: var(--gray); border-top: 1px solid var(--line); }   /* 離したら消す（display:flex が hidden に勝って、残っていた） */
   #ghost b { background: var(--c, #1a73e8); color: #fff; font-size: 12px; padding: 2px 8px; border-radius: 0 6px 0 6px; white-space: nowrap; }
   .grp .gh .tg { font-size: 23px; width: 18px; line-height: 1; flex: none; transition: transform .15s; }
   .grp.shut .gh .tg { transform: rotate(-90deg); }
@@ -283,11 +303,13 @@
   <span class="fnote" id="fnote" hidden></span>
   <span id="vsbtn"></span>
   <span class="sp"></span>
+  <button type="button" id="histbtn" hidden title="この画面でした手直しの一覧（Ctrl+Z で戻す・Ctrl+Y でやり直す）">履歴</button>
   <button type="button" id="fold" hidden>全部たたむ</button>
   <span class="seg"><button type="button" data-view="month">月</button><button type="button" data-view="week">週</button><button type="button" data-view="week2">2週</button></span>
   <span class="vsw"><a href="index.html?go=calendar" class="on">カレンダー</a><a href="index.html?go=whiteboard">ホワイトボード</a><a href="index.html?go=schedule">人の割り振り表</a></span>
 </div>
 <div id="mini" hidden></div>
+<div id="hpanel" hidden><div class="hh">履歴<span class="sp"></span><button type="button" id="h-undo">↶ 戻す</button><button type="button" id="h-redo">↷ やり直す</button><button type="button" id="h-x" aria-label="閉じる">×</button></div><ol id="hlist"></ol><div class="hf">Ctrl+Z で戻す・Ctrl+Y でやり直す。このパソコン・スマホでした手直しだけ（50件まで）</div></div>
 <div class="body">
   <aside id="side"></aside>
   <main>
@@ -562,9 +584,10 @@ function stepGroups(list) {
 // 画面に並べるまとまり：のばした作業は、工程×計画ごとの別のまとまり（その工程のふつうのまとまりの前）。2026-11-23 意見：日をまたいで1本の帯にする
 function dispGroups(list) {
   const out = [];
-  stepGroups(list.filter(e => !(e.of > 1))).forEach(g => out.push(g));
+  const isSp = e => e.of > 1 || !!(e.o && e.d0 && e.d0 !== e.o);   // 何日かにのばした・計画日から動かした作業は、別の帯
+  stepGroups(list.filter(e => !isSp(e))).forEach(g => out.push(g));
   const sp = new Map();
-  list.filter(e => e.of > 1).forEach(e => { const key = e.s + '|' + e.id + '@' + (e.d0 || ''); if (!sp.has(key)) sp.set(key, []); sp.get(key).push(e); });
+  list.filter(isSp).forEach(e => { const key = e.s + '|' + e.id + '@' + (e.d0 || ''); if (!sp.has(key)) sp.set(key, []); sp.get(key).push(e); });
   [...sp.values()].forEach(es => {
     const e = es[0], g = { s: e.s, es, q: es.reduce((n, x) => n + (Number(x.q) || 0), 0), dn: es.filter(x => x.done).length, span: e };
     const i = out.findIndex(x => x.s === e.s);
@@ -624,13 +647,14 @@ function grpHtml(k, g) {
     const sp = e.id + '@' + (e.d0 || ''), fk = (e.d0 || k) + '|' + g.s + '|' + e.id, d1 = addDays(e.d0 || k, e.of - 1);
     const tot = Number(e.q) > 0 ? Math.round(Number(e.q) * e.of * 10) / 10 : 0;
     const gx = canEdit();   // 月でも帯はのばせる
-    return `<div class="grp spg${gx ? ' ed' : ''}${isShut(fk) ? ' shut' : ''}${e.done ? ' alldone' : ''}" style="--c:${colorOf(g.s)}" data-gs="${esc(g.s)}" data-sp="${esc(sp)}" data-k="${k}">
-        <div class="gh" data-d="${k}" data-s="${esc(g.s)}" data-fk="${esc(fk)}" title="押すと、たたむ・ひらく"><span class="tg">▾</span><b>${esc(g.s)}</b>${tot ? esc(num(tot) + (e.u || 'TR')) : ''}<span class="spd">${esc(md(e.d0 || k))}〜${esc(md(d1))}（${e.of}日）</span>${pplHtml(k, g)}</div>
+    const o = e.o || e.d0 || k, moved = (e.d0 || k) !== o || e.of > 1;
+    return `<div class="grp spg${gx ? ' ed' : ''}${isShut(fk) ? ' shut' : ''}${e.done ? ' alldone' : ''}" style="--c:${colorOf(g.s)}" data-gs="${esc(g.s)}" data-sp="${esc(sp)}" data-k="${k}" data-o="${o}"${moved ? ` title="計画の予定日は ${md(o)}。斜線の日は、予定日の外"` : ''}>
+        <div class="gh" data-d="${k}" data-s="${esc(g.s)}" data-fk="${esc(fk)}" title="押すと、たたむ・ひらく${gx ? '（つかんで別の日へ動かせる）' : ''}"><span class="tg">▾</span><b>${esc(g.s)}</b>${tot ? esc(num(tot) + (e.u || 'TR')) : ''}${e.of > 1 ? `<span class="spd">${esc(md(e.d0 || k))}〜${esc(md(d1))}（${e.of}日）</span>` : ''}${(e.d0 || k) !== o ? `<span class="mv">計画 ${esc(md(o))}</span>` : ''}${pplHtml(k, g)}</div>
         ${rowHtml(Object.assign({}, e, { q: tot || e.q }), false, true)}${gx ? gripHtml([e], g.s, e.d0 || k, e.of) : ''}</div>`;
   }
   const xs = canEdit() ? g.es.filter(e => e.of >= 1) : [];   // のばせるのは工程の分だけ（出荷・接木は計画の列の日のまま）
   return `<div class="grp${xs.length ? ' ed' : ''}${isShut(k + '|' + g.s) ? ' shut' : ''}${g.dn === g.es.length ? ' alldone' : ''}" style="--c:${colorOf(g.s)}">
-        <div class="gh" data-d="${k}" data-s="${esc(g.s)}" title="押すと、たたむ・ひらく"><span class="tg">▾</span><b>${esc(g.s)}</b>${esc(qtyText(g))}${pplHtml(k, g)}<small title="内訳を見る">${g.es.length}件 ›</small></div>
+        <div class="gh" data-d="${k}" data-s="${esc(g.s)}" title="押すと、たたむ・ひらく${xs.length ? '（つかんで別の日へ動かせる）' : ''}"><span class="tg">▾</span><b>${esc(g.s)}</b>${esc(qtyText(g))}${pplHtml(k, g)}<small title="内訳を見る">${g.es.length}件 ›</small></div>
         ${rowsHtml(k, g)}${xs.length ? gripHtml(xs, g.s, k, 1) : ''}</div>`;
 }
 // 枠の左右のつまみ：右へ引っぱると先の日まで、左へ引っぱると前の日からにのばす（戻すと縮む）。2026-11-24
@@ -715,7 +739,7 @@ function drawWeek() {
 //   同じ行（週・2週の段・月の週）で、となりの日に同じ工程・同じ計画ののばした分があれば、つながったものとして、上の位置をいちばん下のものに合わせる（上に空きができる）
 function alignSpans() {
   const s = sc();
-  s.querySelectorAll('.grp.spg').forEach(g => { g.style.marginTop = ''; g.style.width = ''; g.classList.remove('band', 'tail'); });
+  s.querySelectorAll('.grp.spg').forEach(g => { g.style.marginTop = ''; g.style.width = ''; g.classList.remove('band', 'tail'); g.querySelectorAll('.offd').forEach(x => x.remove()); });
   const rows = view === 'month' ? [...s.querySelectorAll('.wk')] : [...s.querySelectorAll('.strip')];
   rows.forEach(row => {
     const cells = [...row.children];
@@ -739,6 +763,20 @@ function alignSpans() {
       const a = ch[0].getBoundingClientRect(), b = ch[ch.length - 1].getBoundingClientRect();
       ch[0].style.width = (b.right - a.left) + 'px'; ch[0].classList.add('band');
       ch.slice(1).forEach(g => g.classList.add('tail'));
+    });
+    // 計画の予定日の外の日に、斜線を引く（帯の頭に、日ごとに重ねる）
+    chains.forEach(ch => {
+      const head = ch[0], o = head.dataset.o;
+      if (!o) return;   // メモ（計画日がない）
+      const h0 = head.getBoundingClientRect();
+      ch.forEach(g => {
+        if (g.dataset.k === o) return;
+        const c = g.closest('.col, .day'), r = c ? c.getBoundingClientRect() : g.getBoundingClientRect();
+        const i = document.createElement('i'); i.className = 'offd';
+        const l = Math.max(0, r.left - h0.left - (g === head ? 0 : 6)), w = g === head ? Math.min(h0.width, r.right - h0.left) - l : r.width + 6;
+        i.style.left = l + 'px'; i.style.width = Math.max(0, Math.min(w, h0.width - l)) + 'px';
+        head.appendChild(i);
+      });
     });
   });
 }
@@ -904,7 +942,7 @@ document.body.addEventListener('click', ev => { if (document.body.classList.cont
 
 // ---- 内訳（チップ・見出しを押したとき）：取引先ごとの量と、計画の一覧 ----
 sc().addEventListener('click', ev => {
-  if (ev.target.closest('.ext')) { ev.preventDefault(); return; }   // のばすつまみ：計画の画面へは飛ばない
+  if (ev.target.closest('.ext') || Date.now() - dragJust < 400) { ev.preventDefault(); return; }   // のばすつまみ：計画の画面へは飛ばない
   const pp = ev.target.closest('.ppl.edit'); if (pp) return askPeople(pp.dataset.ppl);
   const an = ev.target.closest('[data-addnote]'); if (an) return askNote(an.dataset.addnote);
   const nt = ev.target.closest('.cnote.del, .nrow.del'); if (nt) return delNote(nt.dataset.note);
@@ -931,7 +969,7 @@ function askPeople(key) {
   if (v === null) return;
   const t = v.trim().normalize('NFKC');
   if (t !== '' && !(Number(t) >= 0)) { toast('人数は数字で入れてください', true); return; }
-  sendEdit({ op: 'people', d: k, s, n: t }, t === '' ? '目安にもどしました' : label(k) + ' ' + s + '：' + t + '人にしました');
+  doEdit({ type: 'people', d: k, s, from: cur == null ? null : cur, to: t === '' ? null : Number(t), text: t === '' ? label(k) + ' ' + s + 'の人数を目安にもどした' : label(k) + ' ' + s + 'の人数を ' + t + '人にした' });
 }
 function askNote(k) {
   const v = prompt(label(k) + ' のメモ（土づくり・廃棄・除草剤 など。60字まで）', '');
@@ -944,75 +982,166 @@ function delNote(id) {
   sendEdit({ op: 'delnote', id }, 'メモを消しました');
 }
 // 日をのばす：行の右端のつまみ（⇔）を押したまま、右の日の列へ動かして離す。左へ戻すと縮む（予定日より前にはならない）
-let drag = null;
+// ---- 引っぱる：つまみで、のばす・縮める（前後どちらへも）／見出しをつかんで、別の日へ動かす。2026-11-24 ----
+let drag = null, dragJust = 0;
+const cellOf = k => document.querySelector('.col[data-d="' + k + '"], .day[data-d="' + k + '"]');
+// 指の下の日：帯はとなりの日に重なっているので、見た目の位置で日を探す
+function cellAt(x, y) {
+  for (const el of document.elementsFromPoint(x, y)) {
+    const c = el.closest && el.closest('.col, .day');
+    if (!c) continue;
+    const r = c.getBoundingClientRect();
+    if (x >= r.left && x < r.right && y >= r.top && y < r.bottom) return c;
+  }
+  return null;
+}
+function ghostEl() {
+  let gh = document.getElementById('ghost');
+  if (!gh) { gh = document.createElement('div'); gh.id = 'ghost'; gh.innerHTML = '<b></b>'; document.body.appendChild(gh); }
+  return gh;
+}
+// 点線の見本：a〜b の日。同じ段にない端は、つかんだ枠の端にそろえる
+function showGhost(d) {
+  const gh = ghostEl(), ca = cellOf(d.a), cb = cellOf(d.b), ia = !!ca && ca.parentElement === d.strip, ib = !!cb && cb.parentElement === d.strip;
+  if (!d.a || (!ia && !ib)) { gh.hidden = true; return; }
+  const r0 = d.src.getBoundingClientRect();
+  const left = ia ? ca.getBoundingClientRect().left + 3 : r0.left, right = ib ? cb.getBoundingClientRect().right - 3 : r0.right;
+  gh.hidden = false;
+  gh.style.left = left + 'px'; gh.style.top = r0.top + 'px'; gh.style.height = r0.height + 'px'; gh.style.width = Math.max(30, right - left) + 'px';
+  const n = diff(d.a, d.b) + 1;
+  gh.firstChild.hidden = n < 2 && d.mode !== 'move';
+  gh.firstChild.textContent = n < 2 ? md(d.a) + ' へ' : md(d.a) + '〜' + md(d.b) + '（' + n + '日）';
+}
+const markDays = d => document.querySelectorAll('.col, .day').forEach(c => c.classList.toggle('drop', !!(d && d.a && c.dataset.d >= d.a && c.dataset.d <= d.b)));
+function startDrag(h, grp, mode, ev, side) {
+  const d0 = h.dataset.d0, of = Number(h.dataset.of) || 1;
+  const items = h.dataset.items ? JSON.parse(h.dataset.items) : [{ id: h.dataset.ext, o: h.dataset.o || d0 }];
+  const c0 = cellAt(ev.clientX, ev.clientY);
+  drag = { mode, side, items, s: h.dataset.s, kind: h.dataset.kind || '', d0, of, end: addDays(d0, of - 1), a: '', b: '', from: c0 ? c0.dataset.d : d0,
+    src: grp || h.closest('a.row'), strip: (grp || h).closest('.strip, .wk') };
+  const gh = ghostEl(); if (grp) gh.style.setProperty('--c', grp.style.getPropertyValue('--c'));
+}
+function moveDrag(ev) {
+  const c = cellAt(ev.clientX, ev.clientY);
+  if (!c || !drag) return;
+  const t = c.dataset.d;
+  let na, nb;
+  if (drag.mode === 'move') { const k = diff(drag.from, t); na = addDays(drag.d0, k); nb = addDays(drag.end, k); }
+  else { const fix = drag.side === 'r' ? drag.d0 : drag.end; na = t < fix ? t : fix; nb = t < fix ? fix : t; }   // つかんだのと反対の端を止める
+  if (na !== drag.a || nb !== drag.b) { drag.a = na; drag.b = nb; markDays(drag); showGhost(drag); }
+}
+function endDrag() {
+  const d = drag; drag = null; markDays(null); ghostEl().hidden = true; document.body.classList.remove('moving');
+  document.querySelectorAll('.gx.on').forEach(x => x.classList.remove('on'));
+  if (!d || !d.a) return;
+  const days = diff(d.a, d.b) + 1;
+  if (d.a === d.d0 && days === d.of) return;
+  if (days > 14) { toast('のばせるのは14日までです', true); return; }
+  const what = (d.kind === 'note' ? 'メモ' : d.s) + (d.items.length > 1 ? d.items.length + '件' : '');
+  const text = d.mode === 'move' ? what + 'を ' + md(d.d0) + ' → ' + md(d.a) + ' へ動かした' : what + 'を ' + (days > 1 ? md(d.a) + '〜' + md(d.b) + '（' + days + '日）' : md(d.a) + 'の1日') + 'にした';
+  doEdit({ type: 'range', kind: d.kind, s: d.s, items: d.items, from: { a: d.d0, n: d.of }, to: { a: d.a, n: days }, text });
+}
+// つまみ（のばす・縮める）
 sc().addEventListener('pointerdown', ev => {
   const h = ev.target.closest('.ext');
   if (!h) return;
   ev.preventDefault(); ev.stopPropagation();
-  const d0 = h.dataset.d0, of = Number(h.dataset.of) || 1, end = addDays(d0, of - 1), side = h.dataset.side || 'r';
-  // 行の ⇔（1つの計画）は data-ext、枠のつまみは data-items（中の計画を全部）
-  const items = h.dataset.items ? JSON.parse(h.dataset.items) : [{ id: h.dataset.ext, o: h.dataset.o || d0 }];
-  drag = { items, s: h.dataset.s, d0, of, end, side, kind: h.dataset.kind || '', a: '', b: '' };
+  startDrag(h, h.closest('.grp'), 'size', ev, h.dataset.side || 'r');
   try { h.setPointerCapture(ev.pointerId); } catch (e) {}
   h.classList.add('on');
-  const src = h.closest('.grp') || h.closest('a.row'), strip = h.closest('.strip, .wk'), grp = h.closest('.grp');
-  let gh = document.getElementById('ghost');
-  if (!gh) { gh = document.createElement('div'); gh.id = 'ghost'; gh.innerHTML = '<b></b>'; document.body.appendChild(gh); }
-  if (grp) gh.style.setProperty('--c', grp.style.getPropertyValue('--c'));
-  const cellOf = k => document.querySelector('.col[data-d="' + k + '"], .day[data-d="' + k + '"]');
-  const ghost = () => {
-    // 同じ段（週・2週の段・月の週）の中だけ、点線の見本を出す。段をまたぐときは、日の色だけ
-    const ca = cellOf(drag.a), cb = cellOf(drag.b), ia = !!ca && ca.parentElement === strip, ib = !!cb && cb.parentElement === strip;
-    if (!drag.a || (!ia && !ib)) { gh.hidden = true; return; }
-    const r0 = src.getBoundingClientRect();
-    const left = ia ? ca.getBoundingClientRect().left + 3 : r0.left, right = ib ? cb.getBoundingClientRect().right - 3 : r0.right;
-    gh.hidden = false;
-    gh.style.left = left + 'px'; gh.style.top = r0.top + 'px'; gh.style.height = r0.height + 'px'; gh.style.width = Math.max(30, right - left) + 'px';
-    const n = diff(drag.a, drag.b) + 1;
-    gh.firstChild.hidden = n < 2;   // 1日なら日付は出さない（ほかの1日の枠と同じ）
-    gh.firstChild.textContent = md(drag.a) + '〜' + md(drag.b) + '（' + n + '日）';
-  };
-  const mark = () => document.querySelectorAll('.col, .day').forEach(c => c.classList.toggle('drop', !!(drag && drag.a && c.dataset.d >= drag.a && c.dataset.d <= drag.b)));
-  h.onpointermove = e2 => {
-    const el = document.elementFromPoint(e2.clientX, e2.clientY), c = el && el.closest('.col, .day');
-    if (!c || !drag) return;
-    // つかんだのと反対の端を止めて、その端から引っぱった日まで（右の端を前の日へ引っぱると、前の日からにもなる）
-    const t = c.dataset.d, fix = side === 'r' ? drag.d0 : drag.end;
-    const na = t < fix ? t : fix, nb = t < fix ? fix : t;
-    if (na !== drag.a || nb !== drag.b) { drag.a = na; drag.b = nb; mark(); ghost(); }
-  };
-  h.onpointerup = h.onpointercancel = () => {
-    h.onpointermove = h.onpointerup = h.onpointercancel = null;
-    h.classList.remove('on'); gh.hidden = true;
-    const d = drag; drag = null; mark();
-    if (!d || !d.a) return;
-    const days = diff(d.a, d.b) + 1;
-    if (d.a === d.d0 && days === d.of) return;
-    if (days > 14) { toast('のばせるのは14日までです', true); return; }
-    preview(d, days);
-    if (d.kind === 'note') { sendEdit({ op: 'notespan', items: d.items.map(it => ({ id: it.id, d: d.a, n: days })) }, days > 1 ? 'メモを ' + md(d.a) + '〜' + md(d.b) + 'の ' + days + '日にしました' : 'メモを ' + md(d.a) + 'の1日にしました'); return; }
-    const list = d.items.map(it => ({ id: it.id, s: d.s, days, start: d.a === it.o ? '' : d.a }));
-    const what = d.items.length > 1 ? d.items.length + '件を' : '';
-    sendEdit({ op: 'spans', items: list }, days > 1 ? what + md(d.a) + '〜' + md(d.b) + 'の ' + days + '日にのばしました（量は日数で分けます）' : what + md(d.a) + 'の1日にしました');
-  };
+  h.onpointermove = moveDrag;
+  h.onpointerup = h.onpointercancel = () => { h.onpointermove = h.onpointerup = h.onpointercancel = null; endDrag(); };
 });
-// のばした結果を、手元の読み込んだ分に先に当てて描き直す（窓口から返ってきたら、その中身で描き直す）
-function preview(d, days) {
-  const ids = new Set(d.items.map(it => it.id)), r1 = v => Math.round(v * 10) / 10;
-  if (d.kind === 'note') {
+// 見出しをつかんで、別の日へ動かす（マウス。スマホは画面を動かす指と重なるので、つまみだけ）
+sc().addEventListener('pointerdown', ev => {
+  if (ev.pointerType === 'touch' || ev.button !== 0) return;
+  const gh = ev.target.closest('.grp.ed > .gh');
+  if (!gh || ev.target.closest('.ppl.edit, small')) return;
+  const grp = gh.parentElement, h = grp.querySelector(':scope > .gx.r');
+  if (!h) return;
+  const x0 = ev.clientX, y0 = ev.clientY, id = ev.pointerId;
+  const mv = e => {
+    if (!drag) {
+      if (Math.hypot(e.clientX - x0, e.clientY - y0) < 6) return;   // 少し動かすまでは、押しただけ（たたむ・ひらく）
+      startDrag(h, grp, 'move', { clientX: x0, clientY: y0 }, '');
+      document.body.classList.add('moving');
+      try { gh.setPointerCapture(id); } catch (e2) {}
+    }
+    moveDrag(e);
+  };
+  const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); if (drag && drag.mode === 'move') { dragJust = Date.now(); endDrag(); } };
+  window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
+});
+// のばした・動かした結果を、手元の読み込んだ分に先に当てて描き直す（窓口から返ってきたら、その中身で描き直す）
+function preview(kind, s, items, a, days) {
+  const ids = new Set(items.map(it => it.id)), r1 = v => Math.round(v * 10) / 10;
+  if (kind === 'note') {
     const base = new Map();
     blocks.forEach(x => { x.notes = (x.notes || []).filter(n => { if (!ids.has(n.id)) return true; if (!base.has(n.id)) base.set(n.id, n); return false; }); });
-    base.forEach(n => { for (let i = 0; i < days; i++) { const di = addDays(d.a, i), x = blocks.get(blockOf(di)); if (x) x.notes.push(Object.assign({}, n, { d: di, part: i + 1, of: days, d0: d.a })); } });
+    base.forEach(n => { for (let i = 0; i < days; i++) { const di = addDays(a, i), x = blocks.get(blockOf(di)); if (x) x.notes.push(Object.assign({}, n, { d: di, part: i + 1, of: days, d0: a })); } });
   } else {
     const base = new Map();
-    blocks.forEach(x => { x.events = x.events.filter(e => { if (!(ids.has(e.id) && e.s === d.s)) return true; if (!base.has(e.id)) base.set(e.id, e); return false; }); });
+    blocks.forEach(x => { x.events = x.events.filter(e => { if (!(ids.has(e.id) && e.s === s)) return true; if (!base.has(e.id)) base.set(e.id, e); return false; }); });
     base.forEach(e => {
       const of = e.of || 1, q = e.q === '' ? '' : (Number(e.q) || 0) * of, h = e.h == null ? null : e.h * of;
-      for (let i = 0; i < days; i++) { const di = addDays(d.a, i), x = blocks.get(blockOf(di)); if (x) x.events.push(Object.assign({}, e, { d: di, q: q === '' ? '' : r1(q / days), h: h == null ? null : h / days, part: i + 1, of: days, d0: d.a })); }
+      for (let i = 0; i < days; i++) { const di = addDays(a, i), x = blocks.get(blockOf(di)); if (x) x.events.push(Object.assign({}, e, { d: di, q: q === '' ? '' : r1(q / days), h: h == null ? null : h / days, part: i + 1, of: days, d0: a })); }
     });
   }
   reindex(); draw(true);
 }
+// 日の範囲を当てる（手元に先に当てて、窓口へ送る）
+function applyRange(kind, s, items, a, days, msg) {
+  preview(kind, s, items, a, days);
+  if (kind === 'note') return sendEdit({ op: 'notespan', items: items.map(it => ({ id: it.id, d: a, n: days })) }, msg);
+  return sendEdit({ op: 'spans', items: items.map(it => ({ id: it.id, s, days, start: a === it.o ? '' : a })) }, msg);
+}
+// ---- 手直しの履歴：戻す（Ctrl+Z）・やり直す（Ctrl+Y）。このブラウザに50件まで覚える ----
+let hist = (() => { try { const v = JSON.parse(localStorage.getItem('qrdemo.calHist') || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; } })();
+let hpos = hist.filter(x => !x.undone).length;   // 当てた数（これより後ろは「戻したもの」）
+const saveHist = () => { try { localStorage.setItem('qrdemo.calHist', JSON.stringify(hist.slice(-50))); } catch (e) {} };
+function run(x, back) {
+  const st = back ? x.from : x.to, msg = (back ? '戻した：' : 'やり直した：') + x.text;
+  if (x.type === 'range') return applyRange(x.kind, x.s, x.items, st.a, st.n, back || x.redo ? msg : x.text);
+  if (x.type === 'people') return sendEdit({ op: 'people', d: x.d, s: x.s, n: st == null ? '' : String(st) }, back || x.redo ? msg : x.text);
+}
+function doEdit(x) {
+  hist = hist.slice(0, hpos); x.at = Date.now(); hist.push(x); hpos = hist.length;
+  if (hist.length > 50) { hist = hist.slice(-50); hpos = hist.length; }
+  saveHist(); drawHist(); run(x, false);
+}
+function undo() {
+  if (!canEdit()) return;
+  if (!hpos) return toast('戻せる手直しがありません');
+  const x = hist[--hpos]; x.undone = true; saveHist(); drawHist(); run(x, true);
+}
+function redo() {
+  if (!canEdit()) return;
+  if (hpos >= hist.length) return toast('やり直せる手直しがありません');
+  const x = hist[hpos++]; x.undone = false; x.redo = true; saveHist(); drawHist(); run(x, false);
+}
+function drawHist() {
+  const hb = document.getElementById('histbtn');
+  hb.hidden = !canEdit();
+  hb.textContent = '履歴' + (hpos ? ' ' + hpos : '');
+  const p = document.getElementById('hpanel');
+  if (p.hidden) return;
+  const tm = t => { const d = new Date(t); return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0'); };
+  document.getElementById('hlist').innerHTML = hist.length ? hist.map((x, i) => ({ x, i })).reverse().map(({ x, i }) => `<li class="${i >= hpos ? 'undone' : ''}"><span class="tm">${tm(x.at)}</span>${esc(x.text)}</li>`).join('') : '<li class="undone" style="text-decoration:none">まだありません</li>';
+  document.getElementById('h-undo').disabled = !hpos;
+  document.getElementById('h-redo').disabled = hpos >= hist.length;
+}
+document.getElementById('histbtn').onclick = () => { const p = document.getElementById('hpanel'); p.hidden = !p.hidden; drawHist(); };
+document.getElementById('h-x').onclick = () => { document.getElementById('hpanel').hidden = true; };
+document.getElementById('h-undo').onclick = undo;
+document.getElementById('h-redo').onclick = redo;
+document.addEventListener('keydown', ev => {
+  if (!(ev.ctrlKey || ev.metaKey) || ev.altKey) return;
+  if (ev.target.closest && ev.target.closest('input, textarea, select, [contenteditable]')) return;
+  const k = ev.key.toLowerCase();
+  if (k === 'z' && !ev.shiftKey) { ev.preventDefault(); undo(); }
+  else if (k === 'y' || (k === 'z' && ev.shiftKey)) { ev.preventDefault(); redo(); }
+});
+drawHist();
 document.getElementById('fold').onclick = () => { foldAll = !foldAll; foldExc.clear(); save('calFold', foldAll ? '1' : ''); draw(true); };
 function openPop(k, s) {
   const es = eventsOn(k).filter(e => e.s === s);
