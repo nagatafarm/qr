@@ -120,6 +120,16 @@
   .big.half small { font-size: 12px; }
   .big.weed { background: #6f8f2f; }
   .big.stock { background: #2f8a8a; }
+  /* メニューのボタンの絵（平らな白い絵。2026-11-24） */
+  .big .ic { flex: none; width: 52px; height: 52px; border-radius: 14px; background: rgba(255,255,255,.18); display: flex; align-items: center; justify-content: center; }
+  .big .ic svg { width: 32px; height: 32px; fill: #fff; display: block; }
+  .big:has(> .ic) { display: flex; align-items: center; gap: 16px; }
+  .big .tx { flex: 1; min-width: 0; }
+  .big.half .ic { width: 40px; height: 40px; border-radius: 11px; }
+  .big.half .ic svg { width: 25px; height: 25px; }
+  .big.half:has(> .ic) { gap: 11px; }
+  .big.wish .ic { width: 44px; height: 44px; }
+  @media (max-width: 380px) { .big.half:has(> .ic) { flex-direction: column; align-items: flex-start; gap: 8px; } }
   a.wishbtn { margin-top: 8px; background: #fff; color: var(--green-d); border: 2px solid var(--green); text-align: center; }
   a.wishbtn small { display: block; font-size: 12px; font-weight: normal; color: var(--gray); }
   /* パートさん用：だれとして記録するかの確認 */
@@ -1753,6 +1763,16 @@ function wishFor() {
 // ---------- 画面：最初の画面（作業を登録する／作業を調べる） ----------
 // 除草・在庫管理の画面（LINE の Bot と同じページ。人の見分けは LINE のログイン）。メニューには、ログインした社員にだけ出す
 const LINE_APP = 'https://liff.line.me/2011954714-Qx2LccvV';
+// メニューのボタンの絵（平らな絵。24×24 のマスに描いた形）
+const ICONS = {
+  reg: 'M9 2h6a1 1 0 0 1 1 1h2a2 2 0 0 1 2 2v15a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2a1 1 0 0 1 1-1zm0 2v2h6V4H9zm1.6 13.1 5.8-5.8-1.4-1.4-4.4 4.4-1.9-1.9-1.4 1.4 3.3 3.3z',
+  find: 'M10 3a7 7 0 1 0 4.2 12.6l4.6 4.6 1.4-1.4-4.6-4.6A7 7 0 0 0 10 3zm0 2a5 5 0 1 1 0 10 5 5 0 0 1 0-10z',
+  weed: 'M11 21v-7.1C7.6 13.6 5 10.9 5 7.5V6h1.5C9 6 11.1 7.5 12 9.6 12.9 6.3 15.9 4 19.5 4H21v1.5c0 4.1-3.1 7.5-7 7.9V21h-3z',
+  stock: 'M3 7l9-4 9 4v10l-9 4-9-4V7zm9-1.8L6.2 7.7 12 10.3l5.8-2.6L12 5.2zM5 9.3v6.4l6 2.7v-6.4L5 9.3zm8 9.1 6-2.7V9.3l-6 2.7v6.4z',
+  sched: 'M7 2h2v2h6V2h2v2h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2V2zM5 10v10h14V10H5zm2 2h4v4H7v-4z',
+  wish: 'M6 2h8l6 6v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm7 1.5V9h5.5L13 3.5zM12 11l-4 4h3v4h2v-4h3l-4-4z',
+};
+function ic(k) { return `<span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path fill-rule="evenodd" d="${ICONS[k]}"/></svg></span>`; }
 function renderFront() {
   const who = isPart() ? 'このスマホは「パートさん用」です' : loggedIn() ? 'ログイン中：' + getName() + '（' + roleLabel() + '）' : '';
   document.getElementById('app').innerHTML = `
@@ -1762,15 +1782,15 @@ function renderFront() {
     <main style="max-width:520px">
       ${noticeHtml()}
       <h2 class="grp">作業の記録</h2>
-      <button type="button" class="big reg" id="f-reg">作業を登録する<small>終わった作業を記録する（QR を読む・やることの一覧）</small></button>
-      <button type="button" class="big find" id="f-find">作業を調べる<small>計画の中身と進み具合を見る（QR を読む・名前で探す）</small></button>
+      <button type="button" class="big reg" id="f-reg">${ic('reg')}<span class="tx">作業を登録する<small>終わった作業を記録する（QR を読む・やることの一覧）</small></span></button>
+      <button type="button" class="big find" id="f-find">${ic('find')}<span class="tx">作業を調べる<small>計画の中身と進み具合を見る（QR を読む・名前で探す）</small></span></button>
       ${loggedIn() ? `<div class="two">
-        <a class="big half weed" href="${LINE_APP}?go=record" target="_blank" rel="noopener">除草<small>記録・マップ（LINE でひらく）</small></a>
-        <a class="big half stock" href="${LINE_APP}?go=stocklist" target="_blank" rel="noopener">在庫管理<small>一覧・入庫・出庫（LINE でひらく）</small></a>
+        <a class="big half weed" href="${LINE_APP}?go=record" target="_blank" rel="noopener">${ic('weed')}<span class="tx">除草<small>記録・マップ（LINE でひらく）</small></span></a>
+        <a class="big half stock" href="${LINE_APP}?go=stocklist" target="_blank" rel="noopener">${ic('stock')}<span class="tx">在庫管理<small>一覧・入庫・出庫（LINE でひらく）</small></span></a>
       </div>` : ''}
       <h2 class="grp">予定の確認</h2>
-      <button type="button" class="big sched" data-nav="calendar">スケジュール<small>いつ・どの作業が・どれだけあるかを、月・週のカレンダーで見る（人の割り振り表もここから）</small></button>
-      ${wishFor() ? `<h2 class="grp">書類の提出</h2><a class="big wish" href="wish.html">出勤希望<small>${canWish() ? 'パートさんの来月・再来月の出勤希望を見る。出勤の表に入れる' : '来月・再来月の出勤する日に 〇 を付けて出す'}</small></a>` : ''}
+      <button type="button" class="big sched" data-nav="calendar">${ic('sched')}<span class="tx">スケジュール<small>いつ・どの作業が・どれだけあるかを、月・週のカレンダーで見る（人の割り振り表もここから）</small></span></button>
+      ${wishFor() ? `<h2 class="grp">書類の提出</h2><a class="big wish" href="wish.html">${ic('wish')}<span class="tx">出勤希望<small>${canWish() ? 'パートさんの来月・再来月の出勤希望を見る。出勤の表に入れる' : '来月・再来月の出勤する日に 〇 を付けて出す'}</small></span></a>` : ''}
       ${who ? `<p class="muted" style="text-align:center;margin-top:16px">${esc(who)}${isPart() ? '<br><button type="button" class="tologin" id="f-login">社員としてログインする</button>' : ''}</p>` : ''}
       <p class="muted" style="text-align:center;font-size:11px;margin-top:6px">天気の予報：Open-Meteo</p>
     </main>`;
