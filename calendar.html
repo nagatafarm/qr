@@ -383,7 +383,9 @@ let manPeople = {};                // '日|工程' → 手で決めた人数
 let groupBy = ['row', 'c', 'i', 'h'].includes(load('calGroup')) ? load('calGroup') : 'c';
 const sumOpen = new Set();         // ひらいている、まとめの行（日|工程|まとめの名前）
 // 手直し（メモ・人数・日数）ができるか：ログインした計画担当。手元の試験（?mock=1）では、いつでもできる
-function canEdit() { if (MOCK) return true; try { return !!(authToken() && authCaps().planner); } catch (e) { return false; } }
+// 窓口に「計画担当だけ」と断られたら true（ログインのあとで部署が変わった人。このブラウザが覚えている権限が古い）。以後、手直しの部品を出さない
+let editDenied = false;
+function canEdit() { if (MOCK) return true; if (editDenied) return false; try { return !!(authToken() && authCaps().planner); } catch (e) { return false; } }
 const blockOf = k => Math.floor(diff(EPOCH, k) / BLOCK);
 const blockStart = b => addDays(EPOCH, b * BLOCK);
 (function restore() {
@@ -433,7 +435,15 @@ async function calEditApi(o) {
     if (o.op === 'span') { if (o.days > 1) mockEdits.spans[o.id + '|' + o.s] = o.days; else delete mockEdits.spans[o.id + '|' + o.s]; }
     if (o.op === 'spans') o.items.forEach(x => { const key = x.id + '|' + x.s; if (x.days > 1 || x.start) mockEdits.spans[key] = { n: x.days, st: x.start }; else delete mockEdits.spans[key]; });
   } else {
-    await postApi(Object.assign({ action: 'calEdit', from: TODAY, to: TODAY }, o));
+    try {
+      await postApi(Object.assign({ action: 'calEdit', from: TODAY, to: TODAY }, o));
+    } catch (e) {
+      // 保存できなかった：画面の上だけ変わった分を、窓口の中身に戻す。計画担当でないと断られたら、手直しの部品も消す
+      if (/計画担当だけ/.test(e && e.message || '')) editDenied = true;
+      blocks.forEach(x => { x.at = 0; });
+      draw(true); need();
+      throw e;
+    }
   }
   blocks.forEach(x => { x.at = 0; });
   need();
@@ -964,6 +974,8 @@ sc().addEventListener('click', ev => {
 });
 // ---- 手直し：人数・メモ・日数（計画担当だけ。カレンダーの手直し.gs） ----
 const sendEdit = (o, ok) => calEditApi(o).then(() => toast(ok)).catch(e => toast(e.message, true));
+// ログインした人の権限（qrdemo.caps）やログインが変わったら、描き直す（計画担当でなくなった人に、つまみ・＋ を出したままにしない）
+window.addEventListener('storage', ev => { if (ev.key === 'qrdemo.caps' || ev.key === 'qrdemo.token' || ev.key === null) { try { draw(true); } catch (e) {} } });
 function askPeople(key) {
   const i = key.indexOf('|'), k = key.slice(0, i), s = key.slice(i + 1), cur = manPeople[key];
   const v = prompt(label(k) + '　' + s + ' に入れる人数（空にすると、作業からの目安にもどす）', cur == null ? '' : String(cur));
@@ -1046,6 +1058,7 @@ function endDrag() {
 sc().addEventListener('pointerdown', ev => {
   const h = ev.target.closest('.ext');
   if (!h) return;
+  if (!canEdit()) { draw(true); return; }   // 計画担当でない人：前の権限で描いたつまみが残っていても、動かさない（描き直して消す）
   ev.preventDefault(); ev.stopPropagation();
   startDrag(h, h.closest('.grp'), 'size', ev, h.dataset.side || 'r');
   try { h.setPointerCapture(ev.pointerId); } catch (e) {}
@@ -1058,6 +1071,7 @@ sc().addEventListener('pointerdown', ev => {
   if (ev.pointerType === 'touch' || ev.button !== 0) return;
   const gh = ev.target.closest('.grp.ed > .gh');
   if (!gh || ev.target.closest('.ppl.edit, small')) return;
+  if (!canEdit()) { draw(true); return; }
   const grp = gh.parentElement, h = grp.querySelector(':scope > .gx.r');
   if (!h) return;
   const x0 = ev.clientX, y0 = ev.clientY, id = ev.pointerId;
