@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>機械マニュアル</title>
+<style>
+  :root { --green: #4f9363; --green-d: #2f6f45; --orange: #d4824a; --bg: #f5f5f3; --line: #dfe6df; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: #222; font-family: "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif; line-height: 1.6; }
+  header { background: var(--green); color: #fff; padding: 14px 16px; }
+  header h1 { margin: 0; font-size: 19px; }
+  header p { margin: 2px 0 0; font-size: 13px; opacity: .95; }
+  main { max-width: 860px; margin: 0 auto; padding: 14px 14px 96px; }
+  .list { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+  .card { display: block; background: #fff; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; text-decoration: none; color: inherit; box-shadow: 0 2px 8px rgba(0,0,0,.05); }
+  .card img { display: block; width: 100%; height: 130px; object-fit: cover; object-position: top; border-bottom: 1px solid var(--line); }
+  .card b { display: block; padding: 10px 12px 0; font-size: 16px; color: var(--green-d); }
+  .card small { display: block; padding: 0 12px 12px; color: #666; font-size: 12px; }
+  section { margin: 26px 0 0; scroll-margin-top: 8px; }
+  h2 { font-size: 18px; margin: 0 0 8px; padding-left: 10px; border-left: 5px solid var(--green); }
+  .pages img { display: block; width: 100%; height: auto; margin: 0 0 12px; border-radius: 8px; border: 1px solid var(--line); background: #fff; }
+  .top { font-size: 13px; }
+  .top a { color: var(--green-d); }
+  .muted { color: #666; font-size: 13px; }
+  .fab { position: fixed; right: 14px; bottom: 14px; z-index: 50; background: var(--orange); color: #fff; text-decoration: none; font-weight: bold; border-radius: 999px; padding: 12px 20px; box-shadow: 0 4px 14px rgba(0,0,0,.3); font-size: 15px; }
+</style>
+</head>
+<body>
+<header><h1>機械マニュアル</h1><p>使う前に読む。紙と同じ中身です。画像は、指2本で広げると大きく見られます</p></header>
+<main>
+  <div class="list">
+    <a class="card" href="#tank"><img src="kikai/tank_1_s.jpg" alt=""><b>タンク動噴（除草剤）</b><small>丸山 MS201EA-1 ＋ 300L タンク</small></a>
+    <a class="card" href="#seoi"><img src="kikai/seoi_1_s.jpg" alt=""><b>背負い動噴（薬剤散布）</b><small>丸山 スーパー霧太郎 MSB1100Li（バッテリー）</small></a>
+    <a class="card" href="#teoshi"><img src="kikai/teoshi_1_s.jpg" alt=""><b>手押し動噴（薬剤散布）</b><small>台車式・ホースリール付き（ホンダ GX25）</small></a>
+    <a class="card" href="#mos"><img src="kikai/mos_1_s.jpg" alt=""><b>モスバリア（アザミウマ対策）</b><small>ジュニアⅡ レッド ＋ コンセントのタイマー</small></a>
+    <a class="card" href="#dump"><img src="kikai/dump_1_s.jpg" alt=""><b>軽ダンプ（土の運搬）</b><small>ダイハツ ハイゼット ダンプ</small></a>
+    <a class="card" href="#cycle"><img src="kikai/cycle_1_s.jpg" alt=""><b>2サイクルと4サイクルの違い</b><small>エンジンに入れる燃料とオイル</small></a>
+  </div>
+
+  <section id="tank"><h2>タンク動噴（除草剤）</h2><div class="pages"><img src="kikai/tank_1.jpg" alt="タンク動噴の使い方 1ページ目" loading="lazy"><img src="kikai/tank_2.jpg" alt="タンク動噴の使い方 2ページ目" loading="lazy"></div><p class="top"><a href="#">↑ 一覧へ</a></p></section>
+  <section id="seoi"><h2>背負い動噴（薬剤散布）</h2><div class="pages"><img src="kikai/seoi_1.jpg" alt="背負い動噴の使い方 1ページ目" loading="lazy"><img src="kikai/seoi_2.jpg" alt="背負い動噴の使い方 2ページ目" loading="lazy"></div><p class="top"><a href="#">↑ 一覧へ</a></p></section>
+  <section id="teoshi"><h2>手押し動噴（薬剤散布）</h2><div class="pages"><img src="kikai/teoshi_1.jpg" alt="手押し動噴の使い方 1ページ目" loading="lazy"><img src="kikai/teoshi_2.jpg" alt="手押し動噴の使い方 2ページ目" loading="lazy"></div><p class="top"><a href="#">↑ 一覧へ</a></p></section>
+  <section id="mos"><h2>モスバリア（アザミウマ対策）</h2><div class="pages"><img src="kikai/mos_1.jpg" alt="モスバリアの使い方 1ページ目" loading="lazy"><img src="kikai/mos_2.jpg" alt="モスバリアの使い方 2ページ目" loading="lazy"></div><p class="top"><a href="#">↑ 一覧へ</a></p></section>
+  <section id="dump"><h2>軽ダンプ（土の運搬）</h2><div class="pages"><img src="kikai/dump_1.jpg" alt="軽ダンプの使い方 1ページ目" loading="lazy"><img src="kikai/dump_2.jpg" alt="軽ダンプの使い方 2ページ目" loading="lazy"></div><p class="top"><a href="#">↑ 一覧へ</a></p></section>
+  <section id="cycle"><h2>2サイクルと4サイクルの違い</h2><div class="pages"><img src="kikai/cycle_1.jpg" alt="2サイクルと4サイクルの違い" loading="lazy"></div><p class="top"><a href="#">↑ 一覧へ</a></p></section>
+
+  <p class="muted" style="text-align:center;margin-top:24px">わからないときは使わない。上長に聞く。</p>
+</main>
+<a class="fab" href="index.html">なえログに戻る</a>
+</body>
+</html>
