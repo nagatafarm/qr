@@ -65,6 +65,8 @@
   .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
   .cols { display: grid; gap: 12px; }
   @media (min-width: 900px) { .cols.two { grid-template-columns: minmax(0, 1fr) 420px; align-items: start; } .cols.two .send { position: static; border: none; padding: 10px 0 0; } }
+  body.has-bnav .send { bottom: var(--bnav-h); padding-bottom: 10px; }
+  body.has-bnav main { padding-bottom: 150px; }
   #toast { position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%); background: #222; color: #fff; padding: 10px 16px; border-radius: 10px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 50; max-width: 90%; }
   #toast.show { opacity: 1; } #toast.err { background: var(--red); }
   @media print { header a, .send, .tabs, .modes, .noprint { display: none !important; } body { background: #fff; } }
@@ -268,5 +270,6 @@ window.addEventListener('beforeunload', ev => { if (ed && ed.dirty) { ev.prevent
 boot();
 </script>
 <script src="feedback.js?v=2"></script>
+<script src="nav.js?v=1"></script>
 </body>
 </html>

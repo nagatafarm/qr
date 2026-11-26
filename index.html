@@ -7,6 +7,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="config.js?v=g1"></script>
 <script src="common.js?v=g1"></script>
+<script>window.NAE_SPA = true;</script>
+<script src="nav.js?v=1"></script>
 <script src="weather.js?v=7"></script>
 <style>
   :root { --orange: #d4834a; --orange-d: #9a5320; --orange-l: #fdf5ee; --green: #4f9363; --green-d: #2f6b3a; --green-l: #f0f6f1; --line: #d6e2d8; --gray: #6b6b6b; --red: #c33; --bg: #f6f7f5; }
@@ -164,18 +166,11 @@
   .findrow .fs .ok { color: var(--green-d); }
   button.btn-link { cursor: pointer; font-family: inherit; }
   .btn-link.on { background: var(--green); color: #fff; }
-  /* どの画面でも上の帯に出す3つのボタン（作業を登録する・作業を調べる・スケジュール） */
   header { flex-wrap: wrap; }
-  header .gnav { order: 9; flex: 1 0 100%; display: flex; gap: 6px; }
-  /* ボタンが5つ（除草記録・在庫管理つき）のとき：せまい画面では短い名前にして、1段に収める */
-  header .gnav .nn { display: none; }
-  @media (max-width: 700px) { header .gnav.five .nw { display: none; } header .gnav.five .nn { display: inline; } }
   /* 除草・在庫管理の中の切り替え（記録する／マップ、在庫を見る／入庫・出庫／履歴）：上の帯のいちばん下に、小さめのタブで */
   header .subnav { order: 10; flex: 1 0 100%; display: flex; gap: 6px; margin-top: 2px; }
   header .subnav .hbtn { padding: 4px 16px; font-size: 13px; border-radius: 999px; }
-  header .subnav .tohome, header .subnav .tohelp { display: none; }   /* PC は右上に「メニューへ戻る」がある。スマホ（右上のボタンを隠す幅）だけ、タブの左に出す */
-  header .gnav a, header .gnav .hbtn { flex: 1; text-align: center; font-size: 14px; padding: 6px 4px; }
-  header .gnav .on { background: #fff; color: var(--green-d); font-weight: bold; }
+  header .subnav .tohelp { display: none; }   /* PC は右上に「？ 使い方」がある。スマホ（右上のボタンを隠す幅）だけ、タブの右に出す */
   header .hbtn.on { background: rgba(255,255,255,.25); font-weight: bold; }
   /* 右上の札：今使っている人と役割 */
   header:has(.me) > div:first-child { flex: 1 1 auto; }
@@ -208,18 +203,14 @@
     header:not(.fronthead):has(.me) .me { order: 1; }
     header:not(.fronthead):has(.me) .hbtns { order: 4; flex: 1 0 100%; }
   }
-  /* とてもせまいスマホ（幅340px 以下）：3つのボタンの字を小さくして、横にはみ出さないようにする */
-  @media (max-width: 340px) { header .gnav { gap: 4px; } header .gnav a, header .gnav .hbtn { font-size: 12px; padding: 6px 2px; min-width: 0; } }
-  /* スマホのスケジュール画面：上の緑の帯は3つのボタンの1段だけにする（カレンダーと割り振り表の切り替えは、中の白い帯のリンクで） */
+  /* スマホのスケジュール・除草・在庫の画面：上の緑の帯は、題名と名前の札の1段だけにする（行き先は下のメニューバー） */
   @media (max-width: 820px) {
-    header.schedhead { padding: 6px 8px; }
-    header.schedhead .ht, header.schedhead .hbtns, header.schedhead .me { display: none !important; }
-    header.schedhead .gnav { gap: 4px; }
-    header.schedhead .gnav .hbtn { padding: 5px 2px; font-size: 13px; }
+    header.schedhead { padding: 6px 10px; }
+    header.schedhead .ht .sub, header.schedhead .hbtns { display: none !important; }
+    header.schedhead h1 { font-size: 15px; }
     header.schedhead .subnav { gap: 4px; flex-wrap: wrap; }
     header.schedhead .subnav .hbtn { padding: 4px 10px; }
     header.schedhead .subnav .tohelp { display: inline-block; margin-left: auto; padding: 4px 11px; }
-    header.schedhead .subnav .tohome { display: inline-block; background: rgba(255,255,255,.92); color: #2f6f45; border-color: #fff; font-weight: bold; }
   }
   #schedframe { display: block; width: 100%; border: 0; background: var(--bg); height: calc(100vh - var(--hh, 110px)); height: calc(100dvh - var(--hh, 110px)); }
 
@@ -1104,7 +1095,7 @@ function renderSetup() {
   const lg = state.login, canBack = loggedIn();
   if (!lg) {
     document.getElementById('app').innerHTML = `<header><div><h1>なえログ</h1><div class="sub">ログイン</div></div>
-      <div style="display:flex;gap:6px;flex:none"><button type="button" class="hbtn" id="home">メニューへ戻る</button></div>${navHtml()}</header>
+      ${navHtml()}</header>
       <main style="max-width:520px"><div class="card">スケジュール用のスプレッドシートがまだないので、ログインの一覧を作れません。</div>
         <button type="button" class="role part" id="partbtn" style="width:100%;margin-top:12px">パートさん用<small>共有のスマホ用。名札の QR を読んで、その人として記録する</small></button></main>`;
   } else {
@@ -1153,14 +1144,13 @@ function meHtml() {
   const name = isPart() || loggedIn() ? getName() : '', role = roleLabel();
   return `<button type="button" class="me" data-me title="${isPart() ? '次の人に替わる' : 'ログイン・ログアウト'}"><span class="ic">${ME_ICON}</span><span class="tx"><b>${esc(name || (isPart() ? '名札を読む' : 'ログイン'))}</b><small>${esc(role || (isPart() ? '' : 'ログインしていません'))}</small></span></button>`;
 }
-function navHtml() {
-  const cur = inSetup ? '' : page;
-  // スマホのせまい幅では短い名前にする（wide＝広い画面の字、narrow＝せまい画面の字）
-  const b = (nav, on, wide, narrow) => `<button type="button" class="hbtn${on ? ' on' : ''}" data-nav="${nav}"><span class="nw">${wide}</span><span class="nn">${narrow}</span></button>`;
-  const sched = cur === 'schedule' || cur === 'calendar' || cur === 'whiteboard' || cur === 'dayplan';
-  // 除草記録・在庫管理は、ログインした社員だけ（パートさん用のスマホには出さない）
-  const ext = loggedIn() ? b('weed', cur === 'weed' || cur === 'weedmap', '除草記録', '除草') + b('stock', cur === 'stock' || cur === 'stockio' || cur === 'stocklog', '在庫管理', '在庫') : '';
-  return meHtml() + `<nav class="gnav${ext ? ' five' : ''}">${b('reg', cur === 'reg', '作業を登録する', '登録')}${b('find', cur === 'find', '作業を調べる', '調べる')}${b('calendar', sched, 'スケジュール', '予定')}${ext}</nav>`;
+// 上の帯の3つのタブはやめた（2026-11-27）。行き先は、下のメニューバー（nav.js）にまとめた。ここは名前の札だけ
+function navHtml() { return meHtml(); }
+// 下のメニューバーに、出す・消すと、今いる所を知らせる
+function navSync() {
+  if (!window.NaeNav) return;
+  const g = { schedule: 'calendar', whiteboard: 'calendar', dayplan: 'calendar', weedmap: 'weed', stockio: 'stock', stocklog: 'stock' };
+  NaeNav.update({ show: !inSetup && (isPart() || loggedIn()) && !!document.querySelector('#app > header'), ext: loggedIn(), cur: g[page] || page });
 }
 document.addEventListener('click', ev => {
   const b = ev.target.closest && ev.target.closest('[data-nav]');
@@ -1179,7 +1169,7 @@ function helpBtn(cls) { return `<a class="hbtn ${cls || ''}" href="${helpHref()}
 function hbtnsHtml(extra, noHome, noUser) {
   const user = noUser ? '' : isPart() ? '<button type="button" class="hbtn" id="nextp">次の人</button>' : loggedIn() ? '<button type="button" class="hbtn" id="chg">ログアウト</button>' : '';
   const late = noHome ? 0 : overdueList().length;   // メニュー以外の画面：予定日を過ぎた作業の数。押すと、メニューのお知らせをひらく
-  return `<div class="hbtns">${extra || ''}${helpBtn()}${late ? '<button type="button" class="hbtn ntc" id="ntc" title="予定日を過ぎた作業">⚠ ' + late + '</button>' : ''}${noHome ? '' : '<button type="button" class="hbtn" id="home">メニューへ戻る</button>'}${user}</div>`;
+  return `<div class="hbtns">${extra || ''}${helpBtn()}${late ? '<button type="button" class="hbtn ntc" id="ntc" title="予定日を過ぎた作業">⚠ ' + late + '</button>' : ''}${user}</div>`;
 }
 // 上の帯：題名の下に今の担当と名前。右に「メニューへ戻る」「一覧へ」と、「担当・名前」（パートさん用のスマホでは「次の人」）
 function headerHtml(sub, back) {
@@ -1950,7 +1940,6 @@ function renderSchedule() {
       ${hbtnsHtml()}${navHtml()}</header>
     <iframe id="schedframe" src="${src}" title="${cal ? 'カレンダー' : 'スケジュール'}"></iframe>`;
   document.getElementById('bulkbar').hidden = true;
-  document.getElementById('home').onclick = () => goPage('front');
   fitFrame();
 }
 // はめ込んだ表の高さを、画面の残り（上の帯の下）いっぱいにする。帯の高さだけ測り、残りは CSS（100dvh）に任せる
@@ -1969,10 +1958,9 @@ function renderExt() {
   document.getElementById('app').innerHTML = `
     <header class="schedhead"><div class="ht"><h1>${weed ? '除草' : '在庫管理'}</h1><div class="sub">${weed ? '除草の記録・マップ' : '在庫を見る・入庫と出庫'}</div></div>
       ${hbtnsHtml()}${navHtml()}
-      <nav class="subnav" aria-label="${weed ? '除草' : '在庫管理'}の画面"><button type="button" class="hbtn tohome" data-nav="front">‹ メニュー</button>${(weed ? [['weed', '記録する'], ['weedmap', 'マップ']] : [['stock', '在庫を見る'], ['stockio', '入庫・出庫'], ['stocklog', '履歴']]).map(x => `<button type="button" class="hbtn${x[0] === page ? ' on' : ''}" data-nav="${x[0]}">${x[1]}</button>`).join('')}${helpBtn('tohelp')}</nav></header>
+      <nav class="subnav" aria-label="${weed ? '除草' : '在庫管理'}の画面">${(weed ? [['weed', '記録する'], ['weedmap', 'マップ']] : [['stock', '在庫を見る'], ['stockio', '入庫・出庫'], ['stocklog', '履歴']]).map(x => `<button type="button" class="hbtn${x[0] === page ? ' on' : ''}" data-nav="${x[0]}">${x[1]}</button>`).join('')}${helpBtn('tohelp')}</nav></header>
     <iframe id="schedframe" data-ext="${page}" src="${src}" title="${weed ? '除草' : '在庫管理'}"></iframe>`;
   document.getElementById('bulkbar').hidden = true;
-  document.getElementById('home').onclick = () => goPage('front');
   const fr = document.getElementById('schedframe');
   fr.addEventListener('load', () => extSkin(fr));
   fitFrame();
@@ -2161,7 +2149,6 @@ function renderGate() {
       <button type="button" class="others" id="g-staff">社員の画面にする（ログインする）</button>
     </main>`;
   document.getElementById('bulkbar').hidden = true;
-  document.getElementById('home').onclick = () => goPage('front');
   document.getElementById('g-scan').onclick = () => { gateManual = false; startScan('gate'); };
   document.querySelectorAll('[data-gname]').forEach(b => b.onclick = () => askWho(b.dataset.gname));
   document.getElementById('g-staff').onclick = () => { save('mode', ''); logout(); renderSetup(); };
@@ -2363,7 +2350,6 @@ function renderFind() {
       <p class="muted">最終更新 ${esc(state.updated)}（自動で更新）。</p>
     </main>`;
   document.getElementById('bulkbar').hidden = true;
-  document.getElementById('home').onclick = () => goPage('front');
   document.getElementById('findscan').onclick = () => startScan('find');
   bindFbar();
   // もう一度押すと閉じる
@@ -2419,7 +2405,6 @@ function renderPlanView(plan) {
       <button type="button" class="backbtn" id="v-back">ほかの計画を調べる</button>
     </main>`;
   document.getElementById('bulkbar').hidden = true;
-  document.getElementById('home').onclick = () => goPage('front');
   document.getElementById('tofind').onclick = () => goPage('find');
   document.getElementById('v-back').onclick = () => goPage('find');
   if (hasSpray()) bindPest(plan);
@@ -2434,12 +2419,13 @@ function planMissing() {
 }
 // ログインが要るか：社員の画面で、まだログインしていない（パートさん用のスマホは、ログインしない）
 function needLogin() { return G_ON ? gNeed() : (!isPart() && !loggedIn()); }
-function render() { renderBody(); afterRender(); }
+function render() { renderBody(); navSync(); afterRender(); }
 // PC では main がスクロールする。描き直しても、見ていた所を動かさない（画面を替えたときだけ、いちばん上へ）
 let paneTop = 0, paneReset = false;
 function toTop() { window.scrollTo(0, 0); paneTop = 0; paneReset = true; const m = document.querySelector('#app > main'); if (m) m.scrollTop = 0; }
 document.addEventListener('scroll', ev => { if (ev.target.matches && ev.target.matches('#app > main')) paneTop = ev.target.scrollTop; }, true);
 new MutationObserver(() => {
+  navSync();
   const m = document.querySelector('#app > main');
   if (!m || m.dataset.pane) return;
   m.dataset.pane = '1';

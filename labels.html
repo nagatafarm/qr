@@ -10,7 +10,7 @@
   @page { size: A4 portrait; margin: 6mm; }
   * { box-sizing: border-box; }
   body { margin: 0; background: #f6f7f5; font-family: "Yu Gothic", "Meiryo", "Hiragino Sans", sans-serif; color: #111; }
-  .bar { background: #2f6b3a; color: #fff; padding: 10px 16px; display: flex; gap: 12px; align-items: center; justify-content: space-between; }
+  .bar { background: #4f9363; color: #fff; padding: 10px 16px; display: flex; gap: 12px; align-items: center; justify-content: space-between; }
   .bar a, .bar button { color: #fff; font-size: 14px; }
   .bar button { background: #fff; color: #2f6b3a; border: none; border-radius: 8px; padding: 6px 14px; font-weight: bold; cursor: pointer; font-family: inherit; }
   .page { width: 198mm; margin: 12px auto; }
@@ -75,7 +75,7 @@
 <body>
 <div class="bar noprint">
   <div><b>ラベル印刷</b>　播種シール・土カード・鉢上げラベル（各計画に同じQR）</div>
-  <div><a id="back" href="#">一覧へ</a>　<button onclick="window.print()">印刷する</button></div>
+  <div><a id="back" class="backlink" href="#">一覧へ</a>　<button onclick="window.print()">印刷する</button></div>
 </div>
 <div class="page" id="page"></div>
 
@@ -171,5 +171,6 @@ function linksHtml(state) {
     `<div class="lk"><div class="qr">${qrSvg(l.u)}</div><div><div class="lt">${esc(l.t)}</div><div class="ld">${esc(l.d)}</div></div></div>`).join('')}</div></div>`;
 }
 </script>
+<script src="nav.js?v=1"></script>
 </body>
 </html>

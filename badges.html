@@ -55,5 +55,6 @@ fetchState().then(s => {
     : '<div class="card">「担当者」シートに名前がありません。スプレッドシートの「担当者」シートに名前を書いてください。</div>';
 }).catch(e => { document.getElementById('sheet').innerHTML = '<div class="card">' + esc(e.message) + '</div>'; });
 </script>
+<script src="nav.js?v=1"></script>
 </body>
 </html>
