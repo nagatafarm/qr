@@ -215,10 +215,27 @@
   .cnote { display: block; background: #fff6c8; border: 1px solid #e8d48a; color: #5a4800; border-radius: 5px; font-size: 11px; padding: 1px 5px; margin-top: 2px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .cnote.del { cursor: pointer; }
   .addnote { border: 1px dashed #c9b25a; background: none; color: #8a7420; border-radius: 5px; font-size: 11px; padding: 0 6px; cursor: pointer; margin-top: 2px; font-family: inherit; }
-  .day .addnote { align-self: flex-start; }
+  .day .addnote { align-self: center; margin-top: auto; }   /* 「＋」は、その日の枠のいちばん下（2026-11-24 意見） */
+  [data-day] { cursor: pointer; }
+  #scroller.oneday { scroll-snap-type: x mandatory; }
+  #scroller.oneday .col { width: var(--sw, 100vw); scroll-snap-stop: always; }
+  #scroller.oneday .col .cb { max-width: 720px; width: 100%; margin: 0 auto; box-sizing: border-box; }
   /* マウスのある画面では、「＋メモ」はその日に乗ったときだけ出す（並ぶとうるさい） */
   /* スマホ（マウスを乗せられない）の月：「＋メモ」の枠はやめて、日のマスの右上に小さな「＋」だけ（2026-11-23 意見） */
-  @media (hover: none) { .day { position: relative; } .day .addnote, .col .ch .addnote { position: absolute; top: 1px; right: 1px; margin: 0; border: none; padding: 3px 5px; font-size: 0; line-height: 1; } .day .addnote::before, .col .ch .addnote::before { content: '＋'; font-size: 15px; color: #b39a3a; } }
+  @media (hover: none) { .day { position: relative; } .col .ch .addnote { position: absolute; top: 1px; right: 1px; margin: 0; border: none; padding: 3px 5px; font-size: 0; line-height: 1; } .day .addnote::before, .col .ch .addnote::before { content: '＋'; font-size: 15px; color: #b39a3a;  } .day .addnote { border: none; padding: 4px 10px; font-size: 0; line-height: 1; } }
+  /* スマホの月：マスがせまいので、工程の名前が切れないように、見出しは字を小さくして折り返す。▾ と「◯件 ›」は出さない（2026-11-24 意見） */
+  @media (max-width: 820px) {
+    .day .grp .gh { padding: 3px 3px; gap: 1px 3px; font-size: 11px; line-height: 1.25; flex-wrap: wrap; white-space: normal; }
+    .day .grp .gh .tg, .day .grp .gh small { display: none; }
+    .day .grp .gh b { flex: 1 0 100%; white-space: nowrap; letter-spacing: -.02em; }
+    .day .grp.shut .gh { opacity: .82; }
+    .day .grp.spg.ed .gh, .day .grp.spg.ed a.row { padding-right: 12px; }
+    .day .grp .sum { padding: 3px 3px; gap: 0 3px; font-size: 11px; flex-wrap: wrap; white-space: normal; }
+    .day .grp .sum .tw2 { display: none; }
+    .day .grp .sum b { flex: 1 0 100%; white-space: nowrap; }
+    .day .grp .sum .cnt ~ span { display: none; }   /* 量は見出しにあるので、行では出さない */
+    .day .grp a.row { padding: 3px 3px; font-size: 11px; }
+  }
   @media (hover: hover) { .addnote { opacity: 0; } .col:hover .addnote, .day:hover .addnote, .addnote:focus { opacity: 1; } }
   /* 計画ごとのまとめ（取引先＝メーカー・品目・ハウス）。押すと中の計画を出す */
   .grp .sum { display: flex; gap: 6px; align-items: center; padding: 4px 8px; border-top: 1px solid #eee; font-size: 12px; cursor: pointer; background: #fafcfa; white-space: nowrap; }
@@ -306,7 +323,7 @@
   <span class="sp"></span>
   <button type="button" id="histbtn" hidden title="この画面でした手直しの一覧（Ctrl+Z で戻す・Ctrl+Y でやり直す）">履歴</button>
   <button type="button" id="fold" hidden>全部たたむ</button>
-  <span class="seg"><button type="button" data-view="month">月</button><button type="button" data-view="week">週</button><button type="button" data-view="week2">2週</button></span>
+  <span class="seg"><button type="button" data-view="month">月</button><button type="button" data-view="week">週</button><button type="button" data-view="week2">2週</button><button type="button" data-view="day">日</button></span>
   <span class="vsw"><a href="index.html?go=calendar" class="on">カレンダー</a><a href="index.html?go=whiteboard">ホワイトボード</a><a href="index.html?go=schedule">人の割り振り表</a><a href="index.html?go=dayplan">1日の予定</a></span>
 </div>
 <div id="mini" hidden></div>
@@ -349,8 +366,8 @@ const label = k => md(k) + '(' + WD[dow(k)] + ')';
 
 // ---- 見え方の好み（このブラウザに覚える） ----
 // 表示：month 月／week 週（7日）／week2 2週（14日を1画面に。2026-11-23 近藤さんFB）。week と week2 は列の幅と送る日数だけがちがう
-let view = ['week', 'week2'].includes(load('calView')) ? load('calView') : 'month';
-const span = () => view === 'week2' ? 14 : 7;
+let view = ['week', 'week2', 'day'].includes(load('calView')) ? load('calView') : 'month';   // day ＝ 1日（2026-11-27 意見：日付を押すと1日の画面）
+const span = () => view === 'week2' ? 14 : view === 'day' ? 1 : 7;
 let wdStart = /^[0-6]$/.test(load('calDow')) ? Number(load('calDow')) : 0;   // 週の始まりの曜日（0＝日）
 // 隠すもの（新しく出てきた工程・品目・取引先は、はじめは出す）。s ＝ 工程、t ＝ 「営利|野菜|トマト」、c ＝ 取引先
 let off = fromSaved(loadJson('calOff', {}));
@@ -621,15 +638,16 @@ const loaded = k => blocks.has(blockOf(k));
 // ---- 月表示：週の行を縦に続ける。端に近づいたら、前後に4週ずつ足す ----
 let weeks = [];                    // 週の始まりの日
 const weekOf = k => addDays(k, -((dow(k) - wdStart + 7) % 7));
+const startOf = k => view === 'day' ? k : weekOf(k);   // 週表示は週の始まり、1日表示はその日
 function monthCells(w) {
   return Array.from({ length: 7 }, (_, i) => {
     const k = addDays(w, i), first = k.slice(8) === '01', m = Number(k.slice(5, 7));
     const gs = dispGroups(eventsOn(k));
     return `<div class="day${m % 2 ? ' odd' : ''}${k < TODAY ? ' past' : ''}${k === TODAY ? ' today' : ''}${first ? ' first' : ''}" data-d="${k}">
-      <div class="dn"><b>${first ? m + '月1日' : Number(k.slice(8))}</b></div>
-      ${notesHtml(k, true)}
+      <div class="dn"><b data-day="${k}" role="button" title="押すと、この日だけの画面にする">${first ? m + '月1日' : Number(k.slice(8))}</b></div>
       ${!loaded(k) ? '<div class="wait">…</div>' : noteGroupHtml(k) + gs.map(g => grpHtml(k, g)).join('')}
-      ${loadHtml(k)}</div>`;
+      ${loadHtml(k)}
+      ${notesHtml(k, true)}</div>`;
   }).join('');
 }
 function drawMonth() {
@@ -648,7 +666,7 @@ let cols = [];
 function colHtml(k) {
   const gs = dispGroups(eventsOn(k)), d = dow(k);
   return `<div class="col${k < TODAY ? ' past' : ''}${k === TODAY ? ' today' : ''}" data-d="${k}">
-    <div class="ch"><div class="w ${d === 0 ? 'sun' : d === 6 ? 'sat' : ''}">${WD[d]}</div><div class="d"><b>${k.slice(8) === '01' ? Number(k.slice(5, 7)) + '/' : ''}${Number(k.slice(8))}</b></div>${loadHtml(k)}${notesHtml(k, true)}</div>
+    <div class="ch"><div class="w ${d === 0 ? 'sun' : d === 6 ? 'sat' : ''}">${WD[d]}</div><div class="d"><b data-day="${k}" role="button" title="押すと、この日だけの画面にする">${k.slice(8) === '01' ? Number(k.slice(5, 7)) + '/' : ''}${Number(k.slice(8))}</b></div>${loadHtml(k)}${notesHtml(k, true)}</div>
     <div class="cb">${!loaded(k) ? '<div class="empty">読み込んでいます…</div>' : (gs.length || (notesOf.get(k) || []).length) ? noteGroupHtml(k) + gs.map(g => grpHtml(k, g)).join('') : '<div class="empty">ありません</div>'}</div></div>`;
 }
 // 工程のまとまり（週・2週・月で同じ見た目）：色の見出し（工程・量・人数・件数）＋ 取引先などでまとめた行
@@ -798,8 +816,9 @@ const sc = () => document.getElementById('scroller');
 function draw(keepPos) {
   const s = sc(), a = keepPos ? anchor() : null;
   document.querySelectorAll('.seg button').forEach(b => b.classList.toggle('on', b.dataset.view === view));
-  s.className = view === 'month' ? '' : view === 'week2' ? 'w2' : 'week';
+  s.className = view === 'month' ? '' : view === 'week2' ? 'w2' : view === 'day' ? 'week oneday' : 'week';
   s.style.setProperty('--days', 7);
+  s.style.setProperty('--sw', s.clientWidth + 'px');   // 1日表示の列の幅＝見えている幅
   if (view === 'month') drawMonth(); else if (view === 'week2') drawWeek2(); else drawWeek();
   foldBtn();
   alignSpans();
@@ -842,9 +861,9 @@ function reset(k) {
   k = k || TODAY;
   if (view === 'week2') { a2 = weekOf(k); draw(false); sc().scrollTop = 0; need(); return; }
   if (view === 'month') { const w = weekOf(k); weeks = Array.from({ length: 14 }, (_, i) => addDays(w, (i - 5) * 7)); }
-  else { const w = weekOf(k); cols = Array.from({ length: 35 }, (_, i) => addDays(w, i - 14)); }
+  else { const w = startOf(k); cols = Array.from({ length: 35 }, (_, i) => addDays(w, i - 14)); }
   draw(false);
-  scrollToDay(view === 'month' ? weekOf(k) : weekOf(k));
+  scrollToDay(startOf(k));
   need();
 }
 function need() {
@@ -857,7 +876,7 @@ function title() {
   const mk = view === 'month' ? addDays(k, 3) : k;
   const t = document.getElementById('ttl');
   viewSync.put(k);   // ほかの画面と、見ている日をそろえる
-  t.textContent = view === 'month' ? mk.slice(0, 4) + '年' + Number(mk.slice(5, 7)) + '月' : mk.slice(0, 4) + '年 ' + md(k) + '〜' + md(addDays(k, span() - 1));
+  t.textContent = view === 'month' ? mk.slice(0, 4) + '年' + Number(mk.slice(5, 7)) + '月' : view === 'day' ? k.slice(0, 4) + '年 ' + label(k) : mk.slice(0, 4) + '年 ' + md(k) + '〜' + md(addDays(k, span() - 1));
 }
 function notes() {
   // 出勤の表がないときの知らせは、一度出したら出しっぱなし（出たり消えたりして、カレンダーの大きさが変わらないように）
@@ -888,6 +907,7 @@ function onScroll() {
   });
 }
 sc().addEventListener('scroll', onScroll, { passive: true });
+window.addEventListener('resize', () => { if (view === 'day') { const k = anchorDay(); draw(false); scrollToDay(k); } });
 // ホイールは横取りしない：くるくる＝縦、Shift＋くるくる＝横（月表示・週表示とも。人の割り振り表と同じ操作）
 
 function step(n) {
@@ -907,7 +927,7 @@ function step(n) {
 }
 document.getElementById('prev').onclick = () => step(-1);
 document.getElementById('next').onclick = () => step(1);
-document.getElementById('today').onclick = () => { if (!sc().querySelector(view === 'month' ? `.wk[data-w="${weekOf(TODAY)}"]` : `.col[data-d="${TODAY}"]`)) reset(TODAY); else scrollToDay(view === 'month' ? weekOf(TODAY) : weekOf(TODAY), true); };
+document.getElementById('today').onclick = () => { if (!sc().querySelector(view === 'month' ? `.wk[data-w="${weekOf(TODAY)}"]` : `.col[data-d="${TODAY}"]`)) reset(TODAY); else scrollToDay(startOf(TODAY), true); };
 document.querySelectorAll('.seg button').forEach(b => b.onclick = () => {
   if (b.dataset.view === view) return;
   const k = anchorDay(); view = b.dataset.view; save('calView', view); reset(view !== 'month' ? (k <= TODAY && TODAY < addDays(k, 7 * 5) ? TODAY : k) : k);
@@ -915,7 +935,7 @@ document.querySelectorAll('.seg button').forEach(b => b.onclick = () => {
 // ---- 見出しを押すと、小さなカレンダーを出す（選んだ日に飛ぶ） ----
 let miniM = '';                    // 小さなカレンダーで出している月の1日
 function goDay(k) {
-  const w = weekOf(k);
+  const w = startOf(k);
   if (!sc().querySelector(view === 'month' ? `.wk[data-w="${w}"]` : `.col[data-d="${w}"]`)) reset(k); else scrollToDay(w, true);
 }
 function miniDraw() {
@@ -954,6 +974,8 @@ document.body.addEventListener('click', ev => { if (document.body.classList.cont
 // ---- 内訳（チップ・見出しを押したとき）：取引先ごとの量と、計画の一覧 ----
 sc().addEventListener('click', ev => {
   if (ev.target.closest('.ext') || Date.now() - dragJust < 400) { ev.preventDefault(); return; }   // のばすつまみ：計画の画面へは飛ばない
+  const dy = ev.target.closest('[data-day]');
+  if (dy && view !== 'day') { view = 'day'; save('calView', view); reset(dy.dataset.day); return; }
   const pp = ev.target.closest('.ppl.edit'); if (pp) return askPeople(pp.dataset.ppl);
   const an = ev.target.closest('[data-addnote]'); if (an) return askNote(an.dataset.addnote);
   const nt = ev.target.closest('.cnote.del, .nrow.del'); if (nt) return delNote(nt.dataset.note);
