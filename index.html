@@ -1947,7 +1947,7 @@ function renderSchedule() {
 // 向こうの画面は「なえログの合言葉をください」と言ってくる（naelog-ready）ので、ログイン中の合言葉を返す（naelog-token）。LINE のログインは要らない
 function renderExt() {
   // v は、向こうの画面を直したときに上げる（スマホが古い画面を覚えたままにならないように。向こうの index.html の ?v= と合わせる）
-  const src = '../record/?go=' + EXT_PAGES.get(page) + '&from=naelog&v=61';
+  const src = '../record/?go=' + EXT_PAGES.get(page) + '&from=naelog&v=62';
   const old = document.getElementById('schedframe');
   if (old && old.dataset.ext === page) {
     const me = document.querySelector('#app header .me');
